@@ -1,0 +1,6 @@
+*.d
+*.o
+*.a
+.DS_Store
+*.dSYM
+tmtags

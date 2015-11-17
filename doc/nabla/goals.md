@@ -1,0 +1,9 @@
+- easy to use with free-form editor (adding or removing `)` is easy with operator precedence) or IDE (`:` can popup obj defined methods)
+- relatively smaller core syntax
+- data is immutable, with local variables and IO support
+- more determinism in program reasoning
+- reverse of parens (limited to infix operators, as little enhancement) for even less parens...
+- extensible literal (sigils), no syntax composition problems since it is used with indented syntax
+- pattern match
+- parsing toolkit
+- pi-calculus concurrency

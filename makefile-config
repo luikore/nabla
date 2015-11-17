@@ -1,0 +1,9 @@
+CFLAGS = -DNDEBUG -MMD -MP -march=native -I../vendor/ccut/include -I../vendor/siphash
+CFLAGS_DEBUG = -g -DCHECK_MEMORY -MMD -MP -march=native -I../vendor/ccut/include -I../vendor/siphash
+LDFLAGS = -L../vendor/ccut/lib -lccut -L../vendor/siphash -lsiphash
+
+CXXFLAGS = $(CFLAGS) --std=c++11
+CXXFLAGS_DEBUG = $(CFLAGS_DEBUG) --std=c++11
+CXXLDFLAGS = $(LDFLAGS) --std=c++11
+
+.PHONY: clean

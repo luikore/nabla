@@ -1,0 +1,321 @@
+# NOTE early dispatch makes more rules but less `if`s, see also methodology.md
+
+# pre-process: replace tabs with '  ', replace "\r\n" with "\n"
+
+# we need an ST representation that can be restored to code, so:
+# - some tokens are for css styling only
+# - eol is a token which may contain comment and space before comment
+# - spaces before a action/eql-sign should be kept
+# - spaces in regexp gets special treatment
+
+# partial context: must not :return
+# other contexts: must :return
+
+# for bootstrap, this file uses only the minimal subset of spellbreak
+# - calls with optional params are filled with concrete params
+# - no use of `\u`, `\x` and `{n}` in regexp
+# - no use nested regexp
+# - special chars inside `[]` are escaped
+# - no use if/infix in callbacks
+# - all `#` are escaped
+
+# NOTE immutable data structure is vital to PEG callbacks
+#      but the most efficient way to impl queue is just reverse the list
+
+# lexer impl
+# the objects $0, $1, $2, ... are in fact un-named tokens,
+# so :token action is add a type to it, and then put it into stream
+# a second :token action using the same object, will duplicate it
+
+lex Main = [
+  end /\z/ { :compile_spellbreak :parse }
+
+  /pattern\b/ { :token "kw.pattern" } /\ +(@\w+)/ { :token "name.pattern" $1 } /\ *=\ /
+  /var\b/ { :token "kw.var" } /\ +([a-z]\w*)/    { :token "name.var" $1 }
+  /lex\b/ { :token "kw.lex" } /\ +(\*?[A-Z]\w*)/ { :token "name.context" $1 } /\ *=\ / Lex
+  /peg\b/ { :token "kw.peg" } /\ +([A-Z]\w*)/    { :token "name.context" $1 } /\ *=\ / Peg
+  # TODO cfg, tag, ...
+
+  String
+  Regexp
+
+  *Spaces
+]
+
+peg Main = [
+  Main : Line* { :return Main[$1] }
+
+  Line : space.eol { } / Ins { :return $1 }
+
+  Ins : kw.pattern name.pattern space.pre-eq op.eq Pattern { :return PatternIns[$2, $5] }
+      / kw.var name.var { :return VarDecl[$2] }
+      / kw.lex name.context Lex { :return Lex[$2, $3] }
+      / kw.peg name.context Peg { :return Peg[$2, $3] }
+
+  Pattern : String { :return $1 } / Regexp { :return $1 }
+]
+
+lex Lex = [
+  begin "[" { :token "begin.lex" }
+  end "]" { :token "end.lex", :parse }
+
+  Regexp
+  String
+  Callback
+  /begin\b/    { :token "kw.begin" } # TODO new syntax: `someword` for keyword matching
+  /end\b/      { :token "kw.end" }
+  /\*[A-Z]\w*/ { :token "name.context.partial" }
+  /[A-Z]\w*/   { :token "name.context" }
+  /[a-z]\w*/   { :token "name.var" }
+  /$[a-z]\w*/  { :token "name.var.global" }
+
+  *Spaces
+]
+
+peg Lex = [
+  Lex : begin.lex RuleLine* end.lex { :return $2 }
+  RuleLine : name.context.partial { :return RefPartialContext[$1] }
+           / name.context { :return RefContext[$1] }
+           / Rule+ { :return SeqLexRules[$1] }
+           / kw.begin Callback? Rule+ { :return BeginCallback[$2, $3] }
+           / kw.end Callback Rule+ { :return EndCallback[$2, $3] }
+           / space.eol { }
+  Rule : Pattern space.pre-callback* Callback? { :return Rule[$1, $3] }
+  Pattern : String { :return $1 }
+          / Regexp { :return $1 }
+          / name.var { :return VarRef[$1] }
+          / name.var.global { :return GlobalVarRef[$1] }
+]
+
+lex Peg = [
+  begin "[" { :token "begin.peg" }
+  end "]" { :token "end.peg", :parse }
+
+  /[A-Z]\w*(\.\w+)*/  { :token "name.rule" }
+  /[a-z]\w*(\-\w+)*(\.\w+(\-\w+)*)*/  { :token "name.token" }
+
+  ":"                 { :token "op.def" }
+  /[\*\?\+]/          { :token "op.quantifier" }
+  "!"                 { :token "op.extract" }
+  "?!"                { :token "op.extract.maybe" }
+  /[><][\*\?\+]/      { :token "op.branch.quantified" }
+  /\/$\w+/            { :token "op.branch.op-table" }
+  "/"                 { :token "op.branch" }
+
+  Callback
+
+  /[&\^]/  { :token "op.lookahead" }
+  /@\w+/   { :token "name.pattern" }
+
+  *Spaces
+]
+
+peg Peg = [
+  Peg : begin.peg Rule* end.peg { :return $2 }
+  Rule : name.rule op.def space.eol? RuleBody space.eol { :return Rule[$1, $4] }
+       / space.eol { }
+  RuleBody : SeqRule { [$1] } >* space.eol? BranchRight { :return :cons $3 $1 }
+  BranchRight : op.branch.quantified SeqRule { :return BranchRight[$1, $2] }
+              / op.branch SeqRule            { :return BranchRight[$1, $2] }
+              / op.branch.op-table           { :return OpBranchRight[$1] }
+  SeqRule : Term+ Callback? { :return SeqRule[$1, $2] }
+  Term : Name op.quantified    { :return Term[$1, $2] }
+       / Name op.extract       { :return Term[$1, $2] }
+       / Name op.extract.maybe { :return Term[$1, $2] }
+       / Name                  { :return Term[$1, nil] }
+       / op.lookahead LookaheadName { :return Lookahead[$1, $2] }
+  Name : name.token { :return $1 }
+       / name.rule  { :return $1 }
+  LookaheadName : name.token   { :return $1 }
+                / name.rule    { :return $1 }
+                / name.pattern { :return $1 }
+]
+
+lex Callback = [
+  begin "{" { :token "begin.code" }
+  end "}" { :token "end.code", :parse }
+
+  String
+  /\$-?\d+/    { :token "name.var.capture" }
+  /:[\w+\-*\/^&|<>=!%@]+/ { :token "name.func" }
+  /.\w+/     { :token "name.method" } # todo
+  /[A-Z]\w*/ { :token "name.type" }
+  /if\b/     { :token "kw.if" }
+  /else\n/   { :token "kw.else" }
+  /end\b/    { :token "kw.end" }
+  /nil\b/    { :token "lit.nil" }
+  /true\n/   { :token "lit.true" }
+  /false\n/  { :token "lit.const" }
+  /var\b/    { :token "kw.var" }
+  /-?\d+/    { :token "lit.int" }
+  /[a-z]\w*/ { :token "name.var" }
+
+  /&&|\|\|/         { :token "op.infix.logic" }
+  />|<|>=|<=|==|!=/ { :token "op.infix.compare" }
+  /\+|-|\^|&|\|/    { :token "op.infix.additive" }
+  /\*\*|\*|\/|%|@/  { :token "op.infix.multitive" } # TODO ** should be separated for right-assoc
+  "[" { :token "begin.list" }
+  "]" { :token "end.list" }
+  "(" { :token "begin.paren" }
+  ")" { :token "end.paren" }
+  "=" { :token "op.eq" }
+  "!" { :token "op.prefix" }
+  /[,\n]/ { :token "space.eol" }
+
+  /\#[^\n]*/   { :style "comment" $0 }
+  /\ +(?=\=)/ { :token "space.pre-eq" }
+  /\ +/ { }
+]
+
+peg Callback = [
+  Callback : begin.code Stmt* end.code { :return Callback[$2] }
+  Stmt : Expr { :return $1 }
+       / space.eol { }
+       / kw.var name.var { :return VarDecl[$2] }
+  Expr : Infix.Logic { :return $1 }
+
+  Infix.Logic : Infix.Compare { :return $1 }
+              >* op.infix.logic Infix.Compare { :return InfixLogic[$2, [$3, $1]] }
+
+  Infix.Compare : Infix.Additive { :return $1 }
+                >* op.infix.compare Infix.Additive { :return Call[$2, [$3, $1]] }
+
+  Infix.Additive : Infix.Multitive { :return $1 }
+                 >* op.infix.additive Infix.Multitive { :return Call[$2, [$3, $1]] }
+
+  Infix.Multitive : Unit { :return $1 }
+                  >* op.infix.multitive Unit { :return Call[$2, [$3, $1]] }
+
+  Unit : begin.paren Expr end.paren { :return $2 }
+       / op.prefix Unit { Call[$1, $2] }
+       / lit.int   { :return :parse_int $1 }
+       / lit.true  { :return true }
+       / lit.false { :return false }
+       / lit.nil   { :return nil }
+       / String    { :return $1 }
+       / name.var.capture { :return Capture[$1] }
+       / name.type begin.list Line* end.list { :return CreateNode[$1, $3] }
+       / begin.list Line* end.list { :return CreateList[$2] }
+       / name.func Expr* { :return Call[$1, $2] }
+       / name.var { :return VarRef[$1] }
+       / If { :return $1 }
+       / name.var space.pre-eq op.eq Expr { :return Assign[$1, $4] }
+
+  Line : Expr { :return $1 }
+       / space.eol { }
+  If : kw.if Expr space.eol Line* If.Else { :return If[$2, $4, $5] }
+  If.Else : kw.end { }
+          / kw.else Line* kw.end { :return $2 }
+          / kw.else If { :return $2 }
+]
+
+lex String = [
+  begin /"/ { var buf, buf = "", :token "begin.string" }
+  end /"/ { :token "end.string", :yield buf }
+
+  /\\x(\h\h)/     { :token "char.hex",       buf = :concat_char buf :char_hex $1 }
+  /\\u\{(\h+)\}/  { :token "char.ux",        buf = :concat_char buf :char_hex $1 }
+  /\\u(\h\h\h\h)/ { :token "char.u4",        buf = :concat_char buf :char_hex $1 }
+  /\\([abftnr])/  { :token "char.escape.sp", buf = :concat_char buf :char_escape_sp $1 }
+  /\\([^\n])/     { :token "char.escape",    buf = :concat_char buf :char_no_escape $1 }
+  /./             { :token "char",           buf = :concat_char buf :char_no_escape $0 }
+]
+
+lex Regexp = [
+  begin "/" { var cg_stack, cg_stack = nil, :token "begin.regexp" }
+  end "/" { :token "end.regexp", :parse }
+
+  /\^|\$|\\[bBaAzZ]/ { :token "anchor" }
+
+  /\\[dDwWhHsS]|\./    { :token "char-group.predef" }
+  /\\p\{[A-Z][a-z]*\}/ { :token "unicode-char-class" }
+  RegexpEscape
+  *RegexpQuantifier
+
+  "|" { :token "op.branch" }
+
+  /\[\^?/ { :token "begin.char-group", cg_stack = :cons true cg_stack }
+  "]"    { :token "end.char-group", cg_stack = :tail cg_stack }
+  "-"    { if cg_stack, :token "op.minus", else :token "char" }
+
+  /\{[A-Z]\w*\}/    { :token "interpolate.predef" }
+
+  "(?i)"               { :token "flag.case-insensitive" }
+  "(?I)"               { :token "flag.case-sensitive" }
+  /\(\?e:\w+(-\w+)?\)/ { :token "flag.encoding" }
+
+  /(\()(\?:|\?=|\?!|\?<=|\?<!|\?>)?/ {
+    :token "begin.group" $1
+    :token "group.special" $2
+  }
+  ")" { :token "end.group" }
+
+  /\s+/ {} # only useful in pretty print
+  /[^\n\s]/ { :token "char" }
+]
+
+peg Regexp = [
+  Regexp : begin.regexp Branches end.regexp { :return Regexp[$2] }
+  Branches : Seq { :return [$1] } >* op.branch Seq { :return :cons $3 $1 }
+  Seq : SeqUnit* { :return Seq[$1] }
+  SeqUnit : anchor { :return PredefAnchor[$1] }
+          / flag.case-insensitive { :return Flag[$1] }
+          / flag.case-sensitive { :return Flag[$1] }
+          / flag.encoding { :return Flag[$1] }
+          / Unit quantifier { :return Quantified[$1, $2] }
+          / Unit begin.quantifier quantifier.range.from quantifier.range.to? end.quantifier quantifier.kind { :return QuantifiedRange[$1, $3, $4, $6] }
+          / Unit { :return Unit[$1] }
+  Unit : SingleChar { :return $1 }
+       / CharGroup  { :return $1 }
+       / Group { :return $1 }
+       / interpolate.predef { :return $1 }
+  SingleChar : RegexpEscape { :return $1 }
+             / char         { :return :char_no_escape $1 }
+  Group : begin.group group.special Branches end.group { :return Group[$2, $3] }
+
+  CharGroup : char-group.predef  { :return CharGroupPredef[$1] }
+            / unicode-char-class { :return UnicodeCharClass[$1] }
+            / begin.char-group CharClass+ end.char-group { :return BracketCharGroup[$1, $2] }
+  CharClass : CharGroup { :return $1 }
+            / SingleChar op.minus SingleChar { :return CharRange[$1, $3] }
+            / SingleChar { :return CharRange[$1, $1] }
+]
+
+lex RegexpEscape = [
+  begin "\\" { :token "char.escape" }
+  end /x(\h\h)/     { :token "char.escape", :yield :char_hex $1 }
+  end /u\{(\h+)\}/  { :token "char.escape", :yield :char_hex $1 }
+  end /u(\h\h\h\h)/ { :token "char.escape", :yield :char_hex $1 }
+  end /[abftnr]/    { :token "char.escape", :yield :char_escape_sp $0 }
+  end /[^\n]/       { :token "char.escape", :yield :char_no_escape $0 }
+]
+
+lex *RegexpQuantifier = [
+  /\?\* | \?\? | \? | \+\* | \+\? | \+ | \*\* | \*\? | \*/ {
+    :token "quantifier"
+  }
+
+  /(\{) (\d+) (\}) ([\*\?]?)/ {
+    :token "begin.quantifier" $1
+    :token "quantifier.range.from" $2
+    :token "end.quantifier" $3
+    :token "quantifier.kind" $4
+  }
+
+  /(\{) (\d+) , (\d*) (\}) ([\*\?]?)/ {
+    :token "begin.quantifier" $1
+    :token "quantifier.range.from" $2
+    :token "quantifier.range.to" $3
+    :token "end.quantifier" $4
+    :token "quantifier.kind" $5
+  }
+]
+
+lex *Spaces = [
+  /\ +(?=\{)/   { :token "space.pre-callback" }
+  /\ +(?=\=)/   { :token "space.pre-eq" }
+
+  /\ *(\#[^\n]*)?(\n|\z)/ { :token "space.eol", :style "comment" $1 }
+
+  /\ +/ { } # ignore
+]

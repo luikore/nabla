@@ -1,0 +1,25 @@
+include FileUtils
+
+desc "stat"
+task :stat do
+  c = 0
+  Dir.glob('{adt,spellbreak}/**/*.{c,cpp,h,rb}') do |f|
+    c += File.read(f).count "\n"
+  end
+  puts "code: #{c} lines"
+
+  c = 0
+  Dir.glob('doc/**/*.md') do |f|
+    c += File.read(f).count "\n"
+  end
+  puts "doc: #{c} lines"
+end
+
+def report_non_zero msg, arr
+  if !arr.empty?
+    puts "#{msg}: #{arr.size}"
+    arr.each do |e|
+      puts "  #{e}"
+    end
+  end
+end

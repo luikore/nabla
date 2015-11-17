@@ -1,0 +1,74 @@
+#include "val.h"
+#include <ccut.h>
+#include <stdlib.h>
+
+void val_suite() {
+  ccut_test("rotl and rotr") {
+    assert_eq(1239, PDLEX_ROTR(PDLEX_ROTL(1239, 3), 3));
+  }
+
+  ccut_test("from and to dbl") {
+    assert_true(VAL_DBL_CAN_IMM(3.6), "should be able to be expressed as immediate value");
+    assert_true(VAL_DBL_CAN_IMM(-3600.0), "should be able to be expressed as immediate value");
+    Val v = VAL_FROM_DBL(3.6);
+    assert_true(VAL_IS_DBL(v), "should be double");
+    assert_true(3.6 == VAL_TO_DBL(v), "expected 3.6, but got %f", VAL_TO_DBL(v));
+  }
+
+  ccut_test("from and to int") {
+    assert_true(VAL_INT_CAN_IMM(1LL<<61), "should be able to express 1<<61 as immediate value");
+    assert_true(!VAL_INT_CAN_IMM(1ULL<<63), "should not be able to express 1<<63 as immediate value");
+    Val v = VAL_FROM_INT(3);
+    assert_true(VAL_IS_INT(v), "should be int");
+    assert_true(3 == VAL_TO_INT(v), "expected 3, but got %ld", VAL_TO_INT(v));
+
+    v = VAL_FROM_INT(-12);
+    assert_true(VAL_IS_INT(v), "should be int");
+    assert_true(-12 == VAL_TO_INT(v), "expected -12, but got %ld", VAL_TO_INT(v));
+  }
+
+  ccut_test("from and to str") {
+    assert_eq(3, VAL_TO_STR(VAL_FROM_STR(3)));
+  }
+
+  ccut_test("immediate value test") {
+    assert_true(VAL_IS_IMM(VAL_FROM_INT(-12)), "should be immediate value");
+    assert_true(VAL_IS_IMM(VAL_FROM_DBL(123.2)), "should be immediate value");
+
+    int64_t a[2] __attribute__ ((aligned (8)));
+    a[0] = 0;
+    a[1] = 0;
+    assert_true(!VAL_IS_IMM((Val)a), "should be pointer");
+    assert_true(!VAL_IS_IMM((Val)(a + 1)), "should be pointer");
+  }
+
+  ccut_test("truth test") {
+    assert_true(VAL_IS_TRUE(VAL_FROM_DBL(3.6)), "should be true");
+    assert_true(VAL_IS_TRUE(VAL_FROM_INT(1)), "should be true");
+    assert_true(VAL_IS_TRUE(VAL_TRUE), "should be true");
+    int64_t a[2] __attribute__ ((aligned (8)));
+    a[0] = 0;
+    a[1] = 0;
+    assert_true(VAL_IS_TRUE((Val)a), "should be true");
+    assert_true(VAL_IS_TRUE((Val)(a + 1)), "should be true");
+
+    assert_true(VAL_IS_FALSE(VAL_FALSE), "should be false");
+    assert_true(VAL_IS_FALSE(VAL_NIL), "should be false");
+  }
+
+  ccut_test("alloc default ref_count == 1") {
+    ValHeader* h = val_alloc(30);
+    assert_eq(1, h->ref_count);
+    val_free(h);
+  }
+
+  ccut_test("retain/release") {
+    ValHeader* h = val_alloc(10);
+    Val v = (Val)h;
+    RETAIN(v);
+    assert_eq(2, h->ref_count);
+    RELEASE(v);
+    assert_eq(1, h->ref_count);
+    val_free(h);
+  }
+}
