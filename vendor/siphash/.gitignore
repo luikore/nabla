@@ -1,0 +1,4 @@
+*.a
+*.o
+test_*
+.DS_Store
