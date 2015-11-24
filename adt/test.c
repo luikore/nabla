@@ -235,7 +235,7 @@ void arena_suite() {
 #pragma mark ### run them all
 
 int main (int argc, char const *argv[]) {
-  ccut_trap_asserts();
+  // ccut_trap_asserts();
   ccut_run_suite(base_suite);
   ccut_run_suite(box_suite);
   ccut_run_suite(mut_array_suite);

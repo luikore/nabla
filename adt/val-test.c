@@ -2,6 +2,30 @@
 #include <ccut.h>
 #include <stdlib.h>
 
+static Val f0() {
+  return 0;
+}
+
+static Val f3(Val a1, Val a2, Val a3) {
+  return a1 + a2 + a3;
+}
+
+static Val f4(Val a1, Val a2, Val a3, Val a4) {
+  return a1 + a2 + a3 + a4;
+}
+
+static Val f6(Val a1, Val a2, Val a3, Val a4, Val a5, Val a6) {
+  return a1 + a2 + a3 + a4 + a5 + a6;
+}
+
+static Val f7(Val a1, Val a2, Val a3, Val a4, Val a5, Val a6, Val a7) {
+  return a1 + a2 + a3 + a4 + a5 + a6 + a7;
+}
+
+static Val f8(Val a1, Val a2, Val a3, Val a4, Val a5, Val a6, Val a7, Val a8) {
+  return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8;
+}
+
 void val_suite() {
   ccut_test("rotl and rotr") {
     assert_eq(1239, PDLEX_ROTR(PDLEX_ROTL(1239, 3), 3));
@@ -70,5 +94,28 @@ void val_suite() {
     RELEASE(v);
     assert_eq(1, h->ref_count);
     val_free(h);
+  }
+
+  ccut_test("val_c_call") {
+    Val argv[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    Val ret;
+
+    ret = val_c_call((void*)f0, 0, argv);
+    assert_eq(0, ret);
+
+    ret = val_c_call((void*)f3, 3, argv);
+    assert_eq(1+2+3, ret);
+
+    ret = val_c_call((void*)f4, 4, argv);
+    assert_eq(1+2+3+4, ret);
+
+    ret = val_c_call((void*)f6, 6, argv);
+    assert_eq(1+2+3+4+5+6, ret);
+
+    ret = val_c_call((void*)f7, 7, argv);
+    assert_eq(1+2+3+4+5+6+7, ret);
+
+    ret = val_c_call((void*)f8, 8, argv);
+    assert_eq(1+2+3+4+5+6+7+8, ret);
   }
 }

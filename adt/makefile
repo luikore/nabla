@@ -3,7 +3,10 @@ default: $(target)
 
 files = val box map array dict sym-table string
 objects = $(addsuffix .o, $(files))
+objects += asm/val-c-call.o
+
 test_srcs = test.c
+test_srcs += asm/val-c-call.S
 test_srcs += $(addsuffix .c, $(files))
 test_srcs += $(addsuffix -test.c, $(files))
 
@@ -12,7 +15,10 @@ test_srcs += $(addsuffix -test.c, $(files))
 
 # CFLAGS += -g -UNDEBUG
 
-$(target): $(objects)
+asm/val-c-call.o: asm/val-c-call.S
+	cc -c $(CFLAGS) asm/val-c-call.S -o asm/val-c-call.o
+
+$(target): $(objects) asm/val-c-call.o
 	ar rcs libadt.a $(objects)
 	rm -f $(objects)
 

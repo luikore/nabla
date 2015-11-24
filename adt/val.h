@@ -162,65 +162,7 @@ inline static uint64_t VAL_REF_COUNT(Val v) {
 
 #pragma mark ### misc
 
-// TODO windows calling convention?
-static Val VAL_C_CALL(void* cfunc, uint64_t argc, Val* argv) {
-  Val res;
-
-  // make new call frame
-  asm("movq %0, %%r10" :: "g"(argc)     : "r10");
-  asm("movq %0, %%r11" :: "g"(cfunc)    : "r11");
-  asm("movq %0, %%rax" :: "g"(argv)     : "rax");
-
-  // System V: RDI, RSI, RDX, RCX, R8, R9
-  // we just move it, no matter if the arg is given or not
-  asm volatile(
-    // save stack base
-    "pushq %rbp\n"
-    // NOTE in mac the address in stack register must 16-byte aligned after add/sub %rsp
-    //      so we add one more push in addition to ensure alignment
-    "pushq %r12\n"
-    "movq %rsp, %rbp\n"
-
-    // first 6 args (don't care if argc is less than 6)
-    "movq 0(%rax), %rdi\n"
-    "movq 8(%rax), %rsi\n"
-    "movq 16(%rax), %rdx\n"
-    "movq 24(%rax), %rcx\n"
-    "movq 32(%rax), %r8\n"
-    "movq 40(%rax), %r9\n"
-    // r12 to compute the stack offset (NOTE callee saves r12-r15)
-    // clear it before cmp -> jump operation
-    "xorq %r12, %r12\n"
-    "cmpq $6, %r10\n"
-    "jle .loop_end\n"
-
-    // argv += argc*8
-    "pushq %r10\n"
-    "shlq $3, %r10\n"
-    "addq %r10, %rax\n"
-    "popq %r10\n"
-
-    // push other args
-  ".loop_push_args:\n"
-    "subq $8, %rax\n"
-    "addq $8, %r12\n"
-    "pushq 0(%rax)\n"
-    "decq %r10\n"
-    "cmpq $6, %r10\n"
-    "jg .loop_push_args\n"
-  ".loop_end:\n"
-
-    "callq *%r11\n"
-
-    // restore stack base
-    "addq %r12, %rsp\n"
-    "popq %r12\n"
-    "popq %rbp\n"
-  );
-
-  asm("movq %%rax, %0" : "=g"(res));
-  return res;
-}
+Val val_c_call(void* cfunc, uint64_t argc, Val* argv);
 
 void val_debug(Val v);
 
