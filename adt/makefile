@@ -1,36 +1,42 @@
 target = libadt.a
+debug_target = libadt-debug.a
 default: $(target)
+debug: $(debug_target)
 
-files = val box map array dict sym-table string
-objects = $(addsuffix .o, $(files))
-objects += asm/val-c-call.o
+c_bases = val box map array dict sym-table string
+bases = $(c_bases)
+bases += asm/val-c-call
+objects = $(addsuffix .o, $(bases))
+debug_objects = $(addsuffix -debug.o, $(bases))
 
-test_srcs = test.c
-test_srcs += asm/val-c-call.S
-test_srcs += $(addsuffix .c, $(files))
-test_srcs += $(addsuffix -test.c, $(files))
+test_srcs = test.c asm/*.S
+test_srcs += $(addsuffix .c, $(c_bases))
+test_srcs += $(addsuffix -test.c, $(c_bases))
 
 -include ../makefile-config
--include *.d
+-include *.d asm/*.d
 
 # CFLAGS += -g -UNDEBUG
 
-asm/val-c-call.o: asm/val-c-call.S
-	cc -c $(CFLAGS) asm/val-c-call.S -o asm/val-c-call.o
+%-debug.o: %.c
+	$(CC) -c $(CFLAGS_DEBUG) $+ -o $@
 
-$(target): $(objects) asm/val-c-call.o
-	ar rcs libadt.a $(objects)
-	rm -f $(objects)
+asm/%-debug.o: asm/%.S
+	$(CC) -c $(CFLAGS_DEBUG) $+ -o $@
 
-debug: $(addsuffix .c, $(files))
-	cc -c $(CFLAGS_DEBUG) $(addsuffix .c, $(files))
-	ar rcs libadt-debug.a $(objects)
-	rm -f $(objects)
+asm/%.o: asm/%.S
+	$(CC) -c $(CFLAGS) $+ -o $@
+
+$(target): $(objects)
+	ar rcs $@ $+
+
+$(debug_target): $(debug_objects)
+	ar rcs $@ $+
 
 test:
-	cc $(CFLAGS_DEBUG) $(LDFLAGS) $(test_srcs) -o adt-test
+	$(CC) $(CFLAGS_DEBUG) $(LDFLAGS) $(test_srcs) -o adt-test
 	./adt-test
 
 clean:
-	rm -f *.o *.d *.a adt-test
+	rm -f {,asm/}*.{o,d,a} adt-test
 	rm -rf *.dSYM

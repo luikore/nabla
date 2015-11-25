@@ -2,11 +2,11 @@
 // NOTE must use upper case S
 .file "val_c_call.S"
 .text
-.globl val_c_call
+.globl _val_c_call
 .align 16
 // .type c_invoke, @function // for linux
 
-_c_invoke:
+_val_c_call:
 
   // prelude: save stack base
   // NOTE in mac the address in stack register must 16-byte aligned after add/sub %rsp
@@ -33,7 +33,8 @@ _c_invoke:
   // pushq %r12
   // movq %rsp, %rbp
 
-  // first 6 args (don't care if argc is less than 6)
+  // first 6 args
+  // TODO safety: do not change the registers when argc is less than 6
   movq 0(%rax), %rdi
   movq 8(%rax), %rsi
   movq 16(%rax), %rdx
