@@ -12,10 +12,11 @@ First simple usage is syntax sugar for visiting environment variables or match r
 
 [design NOTE]: if we use `$lit[content]`, then we don't know if it is `$(lit)[content]`.
 
-from other namespace (NOTE we only know the scope in compile time, we don't know the object type)
+from other namespace (NOTE this initiates a constant search at compile time, so you must ensure the constants are already defined before loading file (or do we delay the compilation the first time the method is called?))
 
     Foo::$bar
-    Foo::$(bar ...)
+    Foo::Bar::$(bar ...)
+    ::$bar
 
 with inline code
 
@@ -31,6 +32,7 @@ The delimiters can be
     ""
     ``
     ||
+    //
 
 Dangling with block code
 
@@ -59,6 +61,13 @@ if need some run-time values
 To make the following mixed use comfortable, literals are designed to be noun-like, so inputs are put to the left side instead of the right side.
 
     :puts $file $line $1
+
+Use macros from other namespace
+
+    # macros search Net::HTTP first, then search Net, then search top level
+    using Net::HTTP
+      ...
+    end
 
 [design NOTE]: since literals are noun-like, if we need to inject some run-time variable as options, define a method on it and call. if we use a prefix notation to inject options like `{opt: 3}$foo`, then namespaced syntax require a weird tweak: `3Foo::$bar` -> `3$Foo::bar`, and doesn't help much: we don't need dynamic syntax, and most options must be determined at compile time.
 
@@ -146,6 +155,13 @@ string example
 
 ## custom syntax usage ideas and examples
 
+### Regexp
+
+    $r/a/
+
+    $<<r
+      ['"`/]
+
 ### Workflow engine
 
     $<<workflow
@@ -156,6 +172,11 @@ string example
 
 ### Data formats
 
+Using the `#` interpolate syntax by default
+
+    $<<json
+      {"foo": x, "bar": #{y}}
+
     $<<yaml
       x: 3
       y: 4
@@ -164,10 +185,21 @@ string example
       a,b,c
       1,2,3
 
+Depending on what we want
+
+    String::$<<json
+      ...
+
+    Map::$<<json
+      ...
+
+    AssocArray::$<<json
+      ...
+
 ### String processing
 
     $<<awk << "some file"
-      src
+      ...src
 
     $<<tr << "something"
       12345-7
@@ -253,19 +285,19 @@ fibonacci seq
 ### SQL
 
     x = 3
-    $(select foo.a, foo.b from foos foo where foo.a > {x})
+    $(select foo.a, foo.b from foos foo where foo.a > #{x})
 
 SQL segment: `with`
 
 lambda args:
 
-    where = -> x, $(with where foo.a > {x});
-    $(select foo.a with {where.call 3})
+    where = -> x, $(with where foo.a > #{x});
+    $(select foo.a with #{where.call 3})
 
 sql args (TODO modify to use PG `with` syntax):
 
     where = $(with (x) begin where foo.a > x end);
-    $(select foo.a with {where}(foo.b))
+    $(select foo.a with #{where}(foo.b))
 
 ### IO open with protocols
 
@@ -273,6 +305,11 @@ sql args (TODO modify to use PG `with` syntax):
     $(open http://example.com).post
 
 ### HTTP header
+
+    Net::HTTP::$<<header
+      foo: #{x}
+      bar: #{y}
+      baz: #{z}
 
 ### Symbolic computation
 
@@ -299,6 +336,12 @@ Greek names will be displayed in the original form
 The expression only evaluates when output is required.
 
 Note - the syntax in `$sym` is limited to calls, operators and constants.
+
+## language composability considerations
+
+We recommend `#{}` for interpolating, if not possible, `@{}`, `${}`, `{{}}` ... can be chosen
+
+For the parsing interface, user only need to specify interpolation start and end symbol.
 
 # annotations
 
@@ -406,10 +449,20 @@ operator naming rule: `{Symbol}({Word}|{Symbol})*{Symbol}`
 
 # custom comment processors
 
-    def # src obj # the object following the processor (constant or method)
-      ... return a comment obj or nil for non-doc identities
+Default comment processor only do some minimal processing.
 
-[TODO] this syntax makes lexer not very consistent, maybe we should use namespace.def_comment
+To define some other document based comment processor for more powerful document:
+
+    # markdown comment processor
+    Kernel::Lang.def_comment_processor "md" -> src obj
+      ... return a comment obj or nil for non-doc identities
+    end
+
+    #<<md
+      **foo**
+
+      - bar
+      - baz
 
 comment object
 
@@ -419,16 +472,13 @@ comment object
 
 you can use `assoc` method to document macro methods
 
-comment processors are module-aware
-
-    class Foo
-      def # src context
-        ...
-
-    class Bar
-      def # src context
-        ...
-
-NOTE this custom comment processing framework provides a uniformed good way to document code, and SDE can make use of it for searching documents in code too.
-
 NOTE for cross reference, a doc page contains simplified links which can be re-written by js, so no need to consider too much on it now.
+
+# nesting
+
+If the macro preprocessor is an update to the main syntax, we may use some additional tricks
+
+    $<<foo
+      $1 # we may make all macro search under Foo first, then the top level
+      $<<bar
+        ...

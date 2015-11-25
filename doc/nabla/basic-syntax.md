@@ -124,13 +124,34 @@ if it is a "right value", then it represents value of expression in the context.
 
 ## comments
 
-can be indented with block
+line comments
 
     # foo
-      bar
+    # bar
 
-    #
-      this part is comment, too
+block comment
+
+    #<<
+      foo
+      bar
+      baz
+
+block comment with preprocessor
+
+    #<<html
+      foo
+      bar
+      baz
+
+    #<<markdown
+      foo
+      bar
+      baz
+
+    #<<asciidoc
+      foo
+      bar
+      baz
 
 ## comma, new line, semicolon and `end`
 
@@ -1039,3 +1060,20 @@ there is no back arrow for do-block (we recommend immutable ways, when we really
 ## matching args
 
 see pattern-match
+
+## namespaces
+
+Every class also acts as a namespace
+
+    class Foo
+      class Baz
+        Bar # searches Bar inside Baz, if not, search under Foo, if not, search top namespace
+            # if not found: raise error - constant 'Bar' not found under 'Foo::Baz'
+      end
+    end
+
+Change constant/macro searching namespace
+
+    using Foo::Bar::Baz
+      ... # constants and macros are searched from Foo::Bar::Baz instead
+    end

@@ -11,9 +11,9 @@
 
 the following words can not be used as variables, but can be used as method names.
 
-declarative (11)
+declarative (12)
 
-    data class
+    data class using
     include extend delegate scope # has implicit receiver
     def undef final
     var # force declaration of a new variable, useful inside `do` blocks
@@ -28,8 +28,8 @@ logic shortcut operator
 
 control flow (12)
 
-    if else switch case ensure fall_through
-    while wend do end collect select
+    if else case when ensure fall_through
+    while wend do end for select
 
 jumps must be inside `while`/`wend`/`do` (can we jump inside lambda?)
 
