@@ -90,28 +90,20 @@ static inline int64_t VAL_UINT_AS_INT(uint64_t u) {
 
 // TODO more compressed header:
 
-//       MSB
-// 24bit extra_rc    (rc - 1) - don't need to extract when changing rc
-// 1bit  has_dtor     (for faster dealloc)
-// 1bit  rc_overflow  (counted in global table)
-// 1bit  rc_perm      (permanent)
-// 1bit  deallocating (it is being deallocated)
-// 1bit  has_assoc    (has associated memory, for extensions)
-// 1bit  user1
-// 1bit  user2
-// 1bit  user3
-//       LSB
-// 32bit klass
-
 // klass can be combined with 32bit method id for the method search? (think about the HAMT method table)
 typedef struct {
-  uint64_t ref_count;
+  // little endian
+  uint16_t extra_rc: 15; // rc - 1 (if highest bit is set)
+  bool rc_overflow: 1;   // we inc extra_rc until this bit is set
+  bool perm: 1;          // is permanent
+  bool has_dtor: 1;
+  bool deallocating: 1;  // we are inside the object's deallocation procedure
+  bool has_assoc: 1;     // extended with asociated memory, stored in global table
+  uint16_t flags: 12;    // 12 bits available, can be used as counters, etc...
   uint32_t klass;
-  uint32_t flags;
 } ValHeader;
 
-#define VAL_REF_COUNT_MAX (~(uint64_t)0)
-#define VAL_IS_PERM(_p_) (((ValHeader*)(_p_))->ref_count == VAL_REF_COUNT_MAX)
+#define VAL_IS_PERM(_p_) (((ValHeader*)(_p_))->perm)
 
 enum {
   KLASS_NIL,
@@ -156,8 +148,16 @@ inline static uint32_t VAL_KLASS(Val v) {
   }
 }
 
-inline static uint64_t VAL_REF_COUNT(Val v) {
-  return ((ValHeader*)(v))->ref_count;
+inline static int64_t VAL_REF_COUNT(Val v) {
+  ValHeader* h = (ValHeader*)v;
+  if (h->rc_overflow) {
+    // TODO search in global
+    return 65535;
+  } else if (h->perm) {
+    return -1;
+  } else {
+    return h->extra_rc + 1;
+  }
 }
 
 #pragma mark ### misc

@@ -6,12 +6,24 @@ static Val f0() {
   return 0;
 }
 
+static Val f1(Val a1) {
+  return a1;
+}
+
+static Val f2(Val a1, Val a2) {
+  return a1 + a2;
+}
+
 static Val f3(Val a1, Val a2, Val a3) {
   return a1 + a2 + a3;
 }
 
 static Val f4(Val a1, Val a2, Val a3, Val a4) {
   return a1 + a2 + a3 + a4;
+}
+
+static Val f5(Val a1, Val a2, Val a3, Val a4, Val a5) {
+  return a1 + a2 + a3 + a4 + a5;
 }
 
 static Val f6(Val a1, Val a2, Val a3, Val a4, Val a5, Val a6) {
@@ -23,12 +35,16 @@ static Val f7(Val a1, Val a2, Val a3, Val a4, Val a5, Val a6, Val a7) {
 }
 
 static Val f8(Val a1, Val a2, Val a3, Val a4, Val a5, Val a6, Val a7, Val a8) {
-  return a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8;
+  return (a1<<1) + (a2<<2) + (a3<<3) + (a4<<4) + (a5<<5) + (a6<<6) + (a7<<7) + (a8<<8);
 }
 
 void val_suite() {
   ccut_test("rotl and rotr") {
     assert_eq(1239, PDLEX_ROTR(PDLEX_ROTL(1239, 3), 3));
+  }
+
+  ccut_test("header size") {
+    assert_eq(sizeof(uint64_t), sizeof(ValHeader));
   }
 
   ccut_test("from and to dbl") {
@@ -103,11 +119,20 @@ void val_suite() {
     ret = val_c_call((void*)f0, 0, argv);
     assert_eq(0, ret);
 
+    ret = val_c_call((void*)f0, 1, argv);
+    assert_eq(1, ret);
+
+    ret = val_c_call((void*)f2, 2, argv);
+    assert_eq(1+2, ret);
+
     ret = val_c_call((void*)f3, 3, argv);
     assert_eq(1+2+3, ret);
 
     ret = val_c_call((void*)f4, 4, argv);
     assert_eq(1+2+3+4, ret);
+
+    ret = val_c_call((void*)f4, 5, argv);
+    assert_eq(1+2+3+4+5, ret);
 
     ret = val_c_call((void*)f6, 6, argv);
     assert_eq(1+2+3+4+5+6, ret);
@@ -116,6 +141,6 @@ void val_suite() {
     assert_eq(1+2+3+4+5+6+7, ret);
 
     ret = val_c_call((void*)f8, 8, argv);
-    assert_eq(1+2+3+4+5+6+7+8, ret);
+    assert_eq((1<<1)+(2<<2)+(3<<3)+(4<<4)+(5<<5)+(6<<6)+(7<<7)+(8<<8), ret);
   }
 }

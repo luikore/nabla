@@ -16,6 +16,11 @@
 #undef val_release
 #endif
 
+typedef union {
+  ValHeader h;
+  uint64_t i;
+} HeaderCast;
+
 typedef struct {
   ValHashFunc hash_func;
   ValDestructorFunc destructor_func;
@@ -44,7 +49,7 @@ void val_debug(Val v) {
     printf("  klass=%u\n", VAL_KLASS(v));
   } else {
     ValHeader* p = (ValHeader*)v;
-    printf("  ref_count=%llu, klass=%u, flags=%u\n", p->ref_count, p->klass, p->flags);
+    printf("  extra_rc=%hu, klass=%u, flags=%u\n", p->extra_rc, p->klass, p->flags);
   }
 }
 
@@ -122,7 +127,7 @@ void val_end_check_memory_cm() {
     log_err("Memory check failed, unfreed memory (%lu):", MM.size(&heap_mem));
     MMIter it;
     for (MM.iter_init(&it, &heap_mem); !MM.iter_is_end(&it); MM.iter_next(&it)) {
-      log_err("  %p: klass=%u, ref_count=%llu", (void*)it.slot->k, VAL_KLASS(it.slot->k), ((ValHeader*)it.slot->k)->ref_count);
+      log_err("  %p: klass=%u, extra_rc=%hu", (void*)it.slot->k, VAL_KLASS(it.slot->k), ((ValHeader*)it.slot->k)->extra_rc);
     }
     assert(false);
   }
@@ -132,7 +137,7 @@ void val_end_check_memory_cm() {
 
 static void _heap_mem_store(void* p) {
   if (heap_mem_checking) {
-    assert(((ValHeader*)p)->ref_count != VAL_REF_COUNT_MAX);
+    assert(!VAL_IS_PERM(p));
     if (val_is_tracing()) {
       printf("heap store: %p\n", p);
       MMIter it;
@@ -146,7 +151,7 @@ static void _heap_mem_store(void* p) {
 
 static void _heap_mem_unstore(void* p) {
   if (heap_mem_checking) {
-    assert(((ValHeader*)p)->ref_count <= 1);
+    assert(((ValHeader*)p)->extra_rc == 0);
     uint64_t v;
     if (!MM.find(&heap_mem, (uint64_t)p, &v)) {
       log_err("Memory check failed, freeing memory not allocated: %p", p);
@@ -171,7 +176,6 @@ void val_end_trace() {
 void* val_alloc_cm(size_t size) {
   ValHeader* p = malloc(size);
   memset(p, 0, size);
-  p->ref_count = 1;
 
   _heap_mem_store(p);
   return p;
@@ -182,7 +186,6 @@ void* val_alloc(size_t size) {
   // see http://en.cppreference.com/w/c/types/max_align_t
   ValHeader* p = malloc(size);
   memset(p, 0, size);
-  p->ref_count = 1;
 
   return p;
 }
@@ -196,7 +199,7 @@ void* val_dup_cm(void* p, size_t osize, size_t nsize) {
   } else {
     memcpy(r, p, nsize);
   }
-  r->ref_count = 1;
+  r->extra_rc = 0;
 
   _heap_mem_store(r);
   return r;
@@ -211,7 +214,7 @@ void* val_dup(void* p, size_t osize, size_t nsize) {
   } else {
     memcpy(r, p, nsize);
   }
-  r->ref_count = 1;
+  r->extra_rc = 0;
 
   return r;
 }
@@ -239,7 +242,7 @@ void* val_realloc(void* p, size_t osize, size_t nsize) {
 
 void val_free_cm(void* _p) {
   ValHeader* p = _p;
-  assert(p->ref_count <= 1);
+  assert(p->extra_rc == 0);
 
   _heap_mem_unstore(p);
   free(p);
@@ -247,20 +250,20 @@ void val_free_cm(void* _p) {
 
 void val_free(void* _p) {
   ValHeader* p = _p;
-  assert(p->ref_count <= 1);
+  assert(p->extra_rc == 0);
 
   free(p);
 }
 
 void val_perm_cm(void* _p) {
   ValHeader* p = _p;
-  p->ref_count = VAL_REF_COUNT_MAX;
+  p->perm = true;
   _heap_mem_unstore(p);
 }
 
 void val_perm(void* _p) {
   ValHeader* p = _p;
-  p->ref_count = VAL_REF_COUNT_MAX;
+  p->perm = true;
 }
 
 // same as val_retain
@@ -272,7 +275,16 @@ void val_retain_cm(Val v) {
   if (VAL_IS_PERM(p)) {
     return;
   }
-  p->ref_count++;
+
+  if (p->rc_overflow) {
+    // todo
+  } else {
+    uint64_t* up = (uint64_t*)p;
+    up[0]++;
+    if (p->rc_overflow) {
+      // todo put in counter table
+    }
+  }
 }
 
 void val_retain(Val v) {
@@ -283,7 +295,16 @@ void val_retain(Val v) {
   if (VAL_IS_PERM(p)) {
     return;
   }
-  p->ref_count++;
+
+  if (p->rc_overflow) {
+    // todo
+  } else {
+    uint64_t* up = (uint64_t*)p;
+    up[0]++;
+    if (p->rc_overflow) {
+      // todo put in counter table
+    }
+  }
 }
 
 void val_release_cm(Val v) {
@@ -295,7 +316,7 @@ void val_release_cm(Val v) {
     return;
   }
 
-  if (p->ref_count == 1) {
+  if (p->extra_rc == 0) {
     FuncMap fm = func_map[p->klass];
     if (fm.delete_func) {
       fm.delete_func(p);
@@ -306,7 +327,11 @@ void val_release_cm(Val v) {
       val_free_cm(p);
     }
   } else {
-    p->ref_count--;
+    if (p->rc_overflow) {
+      // todo
+    } else {
+      p->extra_rc--;
+    }
   }
 }
 
@@ -319,7 +344,7 @@ void val_release(Val v) {
     return;
   }
 
-  if (p->ref_count == 1) {
+  if (p->extra_rc == 0) {
     FuncMap fm = func_map[p->klass];
     if (fm.delete_func) {
       fm.delete_func(p);
@@ -330,6 +355,10 @@ void val_release(Val v) {
       val_free(p);
     }
   } else {
-    p->ref_count--;
+    if (p->rc_overflow) {
+      // todo
+    } else {
+      p->extra_rc--;
+    }
   }
 }
