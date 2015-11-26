@@ -1,61 +1,46 @@
-local env is a hash-like object
+# Object Introspection
 
-## gc
+Methods on objects
 
-incremental tracing
+    obj.class
+    obj.hash_code
+    obj.==
+    obj.match?    # default impl: alias of ==
+    obj.inspect
+    obj.respond_to?
+    obj.call m args
 
-see also gc_ptr.md
+    a.present?
+    a.presence
+    a.blank?
 
-## runtime introspection
+    obj.iv_get k
+    obj.iv_set! k v
+    obj.methods
+    obj.object_id
+    obj.method m
 
-    Kernel::GC
-    Kernel::Lang
+    obj.def! m lambda
+    obj.undef! m
+    obj.extend! module
 
-how powerful should it be?
+methods can be undefined with `undef` or replaced (just def one with the same name again)
 
-## leveled runtime
+to finalize methods to forbid re-def (raise error on re-def):
 
-the primitive should be abled to change
+    final def foo
+      ...
 
-## mutual recursion detection
+to forbid include or re-open of a class
 
-just an idea:
+    final class Foo
+      ...
 
-represent last n tail_call methods in a bitmap
-in a tail\_call instruction, find method, then detect if it is in the bitmap, if yes, apply tail call stack rewrite?
+if a child class re-def the method, it will raise an error
 
-to read: A First-Order One-Pass CPS Transformation
+## Runtime introspection
 
-## JIT inlining trick
+(NOTE) Kernel extends itself and methods on it can be called with `:`, so introspection methods need to be defined under other components.
 
-just an idea:
-
-append the function being inlined, then rewrite longjmp-call to localmp-call
-
-## tag pointer design
-
-*double centric*
-
-for computation-heavy jobs
-
-*pointer centric + double*
-
-just rotated version of double centric design
-
-*pointer centric + mini string*
-
-decimal/double are heap objs, should be good for servers
-
----
-
-every pointer obj has `isa`, which points to the prototype
-
-but value object doesn't have one
-
-there's a special value object that represents `Object` class (todo consider the chain)
-
-# the beneficial on GC
-
-GC doesn't care if an object is mutable, it cares when they are mutated
-
-so we can inform GC on every mutating actions!
+    Kernel::Syntax
+    Kernel::Runtime (prof, debug, tracing...)

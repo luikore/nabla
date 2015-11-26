@@ -70,14 +70,14 @@ the above code is equivalent to
 
     # match first, then assign
     if !(Int.match? arr[1])
-      yield <match error>
+      throw <match error>
     a = arr[0]
     b = arr[1]
 
 or
 
     if not [a, b as Int] ~~ arr
-      yield <match error>
+      throw <match error>
 
 case of const:
 

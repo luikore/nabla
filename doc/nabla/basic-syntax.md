@@ -122,6 +122,16 @@ if it is a "right value", then it represents value of expression in the context.
 
 # Misc
 
+## variables
+
+A name start with lower letter denotes a variable.
+
+Declared the first time it is assigned (even in unreachable control structure)
+
+If need to force a declaration that override previous use of the variable:
+
+    var foo
+
 ## comments
 
 line comments
@@ -136,7 +146,7 @@ block comment
       bar
       baz
 
-block comment with preprocessor
+block comment with preprocessor (should use no space between `#` and `<<` and `html`)
 
     #<<html
       foo
@@ -152,6 +162,10 @@ block comment with preprocessor
       foo
       bar
       baz
+
+NOTE: block comments are not allowed after a non-empty line, the comment below is line comment and generate a warning:
+
+    foo #<<md
 
 ## comma, new line, semicolon and `end`
 
@@ -190,6 +204,7 @@ knot operators: it means an operator is wrapped by `()`, the effect is precedenc
 
     x = a (**) :foo a b  # means `x = (a ** (:foo a b))`
 
+NOTE: we can't do the same as in Haskell, or operator expressions would require a pair of parens wrapping around
 NOTE: no loop shift operator: method `.shl`/`.shr` requires a second param of bit length.
 NOTE: no bit flip operator: only method `.flip`.
 
@@ -287,6 +302,29 @@ for (see below for for section)
 
     if a, b;
     if a, b, else if c, d, else e; end
+
+## exception handling
+
+`try...when` is a control structure for exception handling
+
+    tries = 0
+    try
+      if :foo
+        throw "foo"
+      end
+    when "foo"
+      tries += 1
+      if tries < 10
+        :sleep 1.1 ** tries
+        redo
+      end
+    when _
+      :puts "unkown error"
+    end
+
+`throw` throws an exception (for better debugging, it can be traced and resumed in VM)
+
+`redo` calls the try block again
 
 # Data structures
 
@@ -578,7 +616,7 @@ See also https://ghc.haskell.org/trac/ghc/wiki/ApplicativeDo for applicative do 
 [TODO] in monad comprehension there can also be `take` and `group by`
 https://ghc.haskell.org/trac/ghc/wiki/MonadComprehensions
 
-# Behavior types (class)
+# Behavior types (class, include, scope, delegate)
 
 a data type is inherently a behavior type, but there can be behavior types that are not data types
 
@@ -605,7 +643,7 @@ NOTE: be careful when using it, if some source file has `include *`, it is not r
 classes can also be scoped
 
     class Foo
-      scope :bar
+      scope bar
         include Bar
       end
     end
@@ -617,7 +655,7 @@ scoping is a way to separate concerns. `scope` in fact creates a new class and p
     end
     class Foo
       def a; # no way: can not overwrite final method
-      scope :foo
+      scope foo
         def a; # ok, since scope is an implicit sub data type
       end
     end
@@ -627,13 +665,13 @@ The goodness: one data type can re-use other data-types methods.
 and can delegate methods
 
     class Foo
-      delegate :bar as Bar # delegate on bar, can search methods on bar (will do a class check of Bar)
+      delegate bar as Bar # delegate on bar, can search methods on bar (will do a class check of Bar)
     end
 
 we can also use splat macro on `delegate` (TODO and it has the same reload problem as with `include *`)
 
     class Foo
-      delegate :bar as *Bar
+      delegate bar as *Bar
     end
 
 delegate is like `include`, and `class_of?` checks both `include` and `delegate`. for specific checks, use `class_include?` and `class_delegate?`.
@@ -698,6 +736,23 @@ predicate methods end with `?` and return values are always converted to `true` 
 To mention a method, we can use `Klass:method`, but it is not valid syntax (just for simplicity of reflection API).
 
 [design NOTE] We should not impl `local def`, it can be quite complex if we impl dynamic method calling.
+
+## namespaces
+
+Every class also acts as a namespace
+
+    class Foo
+      class Baz
+        Bar # searches Bar inside Baz, if not, search under Foo, if not, search top namespace
+            # if not found: raise error - constant 'Bar' not found under 'Foo::Baz'
+      end
+    end
+
+Change constant/macro searching namespace
+
+    using Foo::Bar::Baz
+      ... # constants and macros are searched from Foo::Bar::Baz instead
+    end
 
 ## object path changing
 
@@ -812,6 +867,8 @@ not composed
 
 ## method search rule
 
+`super` calls last method defined in this class
+
 search latest defined, then latest included
 
     class A
@@ -864,7 +921,7 @@ NOTE: it is mainly used for certain optimizations to work, but not recommended t
 
 NOTE: there is no modifiers like `private` and `protected` -- we can always use `scope` and `delegate` to reuse code while keeping concerns separated. and they are not easy to test. for some cases of private/protected methods, we can also use lambdas.
 
-[design NOTE]: the modifiers are not methods? `:final`, `:include`, `:delegate`, `:scope` makes compiler optimizations harder, and not as easy to write either.
+[design NOTE]: the modifiers are not methods? `:final`, `:include`, `:delegate`, `:scope` makes compiler optimizations harder, and not as easy to write either. And `include`, `extend`, `delegate`, `scope` all require implicit receiver: the scoped class, making them methods is a bit complex.
 
 # Lambda and subroutines
 
@@ -899,7 +956,7 @@ curry
 
 for lambda
 
-## subroutines (todo clean it)
+## subroutines
 
 a subroutine can modify captured variables, and can use `next` and `break`. but the life of a block ends with a local scope.
 
@@ -941,51 +998,6 @@ NOTE nesting lambda and subroutine
 
 `a` in lambda capture is changed, but outside of lambda, `a` is not changed.
 compiler should generate warning: assigning local variable inside closure has no effect for the outside (lower warning level just warns the subroutine-in-lambda change, higher warning level warns lambda change)
-
-thought C-API of subroutines
-
-    // use return value to control the flow, C-ext usually use this
-    int cb(Val e, Val* udata) {
-      if (...) return ibreak;
-    }
-    arr_iter(arr, undef, cb);
-
-    // iter with code obj, used in lang impl
-    // in byte code, `break`, `return` will create control flow yields,
-    // and the loop captures it, cleans up resources, then re-throw a `return` -- yes, every method body captures the `return`
-    arr_iter_code(arr, undef, code);
-
-## on non-local jumps (todo clean it)
-
-`break`, `next`, `return` goes one jump buf chain
-
-for every method that requires resource cleanup, adds a jump buf chain
-
-todo: make a setjmp/longjmp prototype for impl of coroutines [see](http://en.wikipedia.org/wiki/Setjmp.h)
-
-`do` starts a block, inside the block, variables can be altered
-`->` starts a lambda, lambda just snapshots outside variables
-
-simple rule: break / next are only allowed inside a block, so
-
-    while xx
-      ...
-    end
-
-is in fact:
-
-    while xx do
-      ...
-    end
-
-blocks hold reference count (just for check) but it dies when containing block terminates
-
-blocks are more common than lambdas, but only lambdas works when we need to store them (register callbacks for example)
-
-    :register some_obj -> x y
-      ...
-
-NOTE block is mutable object so it errors instead of giving segfault. mutable objects are immutable pointer with reference count, and a pointer to mutable memory
 
 ## shadow naming and variable scoping
 
@@ -1057,23 +1069,38 @@ it is just an opposite writing of `->` and the following lines before `end` are 
 
 there is no back arrow for do-block (we recommend immutable ways, when we really need to change local vars inside block, then use `do` directly)
 
-## matching args
-
-see pattern-match
-
-## namespaces
-
-Every class also acts as a namespace
+back arrows can be used inside any syntax structures with `end` or `when` delimiter, the following are all valid syntax:
 
     class Foo
-      class Baz
-        Bar # searches Bar inside Baz, if not, search under Foo, if not, search top namespace
-            # if not found: raise error - constant 'Bar' not found under 'Foo::Baz'
+      e <- a.each
+
+      scope foo
+        e <- a.each
+      end
+
+      using ::Bar
+        e <- a.each
       end
     end
 
-Change constant/macro searching namespace
-
-    using Foo::Bar::Baz
-      ... # constants and macros are searched from Foo::Bar::Baz instead
+    try
+      e <- a.each
+    when _
+      e <- a.each
     end
+
+    ->
+      e <- a.each
+    end
+
+    def foo
+      e <- a.each
+    end
+
+    if foo
+      e <- a.each
+    end
+
+## matching args
+
+see pattern-match

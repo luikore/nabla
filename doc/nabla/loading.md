@@ -1,5 +1,7 @@
 ## Loading code from other files
 
+[design NOTE] not a method call, since we need to do code reloading analysis
+
     require 'foo'   # from load paths
     require './foo' # search from same dir
 

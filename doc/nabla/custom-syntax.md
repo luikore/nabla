@@ -437,7 +437,7 @@ treats `a.b` as `a["b"]`
 
 to add new infix operators
 
-    Kernel::Lang.add_operator "^_^" {precedence: 5}
+    Kernel::Syntax.add_operator "^_^" {precedence: 5}
 
 then it can be used in `def`, `.` or `:` calling
 
@@ -454,7 +454,7 @@ Default comment processor only do some minimal processing.
 To define some other document based comment processor for more powerful document:
 
     # markdown comment processor
-    Kernel::Lang.def_comment_processor "md" -> src obj
+    Kernel::Syntax.def_comment_processor "md" -> src obj
       ... return a comment obj or nil for non-doc identities
     end
 
