@@ -91,10 +91,16 @@ _val_c_call:
   addq $24, %rax
 #endif
 
-  // push other args
+  // %rax += %r10 * 8
+  pushq %r10
+  shlq $3, %r10
+  addq %r10, %rax
+  popq %r10
+
+  // push other args, from right to left
 loop_push_args:
-  addq $8, %rax
   pushq 0(%rax)
+  subq $8, %rax
   addq $8, %r12
   decq %r10
   jnz loop_push_args

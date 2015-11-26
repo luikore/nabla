@@ -35,6 +35,7 @@ static Val f7(Val a1, Val a2, Val a3, Val a4, Val a5, Val a6, Val a7) {
 }
 
 static Val f8(Val a1, Val a2, Val a3, Val a4, Val a5, Val a6, Val a7, Val a8) {
+  // printf("\n%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,\n", a1,a2,a3,a4,a5,a6,a7,a8);
   return (a1<<1) + (a2<<2) + (a3<<3) + (a4<<4) + (a5<<5) + (a6<<6) + (a7<<7) + (a8<<8);
 }
 
@@ -98,7 +99,7 @@ void val_suite() {
 
   ccut_test("alloc default ref_count == 1") {
     ValHeader* h = val_alloc(30);
-    assert_eq(1, h->ref_count);
+    assert_eq(1, VAL_REF_COUNT((Val)h));
     val_free(h);
   }
 
@@ -106,9 +107,9 @@ void val_suite() {
     ValHeader* h = val_alloc(10);
     Val v = (Val)h;
     RETAIN(v);
-    assert_eq(2, h->ref_count);
+    assert_eq(2, VAL_REF_COUNT((Val)h));
     RELEASE(v);
-    assert_eq(1, h->ref_count);
+    assert_eq(1, VAL_REF_COUNT((Val)h));
     val_free(h);
   }
 
@@ -119,7 +120,7 @@ void val_suite() {
     ret = val_c_call((void*)f0, 0, argv);
     assert_eq(0, ret);
 
-    ret = val_c_call((void*)f0, 1, argv);
+    ret = val_c_call((void*)f1, 1, argv);
     assert_eq(1, ret);
 
     ret = val_c_call((void*)f2, 2, argv);
@@ -131,7 +132,7 @@ void val_suite() {
     ret = val_c_call((void*)f4, 4, argv);
     assert_eq(1+2+3+4, ret);
 
-    ret = val_c_call((void*)f4, 5, argv);
+    ret = val_c_call((void*)f5, 5, argv);
     assert_eq(1+2+3+4+5, ret);
 
     ret = val_c_call((void*)f6, 6, argv);
