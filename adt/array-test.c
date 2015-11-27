@@ -1,7 +1,17 @@
 #include "array.h"
+#include "array-node.h"
 #include <ccut.h>
 
 void array_suite() {
+  ccut_test("array node") {
+    val_begin_check_memory();
+
+    Val node = (Val)NODE_NEW(0);
+    RELEASE(node);
+
+    val_end_check_memory();
+  }
+
   // the following get tests use prepared arrays, to validate that get operations behaves correctly
 
   ccut_test("get on array of depth 0W") {
@@ -142,11 +152,13 @@ void array_suite() {
   ccut_test("set 3-layered data") {
     val_begin_check_memory();
     Val a = nb_array_new_empty();
-    for (long i = 0; i < 70000; i++) {
+    long sz = 1025;
+    for (long i = 0; i < sz; i++) {
       REPLACE(a, nb_array_set(a, i, VAL_FROM_INT(i)));
     }
-    assert_eq(70000, nb_array_size(a));
+    assert_eq(sz, nb_array_size(a));
 
+    val_begin_trace();
     RELEASE(a);
     val_end_check_memory();
   }

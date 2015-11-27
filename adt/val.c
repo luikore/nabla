@@ -27,11 +27,18 @@ typedef struct {
   ValDeleteFunc delete_func;
 } FuncMap;
 
+static bool eq_func(Val v1, Val v2) {
+  return VAL_EQ(v1, v2);
+}
+
+MUT_MAP_DECL(GlobalRefCounts, Val, int64_t, val_hash, eq_func);
+
 static uint8_t nb_hash_key[16];
 static FuncMap* func_map;
 static size_t func_map_size = 100;
 static uint32_t curr_klass_id = KLASS_USER;
 static bool global_tracing = false; // for begin/end trace
+static struct GlobalRefCounts global_ref_counts;
 
 static void _init() __attribute__((constructor(0)));
 static void _init() {
@@ -41,6 +48,52 @@ static void _init() {
   }
   func_map = malloc(sizeof(FuncMap) * func_map_size);
   memset(func_map, 0, sizeof(FuncMap) * func_map_size);
+  GlobalRefCounts.init(&global_ref_counts);
+}
+
+static void _inc_ref_count(Val v) {
+  ValHeader* p = (ValHeader*)v;
+
+  if (p->rc_overflow) {
+    int64_t ref_count;
+    if (GlobalRefCounts.find(&global_ref_counts, v, &ref_count)) {
+      GlobalRefCounts.insert(&global_ref_counts, v, ref_count + 1);
+    } else {
+      // todo error
+    }
+  } else {
+    uint64_t* up = (uint64_t*)p;
+    up[0]++;
+    if (p->rc_overflow) {
+      int64_t ref_count;
+      if (GlobalRefCounts.find(&global_ref_counts, v, &ref_count)) {
+        // todo error
+      } else {
+        GlobalRefCounts.insert(&global_ref_counts, v, VAL_MAX_EMBED_RC);
+      }
+    }
+  }
+}
+
+static void _dec_ref_count(Val v) {
+  ValHeader* p = (ValHeader*)v;
+
+  if (p->rc_overflow) {
+    int64_t ref_count;
+    if (GlobalRefCounts.find(&global_ref_counts, v, &ref_count)) {
+      if (ref_count == VAL_MAX_EMBED_RC) {
+        GlobalRefCounts.remove(&global_ref_counts, v);
+        p->rc_overflow = false;
+        p->extra_rc = (VAL_MAX_EMBED_RC - 1);
+      } else {
+        GlobalRefCounts.insert(&global_ref_counts, v, ref_count - 1);
+      }
+    } else {
+      // todo error
+    }
+  } else {
+    p->extra_rc--;
+  }
 }
 
 void val_debug(Val v) {
@@ -276,35 +329,11 @@ void val_retain_cm(Val v) {
     return;
   }
 
-  if (p->rc_overflow) {
-    // todo
-  } else {
-    uint64_t* up = (uint64_t*)p;
-    up[0]++;
-    if (p->rc_overflow) {
-      // todo put in counter table
-    }
-  }
+  _inc_ref_count(v);
 }
 
 void val_retain(Val v) {
-  if (VAL_IS_IMM(v)) {
-    return;
-  }
-  ValHeader* p = (ValHeader*)v;
-  if (VAL_IS_PERM(p)) {
-    return;
-  }
-
-  if (p->rc_overflow) {
-    // todo
-  } else {
-    uint64_t* up = (uint64_t*)p;
-    up[0]++;
-    if (p->rc_overflow) {
-      // todo put in counter table
-    }
-  }
+  val_retain_cm(v);
 }
 
 void val_release_cm(Val v) {
@@ -327,11 +356,7 @@ void val_release_cm(Val v) {
       val_free_cm(p);
     }
   } else {
-    if (p->rc_overflow) {
-      // todo
-    } else {
-      p->extra_rc--;
-    }
+    _dec_ref_count(v);
   }
 }
 
@@ -355,10 +380,12 @@ void val_release(Val v) {
       val_free(p);
     }
   } else {
-    if (p->rc_overflow) {
-      // todo
-    } else {
-      p->extra_rc--;
-    }
+    _dec_ref_count(v);
   }
+}
+
+int64_t val_global_ref_count(Val v) {
+  int64_t res;
+  bool found = GlobalRefCounts.find(&global_ref_counts, v, &res);
+  return found ? res : -1;
 }

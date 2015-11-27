@@ -88,37 +88,50 @@ static inline int64_t VAL_UINT_AS_INT(uint64_t u) {
 
 #pragma mark ### object
 
-// TODO more compressed header:
-
 // klass can be combined with 32bit method id for the method search? (think about the HAMT method table)
 typedef struct {
   // little endian
-  uint16_t extra_rc: 15; // rc - 1 (if highest bit is set)
+  uint16_t extra_rc: 12; // rc - 1 (if highest bit is set)
   bool rc_overflow: 1;   // we inc extra_rc until this bit is set
-  bool perm: 1;          // is permanent
+  bool perm: 1;          // is permanent (or managed by custom allocator)
   bool has_dtor: 1;
   bool deallocating: 1;  // we are inside the object's deallocation procedure
+
   bool has_assoc: 1;     // extended with asociated memory, stored in global table
+  bool user1: 1;
+  bool user2: 1;
+  bool user3: 1;
   uint16_t flags: 12;    // 12 bits available, can be used as counters, etc...
+
   uint32_t klass;
 } ValHeader;
 
+#define VAL_MAX_EMBED_RC (1<<12)
 #define VAL_IS_PERM(_p_) (((ValHeader*)(_p_))->perm)
 
 enum {
   KLASS_NIL,
   KLASS_BOOLEAN,
   KLASS_INTEGER,
-  KLASS_RATIONAL,
   KLASS_DOUBLE,
-  KLASS_COMPLEX,
-  KLASS_VECTOR,
   KLASS_RANGE,
   KLASS_STRING,
+
+  KLASS_ARRAY_NODE,
   KLASS_ARRAY,
+
+  KLASS_MAP_SLAB,
+  KLASS_MAP_COLA,
   KLASS_MAP,
-  KLASS_MAP_ITER,
+
+  KLASS_DICT_NODE,
+  KLASS_DICT_LEAF,
   KLASS_DICT,
+
+  KLASS_RATIONAL,
+  KLASS_COMPLEX,
+  KLASS_VECTOR,
+
   KLASS_BOX,
 
   KLASS_USER // start of dynamic allocated classes
@@ -148,11 +161,12 @@ inline static uint32_t VAL_KLASS(Val v) {
   }
 }
 
+int64_t val_global_ref_count(Val v);
+
 inline static int64_t VAL_REF_COUNT(Val v) {
   ValHeader* h = (ValHeader*)v;
   if (h->rc_overflow) {
-    // TODO search in global
-    return 65535;
+    return val_global_ref_count(v);
   } else if (h->perm) {
     return -1;
   } else {
