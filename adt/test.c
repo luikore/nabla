@@ -5,6 +5,8 @@
 
 void val_suite();
 void box_suite();
+void map_cola_suite();
+void map_node_suite();
 void map_suite();
 void array_suite();
 void dict_suite();
@@ -243,9 +245,11 @@ int main (int argc, char const *argv[]) {
   ccut_run_suite(pool_suite);
   ccut_run_suite(arena_suite);
   ccut_run_suite(val_suite);
-  ccut_run_suite(map_suite);
   ccut_run_suite(array_suite);
   ccut_run_suite(dict_suite);
+  ccut_run_suite(map_cola_suite);
+  ccut_run_suite(map_node_suite);
+  ccut_run_suite(map_suite);
   ccut_run_suite(sym_table_suite);
   ccut_run_suite(string_suite);
   ccut_print_stats();

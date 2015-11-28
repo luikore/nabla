@@ -531,7 +531,7 @@ static Array* _array_append(Array* a, Val e) {
     parent_slots[index] = new_child;
     parent_slots = child->slots;
   }
-  PDLEX_UNREACHABLE();
+  NB_UNREACHABLE();
 }
 
 void _node_debug(Node* node, int depth) {

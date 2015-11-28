@@ -20,19 +20,17 @@ Val nb_map_find(Val m, Val k);
 // *v = VAL_UNDEF if elem not exist
 Val nb_map_remove(Val m, Val k, Val* v);
 
-// NOTE if we use iterator pattern, pros: good for bytecode optimization
-//      cons: impl is complex, need allocation for each elem
-//      for simplicity we just stick to the callback mode
-typedef enum { PDLEX_MAP_INEXT, PDLEX_MAP_IBREAK, PDLEX_MAP_IFIN } NbMapIterRet;
+// NOTE not use iterator pattern
+//      iterator pattern
+//        pros: good for bytecode optimization
+//        cons: impl is complex, need allocation for each elem
+//      for simplicity we just stick to the callback style
+typedef enum { NB_MAP_NEXT, NB_MAP_BREAK, NB_MAP_FIN } NbMapEachRet;
 // return ibreak/ibreak
-typedef NbMapIterRet (*NbMapIterCb)(Val k, Val v, Val udata);
+typedef NbMapEachRet (*NbMapEachCb)(Val k, Val v, Val udata);
 // return ibreak/ifin
-NbMapIterRet nb_map_iter(Val m, Val udata, NbMapIterCb callback);
+NbMapEachRet nb_map_each(Val m, Val udata, NbMapEachCb callback);
 
 #pragma mark for test only
 
 void nb_map_debug(Val m);
-
-void nb_map_iter_debug(Val iter);
-
-void nb_map_check_internal_structs();

@@ -96,6 +96,12 @@ static void _dec_ref_count(Val v) {
   }
 }
 
+static void _clear_rc(ValHeader* r) {
+  r->extra_rc = 0;
+  r->rc_overflow = false;
+  r->perm = false;
+}
+
 void val_debug(Val v) {
   printf("debug val 0x%lx (%s)\n", v, VAL_IS_IMM(v) ? "immediate" : "pointer");
   if (VAL_IS_IMM(v)) {
@@ -252,7 +258,7 @@ void* val_dup_cm(void* p, size_t osize, size_t nsize) {
   } else {
     memcpy(r, p, nsize);
   }
-  r->extra_rc = 0;
+  _clear_rc(r);
 
   _heap_mem_store(r);
   return r;
@@ -267,7 +273,7 @@ void* val_dup(void* p, size_t osize, size_t nsize) {
   } else {
     memcpy(r, p, nsize);
   }
-  r->extra_rc = 0;
+  _clear_rc(r);
 
   return r;
 }
@@ -345,7 +351,7 @@ void val_release_cm(Val v) {
     return;
   }
 
-  if (p->extra_rc == 0) {
+  if (!p->rc_overflow && p->extra_rc == 0) {
     FuncMap fm = func_map[p->klass];
     if (fm.delete_func) {
       fm.delete_func(p);
@@ -369,7 +375,10 @@ void val_release(Val v) {
     return;
   }
 
-  if (p->extra_rc == 0) {
+  if (p->klass == 6) {
+    printf("release node xtra_rc=%d\n", p->extra_rc);
+  }
+  if (!p->rc_overflow && p->extra_rc == 0) {
     FuncMap fm = func_map[p->klass];
     if (fm.delete_func) {
       fm.delete_func(p);

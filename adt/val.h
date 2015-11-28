@@ -60,8 +60,8 @@ static inline double VAL_UINT_AS_DBL(uint64_t u) {
 }
 #define VAL_DBL_CAN_IMM(_dbl_) (VAL_DBL_AS_UINT(_dbl_) & (1ULL << 62))
 #define VAL_IS_DBL(_v_) (((_v_) & 3) == 2)
-#define VAL_FROM_DBL(_dbl_) PDLEX_ROTL(VAL_DBL_AS_UINT(_dbl_), 3)
-#define VAL_TO_DBL(_v_) VAL_UINT_AS_DBL(PDLEX_ROTR((_v_), 3))
+#define VAL_FROM_DBL(_dbl_) NB_ROTL(VAL_DBL_AS_UINT(_dbl_), 3)
+#define VAL_TO_DBL(_v_) VAL_UINT_AS_DBL(NB_ROTR((_v_), 3))
 
 static inline uint64_t VAL_INT_AS_UINT(int64_t i) {
   ValCast c = {.i = i};
@@ -120,12 +120,12 @@ enum {
   KLASS_ARRAY_NODE,
   KLASS_ARRAY,
 
-  KLASS_MAP_SLAB,
+  KLASS_MAP_NODE,
   KLASS_MAP_COLA,
   KLASS_MAP,
 
-  KLASS_DICT_NODE,
-  KLASS_DICT_LEAF,
+  KLASS_DICT_MAP,
+  KLASS_DICT_BUCKET,
   KLASS_DICT,
 
   KLASS_RATIONAL,
@@ -164,6 +164,9 @@ inline static uint32_t VAL_KLASS(Val v) {
 int64_t val_global_ref_count(Val v);
 
 inline static int64_t VAL_REF_COUNT(Val v) {
+  if (VAL_IS_IMM(v)) {
+    return -1;
+  }
   ValHeader* h = (ValHeader*)v;
   if (h->rc_overflow) {
     return val_global_ref_count(v);
@@ -267,6 +270,7 @@ typedef void (*ValDeleteFunc)(void*);
 void val_register_delete_func(uint32_t klass, ValDeleteFunc func);
 
 // for convenient in-place-update
+#define AS_VAL(_obj_) *((Val*)(&(_obj_)))
 #define REPLACE(_obj_, _expr_) do {\
   Val _tmp_ = (_expr_);\
   val_release(_obj_);\

@@ -10,7 +10,7 @@
 // for msvc, see http://msdn.microsoft.com/en-us/library/bb385231%28v=vs.90%29.aspx
 // but useless because it can not compile C99 code, not to mention C11
 
-#define PDLEX_POPCNT __builtin_popcountll
+#define NB_POPCNT __builtin_popcountll
 
 // build with -march=native will make use of single instruction of SSE4.2 popcnt or NEON vcnt
 
@@ -18,13 +18,13 @@
 
 // gcc/clang knows rotate code, and replace them with rotl and rotr instructions
 
-static inline uint64_t PDLEX_ROTL(uint64_t v, unsigned n) {
+static inline uint64_t NB_ROTL(uint64_t v, unsigned n) {
   return (v << n) | (v >> (64 - n));
 }
 
-static inline uint64_t PDLEX_ROTR(uint64_t v, unsigned n) {
+static inline uint64_t NB_ROTR(uint64_t v, unsigned n) {
   return (v >> n) | (v << (64 - n));
 }
 
 // for non-gcc/clang compilers, should try C11 _Noreturn
-#define PDLEX_UNREACHABLE __builtin_unreachable
+#define NB_UNREACHABLE __builtin_unreachable

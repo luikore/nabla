@@ -1,6 +1,7 @@
 #pragma once
 
-// array node
+// array node, acts as a val object
+// but not exposed to user (so user won't put an array node as element)
 
 #include "val.h"
 

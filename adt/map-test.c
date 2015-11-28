@@ -1,16 +1,13 @@
 #include "map.h"
 #include <ccut.h>
+#include "box.h"
 
-static NbMapIterRet sum_cb(Val k, Val v, Val udata) {
+static NbMapEachRet sum_cb(Val k, Val v, Val udata) {
   *((Val*)udata) += v;
-  return PDLEX_MAP_INEXT;
+  return NB_MAP_NEXT;
 }
 
 void map_suite() {
-  ccut_test("internal structure check") {
-    nb_map_check_internal_structs();
-  }
-
   ccut_test("map of 1 key") {
     val_begin_check_memory();
 
@@ -67,8 +64,8 @@ void map_suite() {
     Val map = nb_map_new();
 
     Val sum = 0;
-    NbMapIterRet ret = nb_map_iter(map, (Val)&sum, sum_cb);
-    assert_eq(PDLEX_MAP_IFIN, ret);
+    NbMapEachRet ret = nb_map_each(map, (Val)&sum, sum_cb);
+    assert_eq(NB_MAP_FIN, ret);
     assert_eq(0, sum);
 
     RELEASE(map);
@@ -83,8 +80,8 @@ void map_suite() {
     REPLACE(map, nb_map_insert(map, VAL_FROM_INT(2), 7));
 
     Val sum = 0;
-    NbMapIterRet ret = nb_map_iter(map, (Val)&sum, sum_cb);
-    assert_eq(PDLEX_MAP_IFIN, ret);
+    NbMapEachRet ret = nb_map_each(map, (Val)&sum, sum_cb);
+    assert_eq(NB_MAP_FIN, ret);
     assert_eq(1 + 4 + 7, sum);
 
     RELEASE(map);
@@ -101,8 +98,8 @@ void map_suite() {
     }
 
     Val sum = 0;
-    NbMapIterRet ret = nb_map_iter(map, (Val)&sum, sum_cb);
-    assert_eq(PDLEX_MAP_IFIN, ret);
+    NbMapEachRet ret = nb_map_each(map, (Val)&sum, sum_cb);
+    assert_eq(NB_MAP_FIN, ret);
     assert_eq(expected_sum, sum);
 
     RELEASE(map);

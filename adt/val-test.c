@@ -41,7 +41,7 @@ static Val f8(Val a1, Val a2, Val a3, Val a4, Val a5, Val a6, Val a7, Val a8) {
 
 void val_suite() {
   ccut_test("rotl and rotr") {
-    assert_eq(1239, PDLEX_ROTR(PDLEX_ROTL(1239, 3), 3));
+    assert_eq(1239, NB_ROTR(NB_ROTL(1239, 3), 3));
   }
 
   ccut_test("header size") {
