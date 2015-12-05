@@ -4,31 +4,21 @@
 #include "sym-table.h"
 
 typedef struct {
-  uint64_t ref_count;
-  uint32_t klass;
-
-  // flags
-  uint16_t is_slice;
-  uint16_t is_char_size_computed;
-
-  uint64_t bytesize;
-  uint64_t size;      // a cached field which has consistent results in race conditions so no need locking.
-                      // NOTE when impl, write char_size first, then header flags
-} Header;
-
-typedef struct {
-  Header h;
+  ValHeader h; // flags:encoding, user1:is_slice
+  uint64_t byte_size;
   Val ref;
   uint64_t offset;
 } SSlice;
 
 typedef struct {
-  Header h;
+  ValHeader h; // flags:encoding, user1:is_slice
+  uint64_t byte_size;
   char str[];
 } String;
 
-#define VAL_STRING_BYTESIZE(v) ((ValSHeader*)v)->header.bytesize
-#define VAL_STRING_PTR(v) (((ValSHeader*)v)->header.is_slice ? ((ValString*)((ValSSlice*)v)->ref)->str : ((ValString*)v)->str)
+#define ENC(s) (s)->h.flags
+#define IS_SLICE(s) (s)->h.user1
+#define BYTE_SIZE(s) (s)->byte_size
 
 static uint64_t _hash_func(Val str);
 static void _destructor(void* p);
@@ -67,11 +57,10 @@ Val nb_string_new_literal_c(const char* p) {
 
 Val nb_string_new_transient(size_t size) {
   String* s = _alloc_string(size);
-  s->h.size = 0;
   return (Val)s;
 }
 
-size_t nb_string_bytesize(Val s) {
+size_t nb_string_byte_size(Val s) {
   if (VAL_IS_STR(s)) {
     size_t size;
     char* ptr;
@@ -79,13 +68,7 @@ size_t nb_string_bytesize(Val s) {
     return size;
   }
   assert(!VAL_IS_IMM(s));
-  Header* h = (Header*)s;
-  return h->bytesize;
-}
-
-size_t nb_string_size(Val s) {
-  // todo
-  return 0;
+  return BYTE_SIZE((String*)s);
 }
 
 const char* nb_string_ptr(Val s) {
@@ -97,9 +80,8 @@ const char* nb_string_ptr(Val s) {
     return ptr;
   }
   assert(!VAL_IS_IMM(s));
-  Header* h = (Header*)s;
   Val ref;
-  if (h->is_slice) {
+  if (IS_SLICE((String*)s)) {
     ref = ((SSlice*)s)->ref;
   } else {
     ref = s;
@@ -108,8 +90,8 @@ const char* nb_string_ptr(Val s) {
 }
 
 Val nb_string_concat(Val s1, Val s2) {
-  size_t bytesize1 = nb_string_bytesize(s1);
-  size_t bytesize2 = nb_string_bytesize(s2);
+  size_t bytesize1 = nb_string_byte_size(s1);
+  size_t bytesize2 = nb_string_byte_size(s2);
   String* r = _alloc_string(bytesize1 + bytesize2);
   memcpy(r->str, nb_string_ptr(s1), bytesize1);
   memcpy(r->str + bytesize1, nb_string_ptr(s2), bytesize2);
@@ -126,9 +108,9 @@ bool nb_string_eql(Val s1, Val s2) {
 
 int nb_string_cmp(Val s1, Val s2) {
   const char* p1 = nb_string_ptr(s1);
-  size_t l1 = nb_string_bytesize(s1);
+  size_t l1 = nb_string_byte_size(s1);
   const char* p2 = nb_string_ptr(s2);
-  size_t l2 = nb_string_bytesize(s2);
+  size_t l2 = nb_string_byte_size(s2);
   int res = strncmp(p1, p2, l1 > l2 ? l2 : l1);
   if (res == 0) {
     return l1 < l2 ? 1 : l1 > l2 ? -1 : 0;
@@ -142,39 +124,38 @@ Val nb_string_slice(Val v, size_t from, size_t len) {
     return _slice_from_literal(v, from, len);
   }
 
-  Header* h = (Header*)v;
+  String* h = (String*)v;
   SSlice* r = _alloc_s_slice();
-  if (h->is_slice) {
+  if (IS_SLICE(h)) {
     SSlice* s = (SSlice*)v;
     r->ref = s->ref;
-    if (from > s->h.bytesize) {
+    if (from > BYTE_SIZE(s)) {
       // todo use static empty string
-      r->h.bytesize = 0;
+      BYTE_SIZE(r) = 0;
       r->offset = 0;
-    } else if (len > s->h.bytesize - from) {
-      r->h.bytesize = s->h.bytesize - from;
+    } else if (len > BYTE_SIZE(s) - from) {
+      BYTE_SIZE(r) = BYTE_SIZE(s) - from;
       r->offset = s->offset + from;
     } else {
-      r->h.bytesize = len;
+      BYTE_SIZE(r) = len;
       r->offset = s->offset + from;
     }
   } else {
     String* s = (String*)v;
     r->ref = v;
-    if (from > s->h.bytesize) {
+    if (from > BYTE_SIZE(s)) {
       // todo use static empty string
-      r->h.bytesize = 0;
+      BYTE_SIZE(r) = 0;
       r->offset = 0;
-    } else if (len > s->h.bytesize - from) {
-      r->h.bytesize = s->h.bytesize - from;
+    } else if (len > BYTE_SIZE(s) - from) {
+      BYTE_SIZE(r) = BYTE_SIZE(s) - from;
       r->offset = from;
     } else {
-      r->h.bytesize = len;
+      BYTE_SIZE(r) = len;
       r->offset = from;
     }
   }
   RETAIN(r->ref);
-  r->h.size = 0;
   return (Val)r;
 }
 
@@ -184,12 +165,12 @@ bool nb_string_literal_lookup(Val v, size_t* size, char** p) {
 }
 
 static uint64_t _hash_func(Val v) {
-  return val_hash_mem(nb_string_ptr(v), nb_string_bytesize(v));
+  return val_hash_mem(nb_string_ptr(v), nb_string_byte_size(v));
 }
 
 static void _destructor(void* p) {
-  Header* h = p;
-  if (h->is_slice) {
+  String* h = p;
+  if (IS_SLICE(h)) {
     SSlice* slice = p;
     RELEASE(slice->ref);
   }
@@ -217,19 +198,16 @@ static Val _slice_from_literal(Val v, size_t from, size_t len) {
 static String* _alloc_string(size_t bytesize) {
   String* m = val_alloc(sizeof(String) + bytesize);
   m->h.klass = KLASS_STRING;
-  // m->h.is_slice = 0;
-  // m->h.is_char_size_computed = 0;
-  m->h.bytesize = bytesize;
-  // m->h.size = 0;
+  // IS_SLICE(m) = 0;
+  BYTE_SIZE(m) = bytesize;
   return m;
 }
 
 static SSlice* _alloc_s_slice() {
   SSlice* m = val_alloc(sizeof(SSlice));
   m->h.klass = KLASS_STRING;
-  m->h.is_slice = 1;
+  IS_SLICE(m) = 1;
   // m->h.is_char_size_computed = 0;
   // m->h.bytesize = 0;
-  // m->h.size = 0;
   return m;
 }

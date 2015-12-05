@@ -337,7 +337,7 @@ int32_t nb_syntax_node_size(Val node) {
 bool nb_syntax_node_is(Val node, const char* type) {
   Val node_type = GET_KLASS(node)->spec.type;
   const char* from = nb_string_ptr(node_type) + 1;
-  int64_t size = nb_string_bytesize(node_type) - 1;
+  int64_t size = nb_string_byte_size(node_type) - 1;
   if (size != strlen(type)) {
     return false;
   }

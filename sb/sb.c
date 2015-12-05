@@ -103,7 +103,7 @@ static Val concat_char_2(Ctx* ctx, Val left_s, Val right_c) {
   int c = VAL_TO_INT(right_c);
   // TODO refcount and transient optimize
   const char* from = nb_string_ptr(left_s);
-  size_t size = nb_string_bytesize(left_s);
+  size_t size = nb_string_byte_size(left_s);
   Val res_s = nb_string_new_transient(size);
   char* to = (char*)nb_string_ptr(res_s);
   memcpy(to, from, size);

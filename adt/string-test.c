@@ -7,16 +7,16 @@ void string_suite() {
   ccut_test("slice and concat") {
     val_begin_check_memory();
     Val s1 = nb_string_new(strlen("slice and"), "slice and");
-    assert_eq(strlen("slice and"), nb_string_bytesize(s1));
+    assert_eq(strlen("slice and"), nb_string_byte_size(s1));
 
     Val s2 = nb_string_new(strlen("concat"), "concat");
-    assert_eq(strlen("concat"), nb_string_bytesize(s2));
+    assert_eq(strlen("concat"), nb_string_byte_size(s2));
 
     REPLACE(s1, nb_string_slice(s1, 0, 5));
-    assert_eq(5, nb_string_bytesize(s1));
+    assert_eq(5, nb_string_byte_size(s1));
     REPLACE(s1, nb_string_concat(s1, s2));
 
-    size_t sz = nb_string_bytesize(s1);
+    size_t sz = nb_string_byte_size(s1);
     const char* s = nb_string_ptr(s1);
     assert_eq(strlen("sliceconcat"), sz);
     assert_eq(0, memcmp(s, "sliceconcat", sz));
@@ -40,7 +40,7 @@ void string_suite() {
   ccut_test("string literal ptr and size") {
     val_begin_check_memory();
     Val s = nb_string_new_literal_c("foo");
-    assert_eq(3, nb_string_bytesize(s));
+    assert_eq(3, nb_string_byte_size(s));
     assert_mem_eq("foo", nb_string_ptr(s), 3);
     val_end_check_memory();
   }

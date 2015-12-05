@@ -13,9 +13,7 @@ Val nb_string_new_literal_c(const char* p) __attribute__((const));
 
 Val nb_string_new_transient(size_t size);
 
-size_t nb_string_bytesize(Val s);
-
-size_t nb_string_size(Val s);
+size_t nb_string_byte_size(Val s);
 
 const char* nb_string_ptr(Val s);
 

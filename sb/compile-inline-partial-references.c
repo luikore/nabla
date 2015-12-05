@@ -75,7 +75,7 @@ static void _print_network(DepNode** dep_network, int size) {
   for (int i = 0; i < size; i++) {
     DepNode* head = dep_network[i];
     while(head) {
-      printf("%.*s ", (int)nb_string_bytesize(head->ctx_name), nb_string_ptr(head->ctx_name));
+      printf("%.*s ", (int)nb_string_byte_size(head->ctx_name), nb_string_ptr(head->ctx_name));
       head = head->next;
     }
     printf("\n");

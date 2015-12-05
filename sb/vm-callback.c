@@ -137,7 +137,7 @@ VmCallback* nb_vm_callback_compile(PdlexNodeArena* arena, Val node, Spellbreak* 
       if (lex_name == VAL_NIL) {
         COMPILE_ERROR("var statement only allowed in lex");
       } else if (is_begin) {
-        int lex_name_size = nb_string_bytesize(lex_name);
+        int lex_name_size = nb_string_byte_size(lex_name);
         char* lex_name_s = nb_string_ptr(lex_name);
         TokenNode* name_tok = (TokenNode*)AT(stmt, 0);
         int name_size = name_tok->loc.size + lex_name_size + 1;
