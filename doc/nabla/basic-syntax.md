@@ -628,16 +628,6 @@ the name being included must be class
 
 there is only one kind of inheritance via `include`, methods defined in `include` module is looked up hierachically
 
-to inline the methods defined in Bar
-
-    class Foo
-      include *Bar
-    end
-
-the code above is a macro `include`, all methods searchable in `Bar` are inlined and may overwrite defined methods in `Foo`. if `Bar` is re-opened afterwards, `Foo` will not be affected at all. This is useful when you need to make sure methods defined in `Bar` are searched first.
-
-NOTE: be careful when using it, if some source file has `include *`, it is not reloadable. (in future we must develop some a bit more complex mechanism for reloading them, but only raise error when we meet `final` modifiers)
-
 `class` can be re-opened, but `struct` can not.
 
 classes can also be scoped
@@ -668,13 +658,7 @@ and can delegate methods
       delegate bar as Bar # delegate on bar, can search methods on bar (will do a class check of Bar)
     end
 
-we can also use splat macro on `delegate` (TODO and it has the same reload problem as with `include *`)
-
-    class Foo
-      delegate bar as *Bar
-    end
-
-delegate is like `include`, and `class_of?` checks both `include` and `delegate`. for specific checks, use `class_include?` and `class_delegate?`.
+delegate is like `include`, so `obj.class_of? Klass` checks inclusion of both `include` and `delegate`. for specific checks, use `class_include?` and `class_delegate?`.
 
 how about if we delegate only a part of the methods? -- we don't
 
@@ -696,6 +680,33 @@ the order of behavior type and struct type can be switched
     end
 
 [TODO] do we add syntax for `import Behavior` so methods in the object can be limited?
+
+## class with struct
+
+`struct` defines a new data type and a class with the same name, and adds final attribute accessors. But when `include` the class defined by `struct`, the attribute accessors are not included.
+
+    struct Foo
+      foo
+    end
+
+    class Bar
+      include Foo
+      def bar
+        :foo # error, method not defined
+      end
+    end
+
+We may define the behavior before defining the data, an example:
+
+    class Foo
+      def double_foo
+        :foo (+) :foo
+      end
+    end
+
+    struct Foo
+      foo
+    end
 
 ## defining method
 
@@ -907,15 +918,6 @@ a `final` method can not be modified, even in the inherited class.
       def foo; # OK
       undef bar # OK
     end
-
-but note the exception: macro `include *` inlines all the method defs including `final` declarations!
-
-    class Child2
-      include *Parent
-      def foo; # bad
-    end
-
-you may use `include *` for the purpose of freezing methods, but be careful, `include *` also makes the file not-reloadable.
 
 NOTE: it is mainly used for certain optimizations to work, but not recommended to be used everywhere. source files with `final` can not be reloaded!
 
