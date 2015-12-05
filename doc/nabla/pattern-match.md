@@ -185,8 +185,8 @@ Another way:
     foo = present | []
     _ as foo ~ [1, 2, 3]
 
-With data referencing self
+With struct referencing self
 
-    data Foo
+    struct Foo
       parent as ->(.nil?) | Foo
     end

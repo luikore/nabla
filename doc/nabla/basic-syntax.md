@@ -451,28 +451,28 @@ To unroll a map-like data structure, use `**`
 
 NOTE it can also be used in patterns
 
-## data types (custom records)
+## struct types (custom records)
 
-[design NOTE]: adding ivars to core data types is not allowed (so allocations and copying are easier), however, it should be easy to delegate methods to them.
+[design NOTE]: adding ivars to core struct types is not allowed (so allocations and copying are easier), however, it should be easy to delegate methods to them.
 
-`data` declares data type, fields list can be type checked
+`struct` declares struct type, fields list can be type checked
 
-    data Foo
+    struct Foo
       $r/\d+/ ~ a
       Integer ~ b
       String ~ c
       d, e, f # 3 fields without type checker, note that `,` has the same meaning with new line
     end
 
-in a `data` type, you can inherit other data types, and fields with the same names will overlap the previous one.
+in a `struct` type, you can inherit other struct types, and fields with the same names will overlap the previous one.
 
-    data Foo < Bar # think "<" as "⊂"
+    struct Foo < Bar # think "<" as "⊂"
 
-but inheritance is limited only in data fields, no behavior will be inherited, and only single-inheritance allowed.
+but inheritance is limited only in struct fields, no behavior will be inherited, and only single-inheritance allowed.
 
-`data` can not be opened after definition. but `class` can.
+`struct` can not be opened after definition. but `class` can.
 
-`data` defines default getter and setters, and they are `final`.
+`struct` defines default getter and setters, and they are `final`.
 
 ways to new an object
 
@@ -488,7 +488,7 @@ ways to new an object
 
 When a field ends with `?`, it is converted and stored in boolean
 
-    data Foo
+    struct Foo
       a?
       b?
     end
@@ -500,9 +500,9 @@ When a field ends with `?`, it is converted and stored in boolean
 
 [design NOTE]: ADT's sum type doesn't fit in dynamic languages because values are summed type of all types. And in OO language, sum type is polymorphism.
 
-under `data` we can not define methods
+under `struct` we can not define methods
 
-[design NOTE]: if we allow methods defined under `data`, then the difference from `class` is unclear (let `data` mutate members? but how about more members?)
+[design NOTE]: if we allow methods defined under `struct`, then the difference from `class` is unclear (let `struct` mutate members? but how about more members?)
 
 [design NOTE]: the nabla object serialize format with class support:
 
@@ -522,7 +522,7 @@ For example:
       select a * b
     end
 
-`for` may also be used in other data types
+`for` may also be used in other struct types
 
     for Point
       x <- coords.each
@@ -600,7 +600,7 @@ the "while" applicative
 
 [impl NOTE]:
 
-We add an implicit continuation arg in lambda calling, with it we can aggregate data into the primary stack.
+We add an implicit continuation arg in lambda calling, with it we can aggregate struct into the primary stack.
 
 See also https://ghc.haskell.org/trac/ghc/wiki/ApplicativeDo for applicative do notation
 
@@ -618,7 +618,7 @@ https://ghc.haskell.org/trac/ghc/wiki/MonadComprehensions
 
 # Behavior types (class, include, scope, delegate)
 
-a data type is inherently a behavior type, but there can be behavior types that are not data types
+a struct type is inherently a behavior type, but there can be behavior types that are not struct types
 
     class Foo
       include Bar
@@ -638,7 +638,7 @@ the code above is a macro `include`, all methods searchable in `Bar` are inlined
 
 NOTE: be careful when using it, if some source file has `include *`, it is not reloadable. (in future we must develop some a bit more complex mechanism for reloading them, but only raise error when we meet `final` modifiers)
 
-`class` can be re-opened, but `data` can not.
+`class` can be re-opened, but `struct` can not.
 
 classes can also be scoped
 
@@ -650,17 +650,17 @@ classes can also be scoped
 
 scoping is a way to separate concerns. `scope` in fact creates a new class and provide ways
 
-    data Foo
+    struct Foo
       a
     end
     class Foo
       def a; # no way: can not overwrite final method
       scope foo
-        def a; # ok, since scope is an implicit sub data type
+        def a; # ok, since scope is an implicit sub struct type
       end
     end
 
-The goodness: one data type can re-use other data-types methods.
+The goodness: one struct type can re-use other struct-types methods.
 
 and can delegate methods
 
@@ -686,12 +686,12 @@ how about if we delegate only a part of the methods? -- we don't
       end
     end
 
-the order of behavior type and data type can be switched
+the order of behavior type and struct type can be switched
 
     class Foo
       ...
     end
-    data Foo
+    struct Foo
       ...
     end
 

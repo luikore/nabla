@@ -18,7 +18,7 @@ the following words can not be used as variables, but can be used as method name
 
 declarative (12)
 
-    data class using
+    struct class using
     include extend delegate scope
     def undef final
     var

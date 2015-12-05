@@ -4,7 +4,7 @@ Stages:
 
 Token stream and reduced value is packed in context node.
 
-Regexp match data structure:
+Regexp match struct structure:
 
     regexp_code
     str
@@ -13,7 +13,7 @@ Regexp match data structure:
     captures
     threads
 
-Lexer meta data structure:
+Lexer meta struct structure:
 
     node_meta # for creating node_arena
     variables # with immutable default values, only for lexer use
@@ -21,12 +21,12 @@ Lexer meta data structure:
     parser_metas {context_type: parser_meta}
     regexp_metas {context_type: regexp_code}
 
-Lexer data structure:
+Lexer struct structure:
 
     lexer_meta
     node_meta
     node_arena
-    ctx          # user passed data for parser invocation
+    ctx          # user passed struct for parser invocation
     input_stream # and current pos
     context_stack
     variables
@@ -46,21 +46,21 @@ And the parse VM has an internal stack and memoize table, maybe should not reuse
 
 For every context, there is a specific parser env created, but they share the same parser meta.
 
-Node meta data structure:
+Node meta struct structure:
 
     evaluators # organized by round: [round_1_evaluators, round_2_evalators, ...]
                # if some node is not evaluated in a round, put NULL in the table
                # optimize: if some node's closure is not evaluated in a round, put id function address in the table
     attr and eval info for each kind of node
 
-Parser meta data structure:
+Parser meta struct structure:
 
     context_type
     code
     memoize_lookup
     node_lookup
 
-Parser data structure:
+Parser struct structure:
 
     parser_meta
     node_arena # for tokens and nodes
