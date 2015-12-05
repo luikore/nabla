@@ -1,5 +1,8 @@
 #pragma once
 
+// (map internal node)
+// popcnt powered node
+
 #include "val.h"
 
 // key and value

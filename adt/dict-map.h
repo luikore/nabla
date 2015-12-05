@@ -1,5 +1,6 @@
 #pragma once
 
+// (dict internal node)
 // dict-maps are good at storing large number of short keys
 
 #include "val.h"

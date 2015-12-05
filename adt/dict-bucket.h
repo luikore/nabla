@@ -1,5 +1,6 @@
 #pragma once
 
+// (dict internal node)
 // buckets are good at storing little number of long keys
 
 #include "val.h"

@@ -1,6 +1,7 @@
 #pragma once
 
-// collision array
+// (map internal node)
+// collision array, when hash of 2 entries are equal, collision array is used
 
 #include "map-node.h"
 
