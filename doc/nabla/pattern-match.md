@@ -50,14 +50,6 @@ disambig examples:
     Const as _     -- const as left value
     a.b as _       -- calls a.b =
 
-## to test if matches instead of raise error...
-
-use `~~` instead of `~` and it gives a boolean result `true` or `false`.
-
-[TODO] think if there can be a better choice?
-
-[design NOTE]: assign operator, match operator, test match operator, 3 different semantics...
-
 ## matching and mass-assign
 
     <match-expr> ~ <expr>
@@ -76,8 +68,11 @@ the above code is equivalent to
 
 or
 
-    if not [a, b as Int] ~~ arr
+    case arr
+    when [a, b as Int]
+    else
       throw <match error>
+    end
 
 case of const:
 
@@ -86,6 +81,13 @@ case of const:
     Foo ~ 3
     _ as Foo ~ 3     # matching (can raise)
     Foo as Int ~ 3   # matching and assign (can raise)
+
+## matching error
+
+both `~` and `=` works as assignment operator, but:
+
+- `~` throws error when not match
+- `=` doesn't throw
 
 ## matching Map
 
@@ -142,7 +144,7 @@ Lambdas and subroutines may also be defined with matching args
 
 The back arrow is also powered with matching syntax
 
-    collect
+    for
       [x as ->(.even?)] <- xs.each
       [y as ->(.odd?)] <- ys.each
       select x * y
@@ -150,8 +152,41 @@ The back arrow is also powered with matching syntax
 
 [design NOTE] can we make mismatch an error?
 
-## aux match ("or")
+## Logic operations on matcher
 
-for example, a can match `Integer` or `String` or a responds to `.foo?`
+The following methods are defined on lambda:
 
-    a as Integer as String as ->(.foo?) ~ x
+- `|` logic or
+- `&` logic and
+- `.neg` logic negate
+
+We can them use like this:
+
+    foo = do x, x > 4;
+    bar = do x, x < 10;
+    baz = ->(.even?)
+    x ~ (foo | bar) & baz.neg
+
+## On recursive matching
+
+With subroutine referencing self. example matching integer array:
+
+    foo = do x
+      case x
+      when [], true
+      when [Integer, *_ as foo], true
+      end
+    end
+    _ as foo ~ [1, 2, 3]
+
+Another way:
+
+    present = do [[Integer, *_ as foo]], true; # but be careful since matching arguments requires additional brackets
+    foo = present | []
+    _ as foo ~ [1, 2, 3]
+
+With data referencing self
+
+    data Foo
+      parent as ->(.nil?) | Foo
+    end
