@@ -451,16 +451,16 @@ To unroll a map-like data structure, use `**`
 
 NOTE it can also be used in patterns
 
-## struct types (custom records)
+## data types (structs)
 
 [design NOTE]: adding ivars to core struct types is not allowed (so allocations and copying are easier), however, it should be easy to delegate methods to them.
 
 `struct` declares struct type, fields list can be type checked
 
     struct Foo
-      $r/\d+/ ~ a
-      Integer ~ b
-      String ~ c
+      a as $r/\d+/
+      b as Integer
+      c as String
       d, e, f # 3 fields without type checker, note that `,` has the same meaning with new line
     end
 
@@ -509,6 +509,43 @@ under `struct` we can not define methods
     {"foo": Date{"year": 1995, "month": 12, "day": 31}}
 
 It is pure text, a bit readable, and can be parsed (with only the value rules, no other operations allowed).
+
+## Struct with variable initializers
+
+The splat matcher can be used to match arbitrary number of members
+
+    struct Foo
+      x
+      *xs as Array # other construct args are put into xs
+    end
+
+    foo = Foo[1, 2, 3, 4]
+    foo.x  # 1
+    foo.xs # [2, 3, 4]
+
+    # but the map-style constructor must use this form instead:
+    foo = Foo{x: 1, xs: [2, 3, 4]}
+
+The double splat matcher
+
+    struct Foo
+      x
+      **xs as Map
+    end
+
+    foo = Foo{x: 1, y: 2, z: 3, w: 4}
+    foo.x  # 1
+    foo.xs # {y: 2, z: 3, w: 4}
+
+    # then array-style constructor must use this form instead:
+    foo = Foo[1, {y: 2, z: 3, w: 4}]
+
+matchers can not be used together
+
+    struct Foo
+      *xs
+      **ys # error: mixed matchers
+    end
 
 ## `for` constructor
 
@@ -655,16 +692,16 @@ The goodness: one struct type can re-use other struct-types methods.
 and can delegate methods
 
     class Foo
-      delegate bar as Bar # delegate on bar, can search methods on bar (will do a class check of Bar)
+      delegate bar as Bar # delegate on bar, can search methods on bar (also checks if bar is Bar)
     end
 
 delegate is like `include`, so `obj.class_of? Klass` checks inclusion of both `include` and `delegate`. for specific checks, use `class_include?` and `class_delegate?`.
 
-how about if we delegate only a part of the methods? -- we don't
+how about if we delegate only a part of the methods? -- the syntax can't bare so much... we can do this instead:
 
     class Foo
       ['foo', 'bar', 'baz'].each -> x
-        :def x -> args
+        :def x -> [*args]
           :bar.send "#{x}" args
         end
       end
@@ -680,6 +717,27 @@ the order of behavior type and struct type can be switched
     end
 
 [TODO] do we add syntax for `import Behavior` so methods in the object can be limited?
+
+## scope with parameters
+
+scope can accept parameters just like methods, and they can be accessed via reader methods
+
+    struct Foo
+    end
+
+    class Foo
+      scope foo x y
+        def bar
+          :x
+        end
+      end
+    end
+
+    f = Foo[]
+    (f.foo 3 4).x   # 3
+    (f.foo 3 4).bar # 3
+
+scope parameters can use pattern match too, see more in pattern-match.md
 
 ## class with struct
 

@@ -152,6 +152,16 @@ The back arrow is also powered with matching syntax
 
 [design NOTE] can we make mismatch an error?
 
+## Matching scope arguments
+
+Same as matching method arguments and they are defined as methods on the scoped object
+
+    scope foo [x, *xs]
+      def bar
+        :xs
+      end
+    end
+
 ## Logic operations on matcher
 
 The following methods are defined on lambda:
