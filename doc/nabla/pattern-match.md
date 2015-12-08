@@ -108,9 +108,9 @@ function params are NOT match exprs, they allow default assignments
 
 We can match a set to another set
 
-    Set{a, b, 3} ~ Set{1, 2, 3}
+    Set[a, b, 3] ~ Set[1, 2, 3]
 
-It is turned into canonical form first
+But the order for `a`, `b` are not garanteed
 
 ## matching arguments
 
@@ -197,6 +197,6 @@ Another way:
 
 With struct referencing self
 
-    struct Foo
+    struct Foo[
       parent as ->(.nil?) | Foo
-    end
+    ]

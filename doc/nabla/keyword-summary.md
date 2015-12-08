@@ -16,10 +16,10 @@
 
 the following words can not be used as variables, but can be used as method names.
 
-declarative (12)
+declarative (9)
 
     struct class using
-    include extend delegate scope
+    include scope
     def undef final
     var
 

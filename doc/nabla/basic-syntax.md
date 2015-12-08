@@ -457,18 +457,32 @@ NOTE it can also be used in patterns
 
 `struct` declares struct type, fields list can be type checked
 
-    struct Foo
+    struct Foo[
       a as $r/\d+/
       b as Integer
       c as String
       d, e, f # 3 fields without type checker, note that `,` has the same meaning with new line
-    end
+    ]
+
+It can also be declared in map-style:
+
+    struct Foo{
+      a: x
+      b: y
+    }
+    foo = Foo{a: 3, b: 4}
+    foo.x # 3
+    foo.y # 4
 
 in a `struct` type, you can inherit other struct types, and fields with the same names will overlap the previous one.
 
-    struct Foo < Bar # think "<" as "⊂"
+    # `Foo` inherits `Bar`
+    struct Foo < Bar[
+      x
+      y
+    ]
 
-but inheritance is limited only in struct fields, no behavior will be inherited, and only single-inheritance allowed.
+NOTE inheritance is limited only in struct fields, no behavior will be inherited, and only single-inheritance allowed.
 
 `struct` can not be opened after definition. but `class` can.
 
@@ -477,8 +491,8 @@ but inheritance is limited only in struct fields, no behavior will be inherited,
 ways to new an object
 
     Foo[1, 2, 3]   # ordered, new with operator []
-    Foo{"a": 1, "b": 2, "c": 3, "d": 4} # looks like a hash, but much light weight
-                                        # no operator `{}`: it is a built-in syntax
+    Foo{a: 1, b: 2, c: 3, d: 4} # looks like a hash, but much light weight
+                                # no operator `{}`: it is a built-in syntax
     Foo[*some_array]
     Foo{*some_map}
     Foo[-> a, ...;]
@@ -488,10 +502,10 @@ ways to new an object
 
 When a field ends with `?`, it is converted and stored in boolean
 
-    struct Foo
+    struct Foo[
       a?
       b?
-    end
+    ]
 
     foo = Foo{1, nil}
     foo.a?    # true
@@ -510,14 +524,22 @@ under `struct` we can not define methods
 
 It is pure text, a bit readable, and can be parsed (with only the value rules, no other operations allowed).
 
+## delegate
+
+[design NOTE] it is weird to design a syntax for delegate... so make it a macro method instead
+
+    class Foo
+      :delegate 'bar' {on: Bar, only: ['x', 'y', 'z']}
+    end
+
 ## Struct with variable initializers
 
 The splat matcher can be used to match arbitrary number of members
 
-    struct Foo
+    struct Foo[
       x
       *xs as Array # other construct args are put into xs
-    end
+    ]
 
     foo = Foo[1, 2, 3, 4]
     foo.x  # 1
@@ -528,10 +550,10 @@ The splat matcher can be used to match arbitrary number of members
 
 The double splat matcher
 
-    struct Foo
+    struct Foo[
       x
       **xs as Map
-    end
+    ]
 
     foo = Foo{x: 1, y: 2, z: 3, w: 4}
     foo.x  # 1
@@ -542,10 +564,10 @@ The double splat matcher
 
 matchers can not be used together
 
-    struct Foo
+    struct Foo[
       *xs
       **ys # error: mixed matchers
-    end
+    ]
 
 ## `for` constructor
 
@@ -653,7 +675,7 @@ See also https://ghc.haskell.org/trac/ghc/wiki/ApplicativeDo for applicative do 
 [TODO] in monad comprehension there can also be `take` and `group by`
 https://ghc.haskell.org/trac/ghc/wiki/MonadComprehensions
 
-# Behavior types (class, include, scope, delegate)
+# Behavior types (class, include, scope)
 
 a struct type is inherently a behavior type, but there can be behavior types that are not struct types
 
@@ -677,9 +699,7 @@ classes can also be scoped
 
 scoping is a way to separate concerns. `scope` in fact creates a new class and provide ways
 
-    struct Foo
-      a
-    end
+    struct Foo[a]
     class Foo
       def a; # no way: can not overwrite final method
       scope foo
@@ -689,32 +709,30 @@ scoping is a way to separate concerns. `scope` in fact creates a new class and p
 
 The goodness: one struct type can re-use other struct-types methods.
 
-and can delegate methods
-
-    class Foo
-      delegate bar as Bar # delegate on bar, can search methods on bar (also checks if bar is Bar)
-    end
-
-delegate is like `include`, so `obj.class_of? Klass` checks inclusion of both `include` and `delegate`. for specific checks, use `class_include?` and `class_delegate?`.
-
-how about if we delegate only a part of the methods? -- the syntax can't bare so much... we can do this instead:
-
-    class Foo
-      ['foo', 'bar', 'baz'].each -> x
-        :def x -> [*args]
-          :bar.send "#{x}" args
-        end
-      end
-    end
-
 the order of behavior type and struct type can be switched
 
     class Foo
       ...
     end
-    struct Foo
-      ...
+    struct Foo[...]
+
+but accessor methods are overriden:
+
+    class Foo
+      def x= v
+        ...
+      end
     end
+    struct Foo[x] # overrides Foo#x and Foo#x=
+
+if you define final methods that are overriden by struct, it throws error
+
+    class Foo
+      final def x=v
+        ...
+      end
+    end
+    struct Foo[x] # error overriding final method
 
 [TODO] do we add syntax for `import Behavior` so methods in the object can be limited?
 
@@ -722,8 +740,7 @@ the order of behavior type and struct type can be switched
 
 scope can accept parameters just like methods, and they can be accessed via reader methods
 
-    struct Foo
-    end
+    struct Foo[]
 
     class Foo
       scope foo x y
@@ -743,9 +760,7 @@ scope parameters can use pattern match too, see more in pattern-match.md
 
 `struct` defines a new data type and a class with the same name, and adds final attribute accessors. But when `include` the class defined by `struct`, the attribute accessors are not included.
 
-    struct Foo
-      foo
-    end
+    struct Foo[foo]
 
     class Bar
       include Foo
@@ -762,9 +777,7 @@ We may define the behavior before defining the data, an example:
       end
     end
 
-    struct Foo
-      foo
-    end
+    struct Foo[foo]
 
 ## defining method
 
@@ -910,7 +923,7 @@ see pattern-match
 
 method is the boundary of lexical scoping for local vars
 
-`:` lookup passes object, then goes to `Kernel` (it `extend self`), so methods on `Object` is much fewer.
+`:` lookup passes object, then goes to `Kernel` (it's meta class includes `self`), so methods on `Object` is much fewer.
 
     foo.bar
     :bar
@@ -979,9 +992,9 @@ a `final` method can not be modified, even in the inherited class.
 
 NOTE: it is mainly used for certain optimizations to work, but not recommended to be used everywhere. source files with `final` can not be reloaded!
 
-NOTE: there is no modifiers like `private` and `protected` -- we can always use `scope` and `delegate` to reuse code while keeping concerns separated. and they are not easy to test. for some cases of private/protected methods, we can also use lambdas.
+NOTE: there is no modifiers like `private` and `protected` -- we can always use `scope` and `.delegate` to reuse code while keeping concerns separated. and they are not easy to test. for some cases of private/protected methods, we can also use lambdas.
 
-[design NOTE]: the modifiers are not methods? `:final`, `:include`, `:delegate`, `:scope` makes compiler optimizations harder, and not as easy to write either. And `include`, `extend`, `delegate`, `scope` all require implicit receiver: the scoped class, making them methods is a bit complex.
+[design NOTE]: the modifiers are not methods? `:final`, `:include`, `:scope` makes compiler optimizations harder, and not as easy to write either. And `include`, `scope` all require implicit receiver: the scoped class, making them methods is a bit complex.
 
 # Lambda and subroutines
 
