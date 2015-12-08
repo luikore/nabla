@@ -63,11 +63,11 @@ void map_node_suite() {
 
     Slot* slot = NODE_FIND_SLOT(n, nb.b, val_hash(ks[0]));
     assert_true(slot, "should contain ks[0]");
-    assert_true(VAL_EQ(slot->kv.v, vs[0]), "should contain vs[0]");
+    assert_true(val_eq(slot->kv.v, vs[0]), "should contain vs[0]");
 
     slot = NODE_FIND_SLOT(n, nb.b, val_hash(ks[1]));
     assert_true(slot, "should contain ks[1]");
-    assert_true(VAL_EQ(slot->kv.v, vs[2]), "should contain vs[2]");
+    assert_true(val_eq(slot->kv.v, vs[2]), "should contain vs[2]");
 
     RELEASE(n);
     destroy_kvs(ks, vs);

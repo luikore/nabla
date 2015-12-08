@@ -97,8 +97,8 @@ static void _map_debug(Map* map, bool bucket_as_binary);
 #pragma mark ### interface
 
 static Val empty_dict;
-static void _init() __attribute__((constructor(100)));
-static void _init() {
+
+void nb_dict_init_module() {
   Dict* d = DICT_NEW();
   val_perm(d);
   d->size = 0;
@@ -264,7 +264,7 @@ static bool _generic_insert(Val* v_addr, const char* k, size_t ksize, Val v) {
     return true;
   } else {
     bool added = (*v_addr == VAL_UNDEF);
-    if (!VAL_EQ(v, *v_addr)) {
+    if (!val_eq(v, *v_addr)) {
       RETAIN(v);
       REPLACE(*v_addr, v);
     }

@@ -40,7 +40,7 @@ static Cola* COLA_NEW2(Kv kv, Val k, Val v, bool is_int_valued) {
 
 static bool COLA_FIND(Cola* cola, Val k, Val* v) {
   for (int i = 0; i < SIZE(cola); i++) {
-    if (VAL_EQ(cola->kvs[i].k, k)) {
+    if (val_eq(cola->kvs[i].k, k)) {
       *v = cola->kvs[i].v;
       RETAIN(*v);
       return true;
@@ -52,7 +52,7 @@ static bool COLA_FIND(Cola* cola, Val k, Val* v) {
 static Cola* COLA_INSERT(Cola* old, Val k, Val v, bool* size_increased) {
   int insert_i = SIZE(old);
   for (int i = 0; i < SIZE(old); i++) {
-    if (VAL_EQ(old->kvs[i].k, k)) {
+    if (val_eq(old->kvs[i].k, k)) {
       insert_i = i;
       break;
     }
@@ -77,7 +77,7 @@ static Slot COLA_REMOVE(Cola* old, Val k, Val* prev_v, bool* size_decreased) {
 
   int remove_i = -1;
   for (int i = 0; i < SIZE(old); i++) {
-    if (VAL_EQ(old->kvs[i].k, k)) {
+    if (val_eq(old->kvs[i].k, k)) {
       remove_i = i;
       break;
     }
@@ -90,10 +90,10 @@ static Slot COLA_REMOVE(Cola* old, Val k, Val* prev_v, bool* size_decreased) {
     return res;
   } else if (SIZE(old) == 2) {
     int replace_i = -1, keep_i = -1;
-    if (VAL_EQ(old->kvs[0].k, k)) {
+    if (val_eq(old->kvs[0].k, k)) {
       replace_i = 0;
       keep_i = 1;
-    } else if (VAL_EQ(old->kvs[1].k, k)) {
+    } else if (val_eq(old->kvs[1].k, k)) {
       replace_i = 1;
       keep_i = 0;
     }

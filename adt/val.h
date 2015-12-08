@@ -110,12 +110,17 @@ typedef struct {
 #define VAL_IS_PERM(_p_) (((ValHeader*)(_p_))->perm)
 
 enum {
-  KLASS_NIL,
+  KLASS_NIL=1,
   KLASS_BOOLEAN,
   KLASS_INTEGER,
   KLASS_DOUBLE,
   KLASS_RANGE,
   KLASS_STRING,
+
+  KLASS_METHOD,
+  KLASS_LAMBDA,
+  KLASS_SUBROUTINE,
+  KLASS_KLASS,
 
   KLASS_ARRAY_NODE,
   KLASS_ARRAY,
@@ -181,37 +186,37 @@ inline static int64_t VAL_REF_COUNT(Val v) {
 
 Val val_c_call(void* cfunc, uint64_t argc, Val* argv);
 
-void val_debug(Val v);
-
 uint64_t val_hash_mem(const void* memory, size_t size);
 
 uint64_t val_hash(Val v);
 
-uint32_t val_new_class_id();
+// calls `==`
+bool val_eq(Val l, Val r);
 
-typedef uint64_t (*ValHashFunc)(Val obj);
-void val_register_hash_func(uint32_t klass, ValHashFunc hash_func);
+void val_debug(Val v);
 
-// todo: content comparison for real equality
-#define VAL_EQ(_v1_, _v2_) (_v1_ == _v2_)
+Val val_send(Val obj, uint32_t id, int argc, Val* args);
 
-// numeric layout:
-// {
-//   ValHeader header;
-//   dbl / mp_int / mp_q / mp_complex / decimal
-// }
+#pragma mark ### method and klass
 
-// vector layout: (for more complex linear algebra data structures, let third party implement them)
-// {
-//    ValHeader header; // elem type in flags
-//    Val / dbl / mp_int / mp_q / mp_complex / decimal
-// }
+typedef void (*ValCallbackFunc)(void*);
 
-//
-// typedef struct {
-//   ValHeader header; // user_flags = ivar size
-//   Val ivars[];
-// } ValData;
+typedef Val (*ValMethodFunc)(Val, ...);
+
+// if already existed, return it
+Val klass_new(Val name, Val parent);
+
+// register destructor before val_free() is called on the object of the klass.
+// to avoid memory leak, a standard implementaion is to call val_release on all Val members.
+void klass_set_destruct_func(Val klass, ValCallbackFunc func);
+
+// replace the standard destructor() -> val_free() for objects of the klass.
+void klass_set_delete_func(Val klass, ValCallbackFunc func);
+
+void klass_set_debug_func(Val klass, ValCallbackFunc func);
+
+// negative for arbitrary argc
+void klass_def_method(Val klass, Val method_name, int argc, ValMethodFunc func);
 
 #pragma mark ### memory functions
 
@@ -259,15 +264,6 @@ void val_retain(Val p);
 void val_release(Val p);
 
 #endif // CHECK_MEMORY
-
-// register destructor before val_free() is called on the object of the klass.
-// to avoid memory leak, a standard implementaion is to call val_release on all Val members.
-typedef void (*ValDestructorFunc)(void*);
-void val_register_destructor_func(uint32_t klass, ValDestructorFunc func);
-
-// replace the standard destructor() -> val_free() for objects of the klass.
-typedef void (*ValDeleteFunc)(void*);
-void val_register_delete_func(uint32_t klass, ValDeleteFunc func);
 
 // for convenient in-place-update
 #define AS_VAL(_obj_) *((Val*)(&(_obj_)))

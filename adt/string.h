@@ -2,6 +2,8 @@
 
 #include "val.h"
 
+void nb_string_init_module();
+
 Val nb_string_new(size_t size, const char* p);
 
 // put into a permanent symbol table

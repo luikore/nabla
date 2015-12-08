@@ -26,15 +26,15 @@ void map_cola_suite() {
     assert_eq(3, SIZE(c));
 
     assert_true(COLA_FIND(c, k1, &v), "should contain k1");
-    assert_true(VAL_EQ(v1, v), "should contain v1");
+    assert_true(val_eq(v1, v), "should contain v1");
     RELEASE(v);
 
     assert_true(COLA_FIND(c, k2, &v), "should contain k2");
-    assert_true(VAL_EQ(v2, v), "should contain v2");
+    assert_true(val_eq(v2, v), "should contain v2");
     RELEASE(v);
 
     assert_true(COLA_FIND(c, k3, &v), "should contain k3");
-    assert_true(VAL_EQ(v3, v), "should contain v3");
+    assert_true(val_eq(v3, v), "should contain v3");
     RELEASE(v);
 
     RELEASE((Val)c);
@@ -68,13 +68,13 @@ void map_cola_suite() {
 
     assert_eq(2, SIZE(c));
     assert_true(COLA_FIND(c, k1, &v), "should contain k1");
-    assert_true(VAL_EQ(v1, v), "should contain v1");
+    assert_true(val_eq(v1, v), "should contain v1");
     RELEASE(v);
 
     assert_true(!COLA_FIND(c, k2, &v), "should not contain k2");
 
     assert_true(COLA_FIND(c, k3, &v), "should contain k3");
-    assert_true(VAL_EQ(v3, v), "should contain v3");
+    assert_true(val_eq(v3, v), "should contain v3");
     RELEASE(v);
 
     RELEASE((Val)c);

@@ -125,7 +125,6 @@ static Map* MAP_REMOVE(Map* h, uint64_t hash) {
 
 #pragma mark ### helpers decl
 
-static void _init() __attribute__((constructor(100)));
 static bool _deep_find(Slot* slot, uint64_t hash, Val k, Val* v, bool is_int_valued);
 static bool _deep_insert(Slot* slot, uint64_t hash, Val k, Val v, int level, bool is_int_valued);
 static bool _deep_remove(Slot* slot, uint64_t hash, Val k, Val* v, bool is_int_valued);
@@ -133,6 +132,28 @@ static NbMapEachRet _slot_each(Slot* slot, Val udata, NbMapEachCb cb);
 static void _debug(Slot* slot, int level);
 
 #pragma mark ### interface impl
+
+void nb_map_init_module() {
+  // perm empty map
+  Map* map = MAP_ALLOC(0);
+  val_perm(map);
+  map->size = 0;
+  map->bitmap = 0;
+  empty_map = (Val)map;
+
+  // perm empty map of int value
+  map = MAP_ALLOC(0);
+  val_perm(map);
+  map->size = 0;
+  map->bitmap = 0;
+  MAP_IS_INT_VALUED(map) = 1;
+  empty_map_i = (Val)map;
+
+  // destructor func
+  val_register_destructor_func(KLASS_MAP, MAP_DESTROY);
+  val_register_destructor_func(KLASS_MAP_NODE, NODE_DESTROY);
+  val_register_destructor_func(KLASS_MAP_COLA, COLA_DESTROY);
+}
 
 Val nb_map_new() {
   return empty_map;
@@ -249,28 +270,6 @@ NbMapEachRet nb_map_each(Val m, Val udata, NbMapEachCb cb) {
 
 #pragma mark ### helpers impl
 
-static void _init() {
-  // perm empty map
-  Map* map = MAP_ALLOC(0);
-  val_perm(map);
-  map->size = 0;
-  map->bitmap = 0;
-  empty_map = (Val)map;
-
-  // perm empty map of int value
-  map = MAP_ALLOC(0);
-  val_perm(map);
-  map->size = 0;
-  map->bitmap = 0;
-  MAP_IS_INT_VALUED(map) = 1;
-  empty_map_i = (Val)map;
-
-  // destructor func
-  val_register_destructor_func(KLASS_MAP, MAP_DESTROY);
-  val_register_destructor_func(KLASS_MAP_NODE, NODE_DESTROY);
-  val_register_destructor_func(KLASS_MAP_COLA, COLA_DESTROY);
-}
-
 // return true if found
 static bool _deep_find(Slot* slot, uint64_t hash, Val k, Val* v, bool is_int_valued) {
   if (SLOT_IS_NODE(slot)) {
@@ -281,7 +280,7 @@ static bool _deep_find(Slot* slot, uint64_t hash, Val k, Val* v, bool is_int_val
   } else if (SLOT_IS_COLA(slot)) {
     return COLA_FIND((Cola*)slot->h, k, v);
   } else {
-    if (VAL_EQ(slot->kv.k, k)) {
+    if (val_eq(slot->kv.k, k)) {
       *v = slot->kv.v;
       if (!is_int_valued) {
         RETAIN(*v);
@@ -326,7 +325,7 @@ static bool _deep_insert(Slot* slot, uint64_t hash, Val k, Val v, int level, boo
     return size_increased;
 
   } else { // replace kv
-    if (VAL_EQ(slot->kv.k, k)) { // in-place update
+    if (val_eq(slot->kv.k, k)) { // in-place update
       if (!is_int_valued) {
         RETAIN(v);
         RELEASE(slot->kv.v); // NOTE different than _deep_remove, the slot here was retained before
@@ -388,7 +387,7 @@ static bool _deep_remove(Slot* slot, uint64_t hash, Val k, Val* v, bool is_int_v
     return size_decreased;
 
   } else { // kv
-    if (VAL_EQ(slot->kv.k, k)) {
+    if (val_eq(slot->kv.k, k)) {
       *v = slot->kv.v;
       if (!is_int_valued) {
         RETAIN(*v);

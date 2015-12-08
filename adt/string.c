@@ -24,16 +24,16 @@ static uint64_t _hash_func(Val str);
 static void _destructor(void* p);
 
 static NbSymTable* literal_table;
-static void _init() __attribute__((constructor(200))); // after 1..199
-static void _init() {
-  literal_table = nb_sym_table_new();
-  val_register_hash_func(KLASS_STRING, _hash_func);
-  val_register_destructor_func(KLASS_STRING, _destructor);
-}
 
 static String* _alloc_string(size_t size);
 static SSlice* _alloc_s_slice();
 static Val _slice_from_literal(Val v, size_t from, size_t len);
+
+void nb_string_init_module() {
+  literal_table = nb_sym_table_new();
+  val_register_hash_func(KLASS_STRING, _hash_func);
+  val_register_destructor_func(KLASS_STRING, _destructor);
+}
 
 Val nb_string_new(size_t size, const char* p) {
   String* s = _alloc_string(size);

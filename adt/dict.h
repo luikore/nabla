@@ -6,6 +6,8 @@
 
 #include "val.h"
 
+void nb_dict_init_module();
+
 Val nb_dict_new();
 
 Val nb_dict_new_with_root(Val root, int64_t size);

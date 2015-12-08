@@ -169,8 +169,8 @@ void _node_debug(Node* node, int depth);
 #pragma mark --- interface
 
 static Val empty_arr;
-static void _init() __attribute__((constructor(100)));
-static void _init() {
+
+void nb_array_init_module() {
   Array* a = ARR_NEW(0);
   val_perm(a);
   empty_arr = (Val)a;

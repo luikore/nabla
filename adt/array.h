@@ -5,6 +5,8 @@
 #include "val.h"
 #include <stdarg.h>
 
+void nb_array_init_module();
+
 Val nb_array_new_empty();
 
 Val nb_array_new(size_t size, ...);

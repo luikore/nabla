@@ -1,5 +1,6 @@
 #include "val.h"
 #include "utils/mut-map.h"
+#include "klass.h"
 #include <siphash.h>
 
 // TODO move static global fields into vm initialization?
@@ -21,24 +22,25 @@ typedef union {
   uint64_t i;
 } HeaderCast;
 
+MUT_ARRAY_DECL(Klasses, Klass*);
+MUT_MAP_DECL(GlobalRefCounts, Val, int64_t, val_hash, val_eq);
 typedef struct {
-  ValHashFunc hash_func;
-  ValDestructorFunc destructor_func;
-  ValDeleteFunc delete_func;
-} FuncMap;
-
-static bool eq_func(Val v1, Val v2) {
-  return VAL_EQ(v1, v2);
-}
-
-MUT_MAP_DECL(GlobalRefCounts, Val, int64_t, val_hash, eq_func);
+  struct Klasses klasses;
+  struct GlobalRefCounts global_ref_counts;
+  bool global_tracing; // for begin/end trace
+} Runtime;
 
 static uint8_t nb_hash_key[16];
-static FuncMap* func_map;
-static size_t func_map_size = 100;
-static uint32_t curr_klass_id = KLASS_USER;
-static bool global_tracing = false; // for begin/end trace
-static struct GlobalRefCounts global_ref_counts;
+static Runtime runtime = {
+  .global_tracing = false
+};
+
+#pragma mark ### helpers
+
+void nb_array_init_module();
+void nb_dict_init_module();
+void nb_map_init_module();
+void nb_string_init_module();
 
 static void _init() __attribute__((constructor(0)));
 static void _init() {
@@ -46,9 +48,14 @@ static void _init() {
   for (long i = 0; i < 16; i++) {
     nb_hash_key[i] = i*i;
   }
-  func_map = malloc(sizeof(FuncMap) * func_map_size);
-  memset(func_map, 0, sizeof(FuncMap) * func_map_size);
-  GlobalRefCounts.init(&global_ref_counts);
+
+  Klasses.init(&runtime.klasses, KLASS_USER);
+  GlobalRefCounts.init(&runtime.global_ref_counts);
+
+  nb_array_init_module();
+  nb_dict_init_module();
+  nb_map_init_module();
+  nb_string_init_module(); // after map and dict
 }
 
 static void _inc_ref_count(Val v) {
@@ -56,8 +63,8 @@ static void _inc_ref_count(Val v) {
 
   if (p->rc_overflow) {
     int64_t ref_count;
-    if (GlobalRefCounts.find(&global_ref_counts, v, &ref_count)) {
-      GlobalRefCounts.insert(&global_ref_counts, v, ref_count + 1);
+    if (GlobalRefCounts.find(&runtime.global_ref_counts, v, &ref_count)) {
+      GlobalRefCounts.insert(&runtime.global_ref_counts, v, ref_count + 1);
     } else {
       // todo error
     }
@@ -66,10 +73,10 @@ static void _inc_ref_count(Val v) {
     up[0]++;
     if (p->rc_overflow) {
       int64_t ref_count;
-      if (GlobalRefCounts.find(&global_ref_counts, v, &ref_count)) {
+      if (GlobalRefCounts.find(&runtime.global_ref_counts, v, &ref_count)) {
         // todo error
       } else {
-        GlobalRefCounts.insert(&global_ref_counts, v, VAL_MAX_EMBED_RC);
+        GlobalRefCounts.insert(&runtime.global_ref_counts, v, VAL_MAX_EMBED_RC);
       }
     }
   }
@@ -80,13 +87,13 @@ static void _dec_ref_count(Val v) {
 
   if (p->rc_overflow) {
     int64_t ref_count;
-    if (GlobalRefCounts.find(&global_ref_counts, v, &ref_count)) {
+    if (GlobalRefCounts.find(&runtime.global_ref_counts, v, &ref_count)) {
       if (ref_count == VAL_MAX_EMBED_RC) {
-        GlobalRefCounts.remove(&global_ref_counts, v);
+        GlobalRefCounts.remove(&runtime.global_ref_counts, v);
         p->rc_overflow = false;
         p->extra_rc = (VAL_MAX_EMBED_RC - 1);
       } else {
-        GlobalRefCounts.insert(&global_ref_counts, v, ref_count - 1);
+        GlobalRefCounts.insert(&runtime.global_ref_counts, v, ref_count - 1);
       }
     } else {
       // todo error
@@ -102,6 +109,26 @@ static void _clear_rc(ValHeader* r) {
   r->perm = false;
 }
 
+#pragma mark ### klass
+
+Val klass_new(Val name, Val parent) {
+}
+
+void klass_set_destruct_func(Val klass, ValCallbackFunc func) {
+}
+
+void klass_set_delete_func(Val klass, ValCallbackFunc func) {
+}
+
+void klass_set_debug_func(Val klass, ValCallbackFunc func) {
+}
+
+// negative for arbitrary argc
+void klass_def_method(Val klass, Val method_name, int argc, ValMethodFunc func) {
+}
+
+#pragma mark ### misc func
+
 void val_debug(Val v) {
   printf("debug val 0x%lx (%s)\n", v, VAL_IS_IMM(v) ? "immediate" : "pointer");
   if (VAL_IS_IMM(v)) {
@@ -112,17 +139,25 @@ void val_debug(Val v) {
   }
 }
 
+bool val_eq(Val l, Val r) {
+  if (VAL_IS_STR(l)) {
+    if (VAL_IS_STR(r)) {
+      return l == r;
+    }
+  } else if (VAL_IS_IMM(l) && VAL_IS_IMM(r) && !VAL_IS_STR(r)) {
+    return l == r;
+  }
+  Val res = val_send(l, VAL_TO_STR(nb_string_literal_new_c("==")), 1, &r);
+  return VAL_IS_TRUE(res);
+}
+
 uint64_t val_hash(Val v) {
   if (VAL_IS_IMM(v) && !VAL_IS_STR(v)) {
     return siphash(nb_hash_key, (const uint8_t*)&v, 8);
   } else {
-    uint32_t klass = VAL_KLASS(v);
-    assert(klass <= curr_klass_id);
-    ValHashFunc func = func_map[klass].hash_func;
-    if (func) {
-      return func(v);
-    }
-    return 0; // todo
+    Val res = val_send(v, VAL_TO_STR(nb_string_literal_new_c("hash")), 0, NULL);
+    // TODO to uint 64
+    return VAL_TO_INT(res);
   }
 }
 
@@ -130,34 +165,8 @@ uint64_t val_hash_mem(const void* memory, size_t size) {
   return siphash(nb_hash_key, (const uint8_t*)memory, size);
 }
 
-uint32_t val_new_class_id() {
-  if (curr_klass_id + 2 > func_map_size) {
-    func_map = realloc(func_map, sizeof(FuncMap) * func_map_size * 2);
-    memset(func_map + func_map_size, 0, sizeof(FuncMap) * func_map_size);
-    func_map_size *= 2;
-  }
-  return ++curr_klass_id;
-}
-
-void val_register_hash_func(uint32_t klass, ValHashFunc hash_func) {
-  assert(klass <= curr_klass_id);
-  func_map[klass].hash_func = hash_func;
-}
-
-void val_register_destructor_func(uint32_t klass, ValDestructorFunc destructor_func) {
-  assert(klass <= curr_klass_id);
-  if (func_map[klass].delete_func) {
-    log_warn("delete_func is registered on klass %u, this destructor will not be invoked", klass);
-  }
-  func_map[klass].destructor_func = destructor_func;
-}
-
-void val_register_delete_func(uint32_t klass, ValDeleteFunc delete_func) {
-  assert(klass <= curr_klass_id);
-  if (func_map[klass].destructor_func) {
-    log_warn("destructor registered on klass %u will not be invoked", klass);
-  }
-  func_map[klass].delete_func = delete_func;
+Val val_send(Val obj, uint32_t id, int argc, Val* args) {
+  
 }
 
 #pragma mark ### memory function interface
@@ -221,15 +230,15 @@ static void _heap_mem_unstore(void* p) {
 }
 
 void val_begin_trace() {
-  global_tracing = true;
+  runtime.global_tracing = true;
 }
 
 bool val_is_tracing() {
-  return global_tracing;
+  return runtime.global_tracing;
 }
 
 void val_end_trace() {
-  global_tracing = false;
+  runtime.global_tracing = false;
 }
 
 void* val_alloc_cm(size_t size) {
@@ -352,12 +361,13 @@ void val_release_cm(Val v) {
   }
 
   if (!p->rc_overflow && p->extra_rc == 0) {
-    FuncMap fm = func_map[p->klass];
-    if (fm.delete_func) {
-      fm.delete_func(p);
+    uint32_t klass_id = VAL_KLASS((Val)p);
+    Klass* k = *Klasses.at(&runtime.klasses, klass_id);
+    if (k->delete_func) {
+      k->delete_func(p);
     } else {
-      if (fm.destructor_func) {
-        fm.destructor_func(p);
+      if (k->destruct_func) {
+        k->destruct_func(p);
       }
       val_free_cm(p);
     }
@@ -379,12 +389,13 @@ void val_release(Val v) {
     printf("release node xtra_rc=%d\n", p->extra_rc);
   }
   if (!p->rc_overflow && p->extra_rc == 0) {
-    FuncMap fm = func_map[p->klass];
-    if (fm.delete_func) {
-      fm.delete_func(p);
+    uint32_t klass_id = VAL_KLASS((Val)p);
+    Klass* k = *Klasses.at(&runtime.klasses, klass_id);
+    if (k->delete_func) {
+      k->delete_func(p);
     } else {
-      if (fm.destructor_func) {
-        fm.destructor_func(p);
+      if (k->destruct_func) {
+        k->destruct_func(p);
       }
       val_free(p);
     }
@@ -395,6 +406,6 @@ void val_release(Val v) {
 
 int64_t val_global_ref_count(Val v) {
   int64_t res;
-  bool found = GlobalRefCounts.find(&global_ref_counts, v, &res);
+  bool found = GlobalRefCounts.find(&runtime.global_ref_counts, v, &res);
   return found ? res : -1;
 }
