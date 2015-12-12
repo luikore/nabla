@@ -139,6 +139,8 @@ enum {
   KLASS_COMPLEX,
   KLASS_VECTOR,
 
+  KLASS_CONS,
+  KLASS_TOKEN,
   KLASS_BOX,
 
   KLASS_USER // start of dynamic allocated classes
