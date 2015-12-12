@@ -144,4 +144,33 @@ void val_suite() {
     ret = val_c_call((void*)f8, 8, argv);
     assert_eq((1<<1)+(2<<2)+(3<<3)+(4<<4)+(5<<5)+(6<<6)+(7<<7)+(8<<8), ret);
   }
+
+  ccut_test("val_c_call2") {
+    Val argv[] = { 2, 3, 4, 5, 6, 7, 8 };
+    Val ret;
+
+    ret = val_c_call2(1, (void*)f1, 0, argv);
+    assert_eq(1, ret);
+
+    ret = val_c_call2(1, (void*)f2, 1, argv);
+    assert_eq(1+2, ret);
+
+    ret = val_c_call2(1, (void*)f3, 2, argv);
+    assert_eq(1+2+3, ret);
+
+    ret = val_c_call2(1, (void*)f4, 3, argv);
+    assert_eq(1+2+3+4, ret);
+
+    ret = val_c_call2(1, (void*)f5, 4, argv);
+    assert_eq(1+2+3+4+5, ret);
+
+    ret = val_c_call2(1, (void*)f6, 5, argv);
+    assert_eq(1+2+3+4+5+6, ret);
+
+    ret = val_c_call2(1, (void*)f7, 6, argv);
+    assert_eq(1+2+3+4+5+6+7, ret);
+
+    ret = val_c_call2(1, (void*)f8, 7, argv);
+    assert_eq((1<<1)+(2<<2)+(3<<3)+(4<<4)+(5<<5)+(6<<6)+(7<<7)+(8<<8), ret);
+  }
 }

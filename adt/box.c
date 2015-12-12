@@ -6,6 +6,28 @@ typedef struct {
   uint64_t data;
 } Box;
 
+static Val _box_eq(Val l, Val r) {
+  if (VAL_KLASS(r) == KLASS_BOX) {
+    return (nb_box_get(l) == nb_box_get(r)) ? VAL_TRUE : VAL_FALSE;
+  } else {
+    return VAL_FALSE;
+  }
+}
+
+static Val _box_hash(Val b) {
+  uint64_t v = nb_box_get(b);
+  v ^= 0x01030507090A0CULL; // XXX make it a bit different
+  uint64_t h = val_hash_mem(&v, sizeof(uint64_t));
+  // TODO val from uint64
+  return VAL_FROM_INT(h);
+}
+
+void nb_box_init_module() {
+  klass_def_internal(KLASS_BOX, val_strlit_new_c("Box"));
+  klass_def_method(KLASS_BOX, val_strlit_new_c("=="), 1, _box_eq, true);
+  klass_def_method(KLASS_BOX, val_strlit_new_c("hash"), 0, _box_hash, true);
+}
+
 Val nb_box_new(uint64_t data) {
   Box* box = val_alloc(sizeof(Box));
   box->header.klass = KLASS_BOX;

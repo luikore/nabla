@@ -46,8 +46,10 @@ special values for internal use only
 
 #define VAL_IS_TRUE(_v_) ((_v_) & ~VAL_FALSE)
 #define VAL_IS_FALSE(_v_) (!VAL_IS_TRUE(_v_))
+
+// immediate value: int, dbl, true, str, nil, false
 static inline bool VAL_IS_IMM(Val v) {
-  return (v & 7) || !(v & ~VAL_FALSE);
+  return (v & 7) || VAL_IS_FALSE(v);
 }
 
 static inline uint64_t VAL_DBL_AS_UINT(double d) {
@@ -185,6 +187,9 @@ inline static int64_t VAL_REF_COUNT(Val v) {
 #pragma mark ### misc
 
 Val val_c_call(void* cfunc, uint64_t argc, Val* argv);
+
+// call with obj as the first arg
+Val val_c_call2(Val obj, void* cfunc, uint64_t argc, Val* argv);
 
 uint64_t val_hash_mem(const void* memory, size_t size);
 

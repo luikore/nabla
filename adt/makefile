@@ -5,11 +5,11 @@ debug: $(debug_target)
 
 c_bases = val box array dict sym-table map string
 bases = $(c_bases)
-bases += asm/val-c-call ../vendor/tinycthread/source/tinycthread
+bases += asm/val-c-call asm/val-c-call2 ../vendor/tinycthread/source/tinycthread
 objects = $(addsuffix .o, $(bases))
 debug_objects = $(addsuffix -debug.o, $(bases))
 
-test_srcs = test.c asm/val-c-call.S map-node-test.c map-cola-test.c
+test_srcs = test.c asm/val-c-call.S asm/val-c-call2.S map-node-test.c map-cola-test.c
 test_srcs += $(addsuffix .c, $(c_bases))
 test_srcs += $(addsuffix -test.c, $(c_bases))
 

@@ -2,6 +2,7 @@
 #include <string.h>
 #include "string.h"
 #include "sym-table.h"
+#include "utils/str.h"
 
 typedef struct {
   ValHeader h; // flags:encoding, user1:is_slice
@@ -21,6 +22,7 @@ typedef struct {
 #define BYTE_SIZE(s) (s)->byte_size
 
 static Val _hash_func(Val str);
+static Val _eq_func(Val l, Val r);
 static void _destructor(void* p);
 
 static String* _alloc_string(size_t size);
@@ -30,6 +32,7 @@ static Val _slice_from_literal(Val v, size_t from, size_t len);
 void nb_string_init_module() {
   klass_def_internal(KLASS_STRING, val_strlit_new_c("String"));
   klass_def_method(KLASS_STRING, val_strlit_new_c("hash"), 0, _hash_func, true);
+  klass_def_method(KLASS_STRING, val_strlit_new_c("=="), 1, _eq_func, true);
   klass_set_destruct_func(KLASS_STRING, _destructor);
 }
 
@@ -85,14 +88,6 @@ Val nb_string_concat(Val s1, Val s2) {
   memcpy(r->str, nb_string_ptr(s1), bytesize1);
   memcpy(r->str + bytesize1, nb_string_ptr(s2), bytesize2);
   return (Val)r;
-}
-
-bool nb_string_eql(Val s1, Val s2) {
-  if (s1 == s2) { // fast path for same ref and literals
-    return true;
-  } else {
-    return (nb_string_cmp(s1, s2) == 0);
-  }
 }
 
 int nb_string_cmp(Val s1, Val s2) {
@@ -152,6 +147,17 @@ static Val _hash_func(Val v) {
   uint64_t h = val_hash_mem(nb_string_ptr(v), nb_string_byte_size(v));
   // TODO from uint 64
   return VAL_FROM_INT(h);
+}
+
+static Val _eq_func(Val l, Val r) {
+  if (VAL_KLASS(r) == KLASS_STRING) {
+    const char* lptr = nb_string_ptr(l);
+    size_t lsize = nb_string_byte_size(l);
+    const char* rptr = nb_string_ptr(r);
+    size_t rsize = nb_string_byte_size(r);
+    return (str_compare(lsize, lptr, rsize, rptr) ? VAL_FALSE : VAL_TRUE);
+  }
+  return VAL_FALSE;
 }
 
 static void _destructor(void* p) {

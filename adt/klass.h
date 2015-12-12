@@ -20,9 +20,9 @@ typedef struct {
 #define METHOD_IS_CFUNC(m) (m)->h.user1
 #define METHOD_IS_FINAL(m) (m)->h.user2
 
-static Val METHOD_INVOKE(Method* m, int argc, Val* argv) {
+static Val METHOD_INVOKE(Val obj, Method* m, int argc, Val* argv) {
   if (METHOD_IS_CFUNC(m)) {
-    return val_c_call(m->as.func, argc, argv);
+    return val_c_call2(obj, m->as.func, argc, argv);
   } else {
     // TODO
     return VAL_UNDEF;

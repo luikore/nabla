@@ -4,6 +4,8 @@
 
 #include "val.h"
 
+void nb_box_init_module();
+
 Val nb_box_new(uint64_t data);
 // todo box pointers with destruct function
 

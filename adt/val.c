@@ -44,6 +44,7 @@ static Runtime runtime = {
 
 #pragma mark ### helpers
 
+void nb_box_init_module();
 void nb_array_init_module();
 void nb_dict_init_module();
 void nb_map_init_module();
@@ -61,6 +62,7 @@ static void _init() {
 
   runtime.literal_table = nb_sym_table_new();
 
+  nb_box_init_module();
   nb_array_init_module();
   nb_dict_init_module();
   nb_map_init_module();
@@ -131,7 +133,7 @@ static Klass* _klass_new(uint32_t klass_id, Val name, uint32_t parent) {
 
 static Method* _search_method(Klass* klass, uint32_t method_id) {
   int size = MethodSearches.size(&klass->method_searches);
-  for (int i = size; i >= 0; i--) {
+  for (int i = size - 1; i >= 0; i--) {
     MethodSearch* s = MethodSearches.at(&klass->method_searches, i);
     if (s->method && s->method->method_id == method_id) {
       return s->method;
@@ -248,24 +250,39 @@ size_t val_strlit_byte_size(uint32_t sid) {
 }
 
 void val_debug(Val v) {
-  printf("debug val 0x%lx (%s)\n", v, VAL_IS_IMM(v) ? "immediate" : "pointer");
-  if (VAL_IS_IMM(v)) {
-    printf("  klass=%u\n", VAL_KLASS(v));
+  printf("debug val 0x%lx (%s)", v, VAL_IS_IMM(v) ? "immediate" : "pointer");
+  if (v == VAL_UNDEF) {
+    printf(" undef\n");
+    return;
+  } else {
+    uint32_t klass_id = VAL_KLASS(v);
+    Klass* klass_ptr = *Klasses.at(&runtime.klasses, klass_id);
+    if (klass_ptr) {
+      uint32_t str = VAL_TO_STR(klass_ptr->name);
+      printf(" klass=%.*s,", (int)val_strlit_byte_size(str), val_strlit_ptr(str));
+    } else {
+      printf(" klass=0,");
+    }
+  }
+
+  if (!VAL_IS_IMM(v)) {
+    printf("\n");
   } else {
     ValHeader* p = (ValHeader*)v;
-    printf("  extra_rc=%hu, klass=%u, flags=%u\n", p->extra_rc, p->klass, p->flags);
+    printf(" extra_rc=%hu, flags=%u, user1=%u, user2=%u\n",
+    p->extra_rc, p->flags, p->user1, p->user2);
   }
 }
 
 bool val_eq(Val l, Val r) {
-  if (VAL_IS_STR(l)) {
-    if (VAL_IS_STR(r)) {
-      return l == r;
-    }
-  } else if (VAL_IS_IMM(l) && VAL_IS_IMM(r) && !VAL_IS_STR(r)) {
-    return l == r;
+  if (l == r) {
+    return true;
   }
-  Val res = val_send(l, val_strlit_new_c("=="), 1, &r);
+  if (VAL_IS_IMM(l) && VAL_IS_IMM(r)) {
+    return false;
+  }
+  Val argv[] = {l, r};
+  Val res = val_send(l, val_strlit_new_c("=="), 2, argv);
   return VAL_IS_TRUE(res);
 }
 
@@ -288,7 +305,7 @@ Val val_send(Val obj, uint32_t method_id, int32_t argc, Val* args) {
   Klass* k = *Klasses.at(&runtime.klasses, klass_id);
   Method* m = _search_method(k, method_id);
   if (m) {
-    return METHOD_INVOKE(m, argc, args);
+    return METHOD_INVOKE(obj, m, argc, args);
   } else {
     return VAL_UNDEF;
   }
