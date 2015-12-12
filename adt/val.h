@@ -255,7 +255,7 @@ void val_end_trace();
 
 void val_begin_check_memory_cm();
 void val_end_check_memory_cm();
-void* val_alloc_cm(size_t size);
+void* val_alloc_cm(uint32_t klass_id, size_t size);
 void* val_dup_cm(void* p, size_t osize, size_t nsize);
 void* val_realloc_cm(void* p, size_t osize, size_t nsize);
 void val_free_cm(void* p);
@@ -275,7 +275,7 @@ void val_release_cm(Val p);
 
 #else
 
-void* val_alloc_f(size_t size);
+void* val_alloc_f(uint32_t klass_id, size_t size);
 void* val_dup_f(void* p, size_t osize, size_t nsize);
 void* val_realloc_f(void* p, size_t osize, size_t nsize);
 void val_free_f(void* p);
@@ -307,3 +307,11 @@ void val_release_f(Val p);
 
 #define RETAIN(_obj_) val_retain((Val)(_obj_))
 #define RELEASE(_obj_) val_release((Val)(_obj_))
+
+#pragma mark ### arena
+
+void* val_arena_new();
+void* val_arena_alloc(void* arena, uint32_t klass_id, uint8_t qword_count);
+void val_arena_push(void* arena);
+void val_arena_pop(void* arena);
+void val_arena_delete(void* arena);

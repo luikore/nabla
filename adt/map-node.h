@@ -106,8 +106,7 @@ static void SLOT_RELEASE(Slot* slot, bool is_int_valued) {
 #pragma mark ### node
 
 static Node* NODE_ALLOC(size_t size, int level, bool is_int_valued) {
-  Node* node = val_alloc(sizeof(Node) + sizeof(Slot) * size);
-  node->header.klass = KLASS_MAP_NODE;
+  Node* node = val_alloc(KLASS_MAP_NODE, sizeof(Node) + sizeof(Slot) * size);
   IS_INT_VALUED(node) = is_int_valued;
   LEVEL(node) = level;
   SIZE(node) = size;

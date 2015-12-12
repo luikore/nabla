@@ -18,8 +18,7 @@ typedef struct {
 #define NODE_BYTES(n) (sizeof(Node) + sizeof(Val) * NODE_SIZE(n))
 
 static Node* NODE_NEW(uint64_t size) {
-  Node* r = val_alloc(sizeof(Node) + sizeof(Val) * size);
-  r->h.klass = KLASS_ARRAY_NODE;
+  Node* r = val_alloc(KLASS_ARRAY_NODE, sizeof(Node) + sizeof(Val) * size);
   NODE_SIZE(r) = size;
   return r;
 }

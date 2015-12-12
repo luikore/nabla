@@ -67,8 +67,7 @@ static bool SET_V(Val m, Val v) {
 }
 
 inline static Dict* DICT_NEW() {
-  Dict* d = val_alloc(sizeof(Dict));
-  d->h.klass = KLASS_DICT;
+  Dict* d = val_alloc(KLASS_DICT, sizeof(Dict));
   return d;
 }
 

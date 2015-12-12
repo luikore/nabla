@@ -46,8 +46,7 @@ inline static bool NODE_INDEX_OVERFLOW(Node* n, int level, uint64_t pos) {
 }
 
 inline static Array* ARR_NEW(uint64_t root_size) {
-  Array* a = val_alloc(sizeof(Array) + sizeof(Val) * root_size);
-  a->h.klass = KLASS_ARRAY;
+  Array* a = val_alloc(KLASS_ARRAY, sizeof(Array) + sizeof(Val) * root_size);
   // ARR_IS_SLICE(a) = 0;
   ROOT_SIZE(a) = root_size;
   return a;
@@ -96,8 +95,7 @@ inline static bool ARR_IS_PARTIAL_FULL(Array* a) {
 }
 
 inline static Slice* SLICE_NEW() {
-  Slice* s = val_alloc(sizeof(Slice));
-  s->h.klass = KLASS_ARRAY;
+  Slice* s = val_alloc(KLASS_ARRAY, sizeof(Slice));
   ARR_IS_SLICE(s) = true;
   return s;
 }

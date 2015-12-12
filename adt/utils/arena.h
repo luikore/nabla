@@ -21,12 +21,14 @@ typedef struct {
   uint64_t i;
 } ArenaStack;
 
-typedef struct {
+struct ArenaStruct {
   ArenaChunk* head;
   ArenaStack* stack;
   uint32_t stack_size;
   uint32_t stack_cap;
-} Arena;
+};
+
+typedef struct ArenaStruct Arena;
 
 static Arena* arena_new() {
   Arena* arena = malloc(sizeof(Arena) + sizeof(ArenaChunk));

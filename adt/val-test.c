@@ -98,13 +98,13 @@ void val_suite() {
   }
 
   ccut_test("alloc default ref_count == 1") {
-    ValHeader* h = val_alloc(30);
+    ValHeader* h = val_alloc(KLASS_STRING, 30);
     assert_eq(1, VAL_REF_COUNT((Val)h));
     val_free(h);
   }
 
   ccut_test("retain/release") {
-    ValHeader* h = val_alloc(10);
+    ValHeader* h = val_alloc(KLASS_BOOLEAN, 10);
     Val v = (Val)h;
     RETAIN(v);
     assert_eq(2, VAL_REF_COUNT((Val)h));

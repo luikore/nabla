@@ -29,8 +29,7 @@ void nb_box_init_module() {
 }
 
 Val nb_box_new(uint64_t data) {
-  Box* box = val_alloc(sizeof(Box));
-  box->header.klass = KLASS_BOX;
+  Box* box = val_alloc(KLASS_BOX, sizeof(Box));
   box->data = data;
   return (Val)box;
 }

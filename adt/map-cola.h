@@ -14,8 +14,7 @@ typedef struct {
 #define COLA_BYTES(n) (sizeof(Cola) + n * sizeof(Kv))
 
 static Cola* COLA_ALLOC(int size, bool is_int_valued) {
-  Cola* cola = val_alloc(COLA_BYTES(size));
-  cola->header.klass = KLASS_MAP_COLA;
+  Cola* cola = val_alloc(KLASS_MAP_COLA, COLA_BYTES(size));
   LEVEL(cola) = MAX_NODE_LEVEL;
   IS_INT_VALUED(cola) = is_int_valued;
   SIZE(cola) = size;

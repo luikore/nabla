@@ -185,16 +185,14 @@ static Val _slice_from_literal(Val v, size_t from, size_t len) {
 }
 
 static String* _alloc_string(size_t bytesize) {
-  String* m = val_alloc(sizeof(String) + bytesize);
-  m->h.klass = KLASS_STRING;
+  String* m = val_alloc(KLASS_STRING, sizeof(String) + bytesize);
   // IS_SLICE(m) = 0;
   BYTE_SIZE(m) = bytesize;
   return m;
 }
 
 static SSlice* _alloc_s_slice() {
-  SSlice* m = val_alloc(sizeof(SSlice));
-  m->h.klass = KLASS_STRING;
+  SSlice* m = val_alloc(KLASS_STRING, sizeof(SSlice));
   IS_SLICE(m) = 1;
   // m->h.is_char_size_computed = 0;
   // m->h.bytesize = 0;

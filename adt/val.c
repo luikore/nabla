@@ -1,5 +1,6 @@
 #include "val.h"
 #include "utils/mut-map.h"
+#include "utils/arena.h"
 #include "klass.h"
 #include "string.h"
 #include "sym-table.h"
@@ -17,21 +18,21 @@ typedef struct {
   uint32_t name_str;
 } KlassSearchKey;
 
-static uint64_t klass_search_key_hash(KlassSearchKey k) {
+static uint64_t _klass_search_key_hash(KlassSearchKey k) {
   return val_hash_mem(&k, sizeof(KlassSearchKey));
 }
 
-static uint64_t klass_search_key_eq(KlassSearchKey k1, KlassSearchKey k2) {
+static uint64_t _klass_search_key_eq(KlassSearchKey k1, KlassSearchKey k2) {
   return k1.parent == k2.parent && k1.name_str == k2.name_str;
 }
 
 MUT_ARRAY_DECL(Klasses, Klass*);
 MUT_MAP_DECL(GlobalRefCounts, Val, int64_t, val_hash, val_eq);
-MUT_MAP_DECL(KlassSearchMap, KlassSearchKey, uint32_t, klass_search_key_hash, klass_search_key_eq);
+MUT_MAP_DECL(KlassSearchMap, KlassSearchKey, uint32_t, _klass_search_key_hash, _klass_search_key_eq);
 
 typedef struct {
-  struct Klasses klasses;
-  struct KlassSearchMap klass_search_map;
+  struct Klasses klasses; // array index by klass_id
+  struct KlassSearchMap klass_search_map; // { (parent, name_str_lit) => klass* }
   struct GlobalRefCounts global_ref_counts;
   bool global_tracing; // for begin/end trace
   NbSymTable* literal_table;
@@ -121,22 +122,51 @@ static void _clear_rc(ValHeader* r) {
 }
 
 static Klass* _klass_new(uint32_t klass_id, Val name, uint32_t parent) {
-  Klass* k = val_alloc(sizeof(Klass));
-  k->h.klass = KLASS_KLASS;
+  Klass* k = val_alloc(KLASS_KLASS, sizeof(Klass));
   k->id = klass_id;
   k->name = name;
   k->parent_id = parent;
   Fields.init(&k->fields, 0);
   MethodSearches.init(&k->method_searches, 0);
+  val_perm(k);
   return k;
 }
 
-static Method* _search_method(Klass* klass, uint32_t method_id) {
+static Method* _method_new(uint32_t method_id, int argc, bool is_final) {
+  Method* meth = val_alloc(KLASS_METHOD, sizeof(Method));
+  METHOD_ID(meth) = method_id;
+  METHOD_IS_FINAL(meth) = is_final;
+  METHOD_ARGC(meth) = argc;
+  val_perm(meth);
+  return meth;
+}
+
+static Method* _shallow_search_method(Klass* klass, uint32_t method_id) {
   int size = MethodSearches.size(&klass->method_searches);
   for (int i = size - 1; i >= 0; i--) {
     MethodSearch* s = MethodSearches.at(&klass->method_searches, i);
     if (s->method && s->method->method_id == method_id) {
       return s->method;
+    }
+  }
+  return NULL;
+}
+
+static Method* _deep_search_method(Klass* klass, uint32_t method_id) {
+  int size = MethodSearches.size(&klass->method_searches);
+  for (int i = size - 1; i >= 0; i--) {
+    MethodSearch* s = MethodSearches.at(&klass->method_searches, i);
+    if (s->method) {
+      if (s->method->method_id == method_id) {
+        return s->method;
+      }
+    } else {
+      uint32_t include_id = s->include_id;
+      Klass* include_klass = *Klasses.at(&runtime.klasses, include_id);
+      Method* m = _deep_search_method(include_klass, method_id);
+      if (m) {
+        return m;
+      }
     }
   }
   return NULL;
@@ -203,17 +233,23 @@ void klass_set_debug_func(uint32_t klass_id, ValCallbackFunc func) {
 }
 
 void klass_def_fields(uint32_t klass_id, Val fields) {
-  
+
 }
 
 // negative for arbitrary argc
 void klass_def_method(uint32_t klass_id, uint32_t method_id, int argc, ValMethodFunc func, bool is_final) {
   Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
-  Method* meth = val_alloc(sizeof(Method));
-  METHOD_IS_FINAL(meth) = is_final;
+
+  Method* prev_meth = _shallow_search_method(klass, method_id);
+  if (prev_meth) {
+    if (METHOD_IS_FINAL(prev_meth)) {
+      assert(false);
+      // TODO raise error
+    }
+  }
+
+  Method* meth = _method_new(method_id, argc, is_final);
   METHOD_IS_CFUNC(meth) = true;
-  METHOD_ARGC(meth) = argc;
-  METHOD_ID(meth) = method_id;
   meth->as.func = func;
 
   MethodSearch s = {.method = meth};
@@ -303,7 +339,7 @@ uint64_t val_hash_mem(const void* memory, size_t size) {
 Val val_send(Val obj, uint32_t method_id, int32_t argc, Val* args) {
   uint32_t klass_id = VAL_KLASS(obj);
   Klass* k = *Klasses.at(&runtime.klasses, klass_id);
-  Method* m = _search_method(k, method_id);
+  Method* m = _deep_search_method(k, method_id);
   if (m) {
     return METHOD_INVOKE(obj, m, argc, args);
   } else {
@@ -383,19 +419,21 @@ void val_end_trace() {
   runtime.global_tracing = false;
 }
 
-void* val_alloc_cm(size_t size) {
+void* val_alloc_cm(uint32_t klass_id, size_t size) {
   ValHeader* p = malloc(size);
   memset(p, 0, size);
+  p->klass = klass_id;
 
   _heap_mem_store(p);
   return p;
 }
 
-void* val_alloc_f(size_t size) {
+void* val_alloc_f(uint32_t klass_id, size_t size) {
   // malloc is already aligned at least 8 bytes
   // see http://en.cppreference.com/w/c/types/max_align_t
   ValHeader* p = malloc(size);
   memset(p, 0, size);
+  p->klass = klass_id;
 
   return p;
 }
@@ -550,4 +588,29 @@ int64_t val_global_ref_count(Val v) {
   int64_t res;
   bool found = GlobalRefCounts.find(&runtime.global_ref_counts, v, &res);
   return found ? res : -1;
+}
+
+#pragma mark ### arena
+
+void* val_arena_new() {
+  return arena_new();
+}
+
+void* val_arena_alloc(void* arena, uint32_t klass_id, uint8_t qword_count) {
+  ValHeader* data = arena_slot_alloc(arena, qword_count);
+  data->klass = klass_id;
+  val_perm(data);
+  return data;
+}
+
+void val_arena_push(void* arena) {
+  arena_push(arena);
+}
+
+void val_arena_pop(void* arena) {
+  arena_pop(arena);
+}
+
+void val_arena_delete(void* arena) {
+  arena_delete(arena);
 }

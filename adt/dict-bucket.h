@@ -85,9 +85,8 @@ static void BUCKET_ITER_NEXT(Bucket* b, BucketIter* it) {
 }
 
 static Bucket* BUCKET_NEW(size_t bytes) {
-  Bucket* b = val_alloc(sizeof(Bucket) + bytes);
+  Bucket* b = val_alloc(KLASS_DICT_BUCKET, sizeof(Bucket) + bytes);
   BUCKET_BYTES(b) = bytes;
-  b->h.klass = KLASS_DICT_BUCKET;
   b->v = VAL_UNDEF;
   return b;
 }

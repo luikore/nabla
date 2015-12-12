@@ -80,9 +80,8 @@ static bool BIT_MAP_HIT(uint64_t* bit_map, char c, int* index) {
 #define MAP_SIZE(m) ((ValHeader*)(m))->flags
 
 static Map* MAP_NEW(size_t sz) {
-  Map* m = val_alloc(sizeof(Map) + sizeof(Val) * sz);
+  Map* m = val_alloc(KLASS_DICT_MAP, sizeof(Map) + sizeof(Val) * sz);
   MAP_SIZE(m) = sz;
-  m->h.klass = KLASS_DICT_MAP;
   m->v = VAL_UNDEF;
   return m;
 }

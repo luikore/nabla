@@ -34,8 +34,7 @@ static Val empty_map_i; // int valued
 #define MAP_BM_TEST_POS(_map_, _pos_) (((_map_)->bitmap >> _pos_) & 1)
 
 static Map* MAP_ALLOC(size_t root_size) {
-  Map* m = val_alloc(sizeof(Map) + sizeof(Slot) * root_size);
-  m->header.klass = KLASS_MAP;
+  Map* m = val_alloc(KLASS_MAP, sizeof(Map) + sizeof(Slot) * root_size);
   MAP_ROOT_SIZE(m) = root_size;
   return m;
 }

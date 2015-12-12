@@ -8,7 +8,7 @@
 typedef struct {
   ValHeader h; // user1: is_cfunc, user2: is_final
   uint32_t method_id;
-  uint32_t argc;
+  int32_t argc;
   union {
     void* code;
     ValMethodFunc func;
@@ -20,8 +20,23 @@ typedef struct {
 #define METHOD_IS_CFUNC(m) (m)->h.user1
 #define METHOD_IS_FINAL(m) (m)->h.user2
 
+static bool METHOD_ARGC_MATCH(Method* m, int argc) {
+  int m_argc = METHOD_ARGC(m);
+  if (m_argc == argc) {
+    return true;
+  }
+  if (m_argc < 0) {
+    return argc >= (-m_argc);
+  }
+  return false;
+}
+
 static Val METHOD_INVOKE(Val obj, Method* m, int argc, Val* argv) {
   if (METHOD_IS_CFUNC(m)) {
+    if (!METHOD_ARGC_MATCH(m, argc)) {
+      // TODO raise error
+      assert(false);
+    }
     return val_c_call2(obj, m->as.func, argc, argv);
   } else {
     // TODO
