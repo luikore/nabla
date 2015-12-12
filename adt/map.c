@@ -150,9 +150,12 @@ void nb_map_init_module() {
   empty_map_i = (Val)map;
 
   // destructor func
-  val_register_destructor_func(KLASS_MAP, MAP_DESTROY);
-  val_register_destructor_func(KLASS_MAP_NODE, NODE_DESTROY);
-  val_register_destructor_func(KLASS_MAP_COLA, COLA_DESTROY);
+  klass_def_internal(KLASS_MAP, val_strlit_new_c("Map"));
+  klass_set_destruct_func(KLASS_MAP, MAP_DESTROY);
+  klass_def_internal(KLASS_MAP_NODE, val_strlit_new_c("MapNode"));
+  klass_set_destruct_func(KLASS_MAP_NODE, NODE_DESTROY);
+  klass_def_internal(KLASS_MAP_COLA, val_strlit_new_c("MapCola"));
+  klass_set_destruct_func(KLASS_MAP_COLA, COLA_DESTROY);
 }
 
 Val nb_map_new() {

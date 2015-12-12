@@ -175,8 +175,10 @@ void nb_array_init_module() {
   val_perm(a);
   empty_arr = (Val)a;
 
-  val_register_destructor_func(KLASS_ARRAY_NODE, NODE_DESTROY);
-  val_register_destructor_func(KLASS_ARRAY, ARR_DESTROY);
+  klass_def_internal(KLASS_ARRAY_NODE, val_strlit_new_c("ArrayNode"));
+  klass_set_destruct_func(KLASS_ARRAY_NODE, NODE_DESTROY);
+  klass_def_internal(KLASS_ARRAY, val_strlit_new_c("Array"));
+  klass_set_destruct_func(KLASS_ARRAY, ARR_DESTROY);
 }
 
 Val nb_array_new_empty() {

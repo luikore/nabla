@@ -25,7 +25,5 @@ bool nb_string_eql(Val s1, Val s2);
 
 int nb_string_cmp(Val s1, Val s2);
 
-bool nb_string_literal_lookup(Val literal, size_t* size, char** p);
-
 // todo negative index
 Val nb_string_slice(Val s, size_t from, size_t len);

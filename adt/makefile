@@ -5,7 +5,7 @@ debug: $(debug_target)
 
 c_bases = val box array dict sym-table map string
 bases = $(c_bases)
-bases += asm/val-c-call
+bases += asm/val-c-call ../vendor/tinycthread/source/tinycthread
 objects = $(addsuffix .o, $(bases))
 debug_objects = $(addsuffix -debug.o, $(bases))
 

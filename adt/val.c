@@ -1,33 +1,40 @@
 #include "val.h"
 #include "utils/mut-map.h"
 #include "klass.h"
+#include "string.h"
+#include "sym-table.h"
 #include <siphash.h>
 
 // TODO move static global fields into vm initialization?
-
-#ifdef CHECK_MEMORY
-#undef val_begin_check_memory
-#undef val_end_check_memory
-#undef val_alloc
-#undef val_dup
-#undef val_realloc
-#undef val_free
-#undef val_perm
-#undef val_retain
-#undef val_release
-#endif
 
 typedef union {
   ValHeader h;
   uint64_t i;
 } HeaderCast;
 
+typedef struct {
+  uint32_t parent;
+  uint32_t name_str;
+} KlassSearchKey;
+
+static uint64_t klass_search_key_hash(KlassSearchKey k) {
+  return val_hash_mem(&k, sizeof(KlassSearchKey));
+}
+
+static uint64_t klass_search_key_eq(KlassSearchKey k1, KlassSearchKey k2) {
+  return k1.parent == k2.parent && k1.name_str == k2.name_str;
+}
+
 MUT_ARRAY_DECL(Klasses, Klass*);
 MUT_MAP_DECL(GlobalRefCounts, Val, int64_t, val_hash, val_eq);
+MUT_MAP_DECL(KlassSearchMap, KlassSearchKey, uint32_t, klass_search_key_hash, klass_search_key_eq);
+
 typedef struct {
   struct Klasses klasses;
+  struct KlassSearchMap klass_search_map;
   struct GlobalRefCounts global_ref_counts;
   bool global_tracing; // for begin/end trace
+  NbSymTable* literal_table;
 } Runtime;
 
 static uint8_t nb_hash_key[16];
@@ -49,13 +56,15 @@ static void _init() {
     nb_hash_key[i] = i*i;
   }
 
-  Klasses.init(&runtime.klasses, KLASS_USER);
+  Klasses.init(&runtime.klasses, KLASS_USER + 10);
   GlobalRefCounts.init(&runtime.global_ref_counts);
+
+  runtime.literal_table = nb_sym_table_new();
 
   nb_array_init_module();
   nb_dict_init_module();
   nb_map_init_module();
-  nb_string_init_module(); // after map and dict
+  nb_string_init_module();
 }
 
 static void _inc_ref_count(Val v) {
@@ -109,25 +118,134 @@ static void _clear_rc(ValHeader* r) {
   r->perm = false;
 }
 
+static Klass* _klass_new(uint32_t klass_id, Val name, uint32_t parent) {
+  Klass* k = val_alloc(sizeof(Klass));
+  k->h.klass = KLASS_KLASS;
+  k->id = klass_id;
+  k->name = name;
+  k->parent_id = parent;
+  Fields.init(&k->fields, 0);
+  MethodSearches.init(&k->method_searches, 0);
+  return k;
+}
+
+static Method* _search_method(Klass* klass, uint32_t method_id) {
+  int size = MethodSearches.size(&klass->method_searches);
+  for (int i = size; i >= 0; i--) {
+    MethodSearch* s = MethodSearches.at(&klass->method_searches, i);
+    if (s->method && s->method->method_id == method_id) {
+      return s->method;
+    }
+  }
+  return NULL;
+}
+
 #pragma mark ### klass
 
-Val klass_new(Val name, Val parent) {
+void klass_def_internal(uint32_t klass_id, uint32_t name_id) {
+  Val name = VAL_FROM_STR(name_id);
+  if (Klasses.size(&runtime.klasses) <= klass_id) {
+    while (Klasses.size(&runtime.klasses) < klass_id) {
+      Klasses.push(&runtime.klasses, NULL);
+    }
+    Klass* k = _klass_new(klass_id, name, 0);
+    Klasses.push(&runtime.klasses, k);
+  } else {
+    Klass** k = Klasses.at(&runtime.klasses, klass_id);
+    assert(*k == NULL);
+    *k = _klass_new(klass_id, name, 0);
+  }
 }
 
-void klass_set_destruct_func(Val klass, ValCallbackFunc func) {
+uint32_t klass_find(Val name, uint32_t parent) {
+  KlassSearchKey k = {.parent = parent, .name_str = VAL_TO_STR(name)};
+  uint32_t res;
+  if (KlassSearchMap.find(&runtime.klass_search_map, k, &res)) {
+    return res;
+  } else {
+    return 0;
+  }
 }
 
-void klass_set_delete_func(Val klass, ValCallbackFunc func) {
+uint32_t klass_ensure(Val name, uint32_t parent) {
+  uint32_t res = klass_find(name, parent);
+  if (res) {
+    return res;
+  } else {
+    KlassSearchKey key = {.parent = parent, .name_str = VAL_TO_STR(name)};
+    uint32_t klass_id = Klasses.size(&runtime.klasses);
+    KlassSearchMap.insert(&runtime.klass_search_map, key, klass_id);
+
+    Klass* k = _klass_new(klass_id, name, parent);
+    Klasses.push(&runtime.klasses, k);
+    return klass_id;
+  }
 }
 
-void klass_set_debug_func(Val klass, ValCallbackFunc func) {
+void klass_set_destruct_func(uint32_t klass_id, ValCallbackFunc func) {
+  Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
+  assert(klass);
+  klass->destruct_func = func;
+}
+
+void klass_set_delete_func(uint32_t klass_id, ValCallbackFunc func) {
+  Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
+  assert(klass);
+  klass->delete_func = func;
+}
+
+void klass_set_debug_func(uint32_t klass_id, ValCallbackFunc func) {
+  Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
+  assert(klass);
+  klass->debug_func = func;
+}
+
+void klass_def_fields(uint32_t klass_id, Val fields) {
+  
 }
 
 // negative for arbitrary argc
-void klass_def_method(Val klass, Val method_name, int argc, ValMethodFunc func) {
+void klass_def_method(uint32_t klass_id, uint32_t method_id, int argc, ValMethodFunc func, bool is_final) {
+  Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
+  Method* meth = val_alloc(sizeof(Method));
+  METHOD_IS_FINAL(meth) = is_final;
+  METHOD_IS_CFUNC(meth) = true;
+  METHOD_ARGC(meth) = argc;
+  METHOD_ID(meth) = method_id;
+  meth->as.func = func;
+
+  MethodSearch s = {.method = meth};
+  // NOTE if method was defined before, should not remove it so we can invoke `super`
+  MethodSearches.push(&klass->method_searches, s);
 }
 
 #pragma mark ### misc func
+
+uint32_t val_strlit_new(size_t size, const char* s) {
+  uint64_t sid;
+  nb_sym_table_get_set(runtime.literal_table, size, s, &sid);
+  return (uint32_t)sid;
+}
+
+uint32_t val_strlit_new_c(const char* s) {
+  return val_strlit_new(strlen(s), s);
+}
+
+const char* val_strlit_ptr(uint32_t sid) {
+  size_t size;
+  char* s;
+  bool found = nb_sym_table_reverse_get(runtime.literal_table, &size, &s, sid);
+  assert(found);
+  return s;
+}
+
+size_t val_strlit_byte_size(uint32_t sid) {
+  size_t size;
+  char* s;
+  bool found = nb_sym_table_reverse_get(runtime.literal_table, &size, &s, sid);
+  assert(found);
+  return size;
+}
 
 void val_debug(Val v) {
   printf("debug val 0x%lx (%s)\n", v, VAL_IS_IMM(v) ? "immediate" : "pointer");
@@ -147,7 +265,7 @@ bool val_eq(Val l, Val r) {
   } else if (VAL_IS_IMM(l) && VAL_IS_IMM(r) && !VAL_IS_STR(r)) {
     return l == r;
   }
-  Val res = val_send(l, VAL_TO_STR(nb_string_literal_new_c("==")), 1, &r);
+  Val res = val_send(l, val_strlit_new_c("=="), 1, &r);
   return VAL_IS_TRUE(res);
 }
 
@@ -155,7 +273,7 @@ uint64_t val_hash(Val v) {
   if (VAL_IS_IMM(v) && !VAL_IS_STR(v)) {
     return siphash(nb_hash_key, (const uint8_t*)&v, 8);
   } else {
-    Val res = val_send(v, VAL_TO_STR(nb_string_literal_new_c("hash")), 0, NULL);
+    Val res = val_send(v, val_strlit_new_c("hash"), 0, NULL);
     // TODO to uint 64
     return VAL_TO_INT(res);
   }
@@ -165,8 +283,15 @@ uint64_t val_hash_mem(const void* memory, size_t size) {
   return siphash(nb_hash_key, (const uint8_t*)memory, size);
 }
 
-Val val_send(Val obj, uint32_t id, int argc, Val* args) {
-  
+Val val_send(Val obj, uint32_t method_id, int32_t argc, Val* args) {
+  uint32_t klass_id = VAL_KLASS(obj);
+  Klass* k = *Klasses.at(&runtime.klasses, klass_id);
+  Method* m = _search_method(k, method_id);
+  if (m) {
+    return METHOD_INVOKE(m, argc, args);
+  } else {
+    return VAL_UNDEF;
+  }
 }
 
 #pragma mark ### memory function interface
@@ -249,7 +374,7 @@ void* val_alloc_cm(size_t size) {
   return p;
 }
 
-void* val_alloc(size_t size) {
+void* val_alloc_f(size_t size) {
   // malloc is already aligned at least 8 bytes
   // see http://en.cppreference.com/w/c/types/max_align_t
   ValHeader* p = malloc(size);
@@ -273,7 +398,7 @@ void* val_dup_cm(void* p, size_t osize, size_t nsize) {
   return r;
 }
 
-void* val_dup(void* p, size_t osize, size_t nsize) {
+void* val_dup_f(void* p, size_t osize, size_t nsize) {
   ValHeader* r = malloc(nsize);
 
   if (nsize > osize) {
@@ -299,7 +424,7 @@ void* val_realloc_cm(void* p, size_t osize, size_t nsize) {
   return p;
 }
 
-void* val_realloc(void* p, size_t osize, size_t nsize) {
+void* val_realloc_f(void* p, size_t osize, size_t nsize) {
   assert(nsize > osize);
 
   p = realloc(p, nsize);
@@ -316,7 +441,7 @@ void val_free_cm(void* _p) {
   free(p);
 }
 
-void val_free(void* _p) {
+void val_free_f(void* _p) {
   ValHeader* p = _p;
   assert(p->extra_rc == 0);
 
@@ -329,7 +454,7 @@ void val_perm_cm(void* _p) {
   _heap_mem_unstore(p);
 }
 
-void val_perm(void* _p) {
+void val_perm_f(void* _p) {
   ValHeader* p = _p;
   p->perm = true;
 }
@@ -347,7 +472,7 @@ void val_retain_cm(Val v) {
   _inc_ref_count(v);
 }
 
-void val_retain(Val v) {
+void val_retain_f(Val v) {
   val_retain_cm(v);
 }
 
@@ -376,7 +501,7 @@ void val_release_cm(Val v) {
   }
 }
 
-void val_release(Val v) {
+void val_release_f(Val v) {
   if (VAL_IS_IMM(v)) {
     return;
   }

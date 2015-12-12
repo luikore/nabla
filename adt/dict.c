@@ -105,9 +105,12 @@ void nb_dict_init_module() {
   d->root = VAL_UNDEF;
   empty_dict = (Val)d;
 
-  val_register_destructor_func(KLASS_DICT_MAP, MAP_DESTROY);
-  val_register_destructor_func(KLASS_DICT_BUCKET, BUCKET_DESTROY);
-  val_register_destructor_func(KLASS_DICT, DICT_DESTROY);
+  klass_def_internal(KLASS_DICT_MAP, val_strlit_new_c("DictMap"));
+  klass_set_destruct_func(KLASS_DICT_MAP, MAP_DESTROY);
+  klass_def_internal(KLASS_DICT_BUCKET, val_strlit_new_c("DictBucket"));
+  klass_set_destruct_func(KLASS_DICT_BUCKET, BUCKET_DESTROY);
+  klass_def_internal(KLASS_DICT, val_strlit_new_c("Dict"));
+  klass_set_destruct_func(KLASS_DICT, DICT_DESTROY);
 }
 
 Val nb_dict_new() {

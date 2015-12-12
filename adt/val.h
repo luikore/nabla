@@ -195,28 +195,47 @@ bool val_eq(Val l, Val r);
 
 void val_debug(Val v);
 
-Val val_send(Val obj, uint32_t id, int argc, Val* args);
+Val val_send(Val obj, uint32_t id, int32_t argc, Val* args);
+
+uint32_t val_strlit_new(size_t size, const char* s);
+
+uint32_t val_strlit_new_c(const char* s);
+
+size_t val_strlit_byte_size(uint32_t l);
+
+const char* val_strlit_ptr(uint32_t l);
 
 #pragma mark ### method and klass
 
 typedef void (*ValCallbackFunc)(void*);
 
-typedef Val (*ValMethodFunc)(Val, ...);
+#ifndef ANYARGS
+# ifdef __cplusplus
+#   define ANYARGS ...
+# else
+#   define ANYARGS
+# endif
+#endif
+typedef Val (*ValMethodFunc)(ANYARGS);
 
-// if already existed, return it
-Val klass_new(Val name, Val parent);
+void klass_def_internal(uint32_t klass_id, uint32_t name_id);
+
+// return 0 if not exist
+uint32_t klass_find(Val name, uint32_t parent_id);
+
+uint32_t klass_ensure(Val name, uint32_t parent_id);
 
 // register destructor before val_free() is called on the object of the klass.
 // to avoid memory leak, a standard implementaion is to call val_release on all Val members.
-void klass_set_destruct_func(Val klass, ValCallbackFunc func);
+void klass_set_destruct_func(uint32_t klass_id, ValCallbackFunc func);
 
 // replace the standard destructor() -> val_free() for objects of the klass.
-void klass_set_delete_func(Val klass, ValCallbackFunc func);
+void klass_set_delete_func(uint32_t klass_id, ValCallbackFunc func);
 
-void klass_set_debug_func(Val klass, ValCallbackFunc func);
+void klass_set_debug_func(uint32_t klass_id, ValCallbackFunc func);
 
 // negative for arbitrary argc
-void klass_def_method(Val klass, Val method_name, int argc, ValMethodFunc func);
+void klass_def_method(uint32_t klass_id, uint32_t method_id, int argc, ValMethodFunc func, bool is_final);
 
 #pragma mark ### memory functions
 
@@ -251,17 +270,25 @@ void val_release_cm(Val p);
 
 #else
 
+void* val_alloc_f(size_t size);
+void* val_dup_f(void* p, size_t osize, size_t nsize);
+void* val_realloc_f(void* p, size_t osize, size_t nsize);
+void val_free_f(void* p);
+void val_perm_f(void* p);
+void val_retain_f(Val p);
+void val_release_f(Val p);
+
 #define val_begin_check_memory()
 #define val_end_check_memory()
-void* val_alloc(size_t size);
-void* val_dup(void* p, size_t osize, size_t nsize);
+#define val_alloc val_alloc_f
+#define val_dup val_dup_f
 // mainly used for transient in-place updates
-void* val_realloc(void* p, size_t osize, size_t nsize);
-void val_free(void* p);
-void val_perm(void* p);
-void val_retain(Val p);
+#define val_realloc val_realloc_f
+#define val_free val_free_f
+#define val_perm val_perm_f
+#define val_retain val_retain_f
 // if ref_count on pointer val == 1, free it, else decrease it. no effect on immediate vals
-void val_release(Val p);
+#define val_release val_release_f
 
 #endif // CHECK_MEMORY
 

@@ -20,19 +20,17 @@ typedef struct {
 #define IS_SLICE(s) (s)->h.user1
 #define BYTE_SIZE(s) (s)->byte_size
 
-static uint64_t _hash_func(Val str);
+static Val _hash_func(Val str);
 static void _destructor(void* p);
-
-static NbSymTable* literal_table;
 
 static String* _alloc_string(size_t size);
 static SSlice* _alloc_s_slice();
 static Val _slice_from_literal(Val v, size_t from, size_t len);
 
 void nb_string_init_module() {
-  literal_table = nb_sym_table_new();
-  val_register_hash_func(KLASS_STRING, _hash_func);
-  val_register_destructor_func(KLASS_STRING, _destructor);
+  klass_def_internal(KLASS_STRING, val_strlit_new_c("String"));
+  klass_def_method(KLASS_STRING, val_strlit_new_c("hash"), 0, _hash_func, true);
+  klass_set_destruct_func(KLASS_STRING, _destructor);
 }
 
 Val nb_string_new(size_t size, const char* p) {
@@ -42,9 +40,7 @@ Val nb_string_new(size_t size, const char* p) {
 }
 
 Val nb_string_new_literal(size_t size, const char* p) {
-  uint64_t sid;
-  nb_sym_table_get_set(literal_table, size, p, &sid);
-  return VAL_FROM_STR(sid);
+  return VAL_FROM_STR((uint64_t)val_strlit_new(size, p));
 }
 
 Val nb_string_new_c(const char* p) {
@@ -52,7 +48,7 @@ Val nb_string_new_c(const char* p) {
 }
 
 Val nb_string_new_literal_c(const char* p) {
-  return nb_string_new_literal(strlen(p), p);
+  return VAL_FROM_STR((uint64_t)val_strlit_new_c(p));
 }
 
 Val nb_string_new_transient(size_t size) {
@@ -62,10 +58,7 @@ Val nb_string_new_transient(size_t size) {
 
 size_t nb_string_byte_size(Val s) {
   if (VAL_IS_STR(s)) {
-    size_t size;
-    char* ptr;
-    nb_sym_table_reverse_get(literal_table, &size, &ptr, VAL_TO_STR(s));
-    return size;
+    return val_strlit_byte_size(VAL_TO_STR(s));
   }
   assert(!VAL_IS_IMM(s));
   return BYTE_SIZE((String*)s);
@@ -73,11 +66,7 @@ size_t nb_string_byte_size(Val s) {
 
 const char* nb_string_ptr(Val s) {
   if (VAL_IS_STR(s)) {
-    size_t size;
-    char* ptr;
-    bool res = nb_sym_table_reverse_get(literal_table, &size, &ptr, VAL_TO_STR(s));
-    assert(res);
-    return ptr;
+    return val_strlit_ptr(VAL_TO_STR(s));
   }
   assert(!VAL_IS_IMM(s));
   Val ref;
@@ -159,13 +148,10 @@ Val nb_string_slice(Val v, size_t from, size_t len) {
   return (Val)r;
 }
 
-bool nb_string_literal_lookup(Val v, size_t* size, char** p) {
-  uint64_t sid = VAL_TO_STR(v);
-  return nb_sym_table_reverse_get(literal_table, size, p, sid);
-}
-
-static uint64_t _hash_func(Val v) {
-  return val_hash_mem(nb_string_ptr(v), nb_string_byte_size(v));
+static Val _hash_func(Val v) {
+  uint64_t h = val_hash_mem(nb_string_ptr(v), nb_string_byte_size(v));
+  // TODO from uint 64
+  return VAL_FROM_INT(h);
 }
 
 static void _destructor(void* p) {
@@ -177,22 +163,19 @@ static void _destructor(void* p) {
 }
 
 static Val _slice_from_literal(Val v, size_t from, size_t len) {
-  size_t lsize;
-  char* lptr;
-  if (nb_string_literal_lookup(v, &lsize, &lptr)) {
-    if (from >= lsize) {
-      return nb_string_new(0, NULL);
-    }
-    if (from + len > lsize) {
-      len = lsize - from;
-    }
-    String* s = _alloc_string(len);
-    memcpy(s, lptr + from, len);
-    return (Val)s;
-  } else {
-    // todo error
-    return VAL_NIL;
+  uint32_t sid = VAL_TO_STR(v);
+  size_t lsize = val_strlit_byte_size(sid);
+  if (from >= lsize) {
+    return nb_string_new(0, NULL);
   }
+
+  const char* lptr = val_strlit_ptr(sid);
+  if (from + len > lsize) {
+    len = lsize - from;
+  }
+  String* s = _alloc_string(len);
+  memcpy(s, lptr + from, len);
+  return (Val)s;
 }
 
 static String* _alloc_string(size_t bytesize) {
