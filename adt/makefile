@@ -3,7 +3,7 @@ debug_target = libadt-debug.a
 default: $(target)
 debug: $(debug_target)
 
-c_bases = val box array dict sym-table map string cons
+c_bases = val box array dict sym-table map string cons token
 bases = $(c_bases)
 bases += asm/val-c-call asm/val-c-call2 ../vendor/tinycthread/source/tinycthread
 objects = $(addsuffix .o, $(bases))
