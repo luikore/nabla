@@ -6,9 +6,9 @@ void cons_suite() {
     void* arena = val_arena_new();
 
     Val node;
-    node = nb_cons_arena_new(arena, VAL_FROM_INT(1), VAL_NIL);
-    node = nb_cons_arena_new(arena, VAL_FROM_INT(2), node);
-    node = nb_cons_arena_new(arena, VAL_FROM_INT(3), node);
+    node = nb_cons_anew(arena, VAL_FROM_INT(1), VAL_NIL);
+    node = nb_cons_anew(arena, VAL_FROM_INT(2), node);
+    node = nb_cons_anew(arena, VAL_FROM_INT(3), node);
 
     node = nb_cons_arena_reverse(arena, node);
 

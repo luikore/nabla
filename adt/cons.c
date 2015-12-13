@@ -15,7 +15,7 @@ Val nb_cons_new(Val head, Val tail) {
   return (Val)node;
 }
 
-Val nb_cons_arena_new(void* arena, Val head, Val tail) {
+Val nb_cons_anew(void* arena, Val head, Val tail) {
   Cons* node = val_arena_alloc(arena, KLASS_CONS, sizeof(Cons));
   node->head = head;
   node->tail = tail;
@@ -33,7 +33,7 @@ Val nb_cons_reverse(Val list) {
 Val nb_cons_arena_reverse(void* arena, Val list) {
   Val res = VAL_NIL;
   for (Val curr = list; curr != VAL_NIL; curr = nb_cons_tail(curr)) {
-    res = nb_cons_arena_new(arena, nb_cons_head(curr), res);
+    res = nb_cons_anew(arena, nb_cons_head(curr), res);
   }
   return res;
 }

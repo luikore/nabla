@@ -146,6 +146,10 @@ enum {
   KLASS_USER // start of dynamic allocated classes
 };
 
+// some salts for hashing
+#define KLASS_BOX_SALT 0x01030507090A0CULL
+#define KLASS_TOKEN_SALT 0x9370ULL
+
 inline static uint32_t VAL_KLASS(Val v) {
   if (VAL_IS_IMM(v)) {
     switch (v) {

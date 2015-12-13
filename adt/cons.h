@@ -6,7 +6,7 @@
 
 Val nb_cons_new(Val head, Val tail);
 
-Val nb_cons_arena_new(void* arena, Val head, Val tail);
+Val nb_cons_anew(void* arena, Val head, Val tail);
 
 Val nb_cons_reverse(Val list);
 

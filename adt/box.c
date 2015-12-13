@@ -16,7 +16,7 @@ static Val _box_eq(Val l, Val r) {
 
 static Val _box_hash(Val b) {
   uint64_t v = nb_box_get(b);
-  v ^= 0x01030507090A0CULL; // XXX make it a bit different
+  v ^= KLASS_BOX_SALT;
   uint64_t h = val_hash_mem(&v, sizeof(uint64_t));
   // TODO val from uint64
   return VAL_FROM_INT(h);
