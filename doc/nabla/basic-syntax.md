@@ -529,8 +529,16 @@ It is pure text, a bit readable, and can be parsed (with only the value rules, n
 [design NOTE] it is weird to design a syntax for delegate... so make it a macro method instead
 
     class Foo
-      :delegate 'bar' {on: Bar, only: ['x', 'y', 'z']}
+      :delegate Bar {on: 'bar', only: ['x', 'y', 'z']}
     end
+
+If we delegate every method like this:
+
+    class Foo
+      :delegate Bar {on: 'bar'}
+    end
+
+It snapshots method searches on Bar and define them all on the class.
 
 ## Struct with variable initializers
 
@@ -949,9 +957,7 @@ not composed
 
 ## method search rule
 
-`super` calls last method defined in this class
-
-search latest defined, then latest included
+search own methods, then search methods defined in latest included class
 
     class A
       include M1
@@ -960,9 +966,35 @@ search latest defined, then latest included
       end
       include M2
       def foo
-        ... super # search first foo, then M2, then M1
+        ... super # search first foo, then in M2, then in M1
       end
     end
+
+`super` calls last method defined with this order
+
+if some class included shall overwrite self-defined methods, use the `:prepend` macro instead
+
+    class B
+      def foo
+        :puts 'B'
+      end
+    end
+    class A
+      def foo
+        :puts 'A'
+      end
+      include B
+    end
+    A[].foo # 'A'
+
+    class A
+      :prepend B
+    end
+    A[].foo # 'B'
+
+Note `:prepend` is a macro method, not declarative instruction like `include`, only methods available at the call site are put into A.
+
+[design NOTE] this is the same method search mechanism as in Ruby, so all own-defined methods can easily be put in a map for less search steps
 
 ## the final modifier
 
