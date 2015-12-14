@@ -62,6 +62,21 @@ void mut_array_suite() {
     Points.cleanup(&da);
   }
 
+  ccut_test("remove") {
+    struct Points da;
+    Points.init(&da, 0);
+    for (int i = 0; i < 5; i++) {
+      MyPoint p = {i, i*2};
+      Points.push(&da, p);
+    }
+    Points.remove(&da, 4);
+    Points.remove(&da, 0);
+    assert_eq(3, Points.size(&da));
+    assert_eq(1, Points.at(&da, 0)->x);
+    assert_eq(2, Points.at(&da, 1)->x);
+    assert_eq(3, Points.at(&da, 2)->x);
+  }
+
   ccut_test("reverse") {
     struct Points a;
     Points.init(&a, 3);

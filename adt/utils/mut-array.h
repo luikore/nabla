@@ -48,6 +48,15 @@
     }\
     da->data[da->size++] = e;\
   }\
+  \
+  static void MutArrayType##_MUT_ARRAY_remove(struct MutArrayType* da, size_t i) {\
+    assert(da->size > i);\
+    if (i + 1 != da->size) {\
+      memmove(da->data + i, da->data + i + 1, sizeof(ElemType) * (da->size - i - 1));\
+    }\
+    da->size--;\
+  }\
+  \
   static void MutArrayType##_MUT_ARRAY_reverse(struct MutArrayType* da) {\
     for (int i = 0, j = da->size - 1; i < j; i++, j--) {\
       ElemType tmp = da->data[j];\
@@ -70,6 +79,7 @@
     void (*init_dup)(struct MutArrayType* to, struct MutArrayType* from);\
     void (*cleanup)(struct MutArrayType*);\
     void (*push)(struct MutArrayType*, ElemType);\
+    void (*remove)(struct MutArrayType*, size_t);\
     void (*reverse)(struct MutArrayType*);\
     size_t (*size)(struct MutArrayType*);\
     ElemType* (*at)(struct MutArrayType*, size_t);\
@@ -78,6 +88,7 @@
     .init_dup = MutArrayType##_MUT_ARRAY_init_dup,\
     .cleanup = MutArrayType##_MUT_ARRAY_cleanup,\
     .push = MutArrayType##_MUT_ARRAY_push,\
+    .remove = MutArrayType##_MUT_ARRAY_remove,\
     .reverse = MutArrayType##_MUT_ARRAY_reverse,\
     .size = MutArrayType##_MUT_ARRAY_size,\
     .at = MutArrayType##_MUT_ARRAY_at\
