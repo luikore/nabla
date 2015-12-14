@@ -961,16 +961,16 @@ search own methods, then search methods defined in latest included class
 
     class A
       include M1
-      def foo
+      def foo # first foo
         ...
       end
       include M2
-      def foo
-        ... super # search first foo, then in M2, then in M1
+      def foo # overwrite the first foo
+        ... super # search in M2, if not found, search in M1
       end
     end
 
-`super` calls last method defined with this order
+`super` calls method defined in included class
 
 if some class included shall overwrite self-defined methods, use the `:prepend` macro instead
 
@@ -1020,6 +1020,14 @@ a `final` method can not be modified, even in the inherited class.
       include Parent
       def foo; # OK
       undef bar # OK
+    end
+
+`final` can also be used in `undef`, which makes a method with the same name un-definable
+
+    class Foo
+      final undef bar
+      def bar # error
+      end
     end
 
 NOTE: it is mainly used for certain optimizations to work, but not recommended to be used everywhere. source files with `final` can not be reloaded!
