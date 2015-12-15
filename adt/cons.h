@@ -4,6 +4,8 @@
 
 #include "val.h"
 
+void nb_cons_init_module();
+
 Val nb_cons_new(Val head, Val tail);
 
 Val nb_cons_anew(void* arena, Val head, Val tail);
@@ -15,3 +17,5 @@ Val nb_cons_arena_reverse(void* arena, Val list);
 Val nb_cons_head(Val node);
 
 Val nb_cons_tail(Val node);
+
+Val nb_cons_list(int32_t argc, Val* argv);

@@ -18,3 +18,5 @@ Val nb_token_anew(void* arena, Val name, NbTokenLoc loc);
 Val nb_token_anew_c(void* arena, Val name, const char* content);
 
 NbTokenLoc* nb_token_loc(Val tok);
+
+Val nb_token_to_s(Val tok);

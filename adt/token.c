@@ -1,5 +1,6 @@
 #include "token.h"
 #include "utils/str.h"
+#include "string.h"
 
 typedef struct {
   ValHeader h;
@@ -57,4 +58,10 @@ Val nb_token_anew_c(void* arena, Val name, const char* content) {
 NbTokenLoc* nb_token_loc(Val tok) {
   assert(VAL_KLASS(tok) == KLASS_TOKEN);
   return &((Token*)tok)->loc;
+}
+
+Val nb_token_to_s(Val v) {
+  assert(VAL_KLASS(v) == KLASS_TOKEN);
+  Token* tok = (Token*)v;
+  return nb_string_new(tok->loc.size, tok->loc.s);
 }

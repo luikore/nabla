@@ -50,6 +50,8 @@ void nb_array_init_module();
 void nb_dict_init_module();
 void nb_map_init_module();
 void nb_string_init_module();
+void nb_cons_init_module();
+void nb_token_init_module();
 
 static void _init() __attribute__((constructor(0)));
 static void _init() {
@@ -73,6 +75,8 @@ static void _init() {
   nb_dict_init_module();
   nb_map_init_module();
   nb_string_init_module();
+  nb_cons_init_module();
+  nb_token_init_module();
 }
 
 static void _inc_ref_count(Val v) {
