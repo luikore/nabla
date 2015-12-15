@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <assert.h>
 #include <stdio.h>
+#include <stdnoreturn.h>
 #include "utils/intrinsics.h"
 #include "utils/dbg.h"
 
@@ -199,6 +200,7 @@ Val val_c_call2(Val obj, void* cfunc, uint64_t argc, Val* argv);
 
 uint64_t val_hash_mem(const void* memory, size_t size);
 
+// calls `hash`
 uint64_t val_hash(Val v);
 
 // calls `==`
@@ -216,6 +218,11 @@ size_t val_strlit_byte_size(uint32_t l);
 
 const char* val_strlit_ptr(uint32_t l);
 
+noreturn void val_throw(Val obj);
+
+#define FATAL(msg, ...) ({ fprintf(stderr, (msg), ##__VA_ARGS__); _Exit(-1); })
+#define ASSERT(expr, msg, ...) if (!(expr)) { VAL_FATAL((msg), ##__VA_ARGS__) }
+
 #pragma mark ### method and klass
 
 typedef void (*ValCallbackFunc)(void*);
@@ -229,12 +236,13 @@ typedef void (*ValCallbackFunc)(void*);
 #endif
 typedef Val (*ValMethodFunc)(ANYARGS);
 
+// define klass_id < KLASS_USER
 void klass_def_internal(uint32_t klass_id, uint32_t name_id);
 
 // return 0 if not exist
 uint32_t klass_find(Val name, uint32_t parent_id);
-
 uint32_t klass_ensure(Val name, uint32_t parent_id);
+Val klass_val(uint32_t klass_id);
 
 // register destructor before val_free() is called on the object of the klass.
 // to avoid memory leak, a standard implementaion is to call val_release on all Val members.
@@ -247,6 +255,14 @@ void klass_set_debug_func(uint32_t klass_id, ValCallbackFunc func);
 
 // negative for arbitrary argc
 void klass_def_method(uint32_t klass_id, uint32_t method_id, int argc, ValMethodFunc func, bool is_final);
+
+void klass_include(uint32_t klass_id, uint32_t included_id);
+
+typedef struct {
+  Val matcher; // VAL_UNDEF if not defined
+  uint32_t field_id;
+  bool is_splat;
+} NbStructField;
 
 #pragma mark ### memory functions
 

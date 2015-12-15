@@ -4,6 +4,7 @@
 
 #include "val.h"
 #include "utils/mut-array.h"
+#include "utils/mut-map.h"
 
 typedef struct {
   ValHeader h; // user1: is_cfunc, user2: is_final
@@ -44,34 +45,37 @@ static Val METHOD_INVOKE(Val obj, Method* m, int argc, Val* argv) {
   }
 }
 
-typedef struct {
-  Val name;
-  void* matcher;
-} Field;
+static uint64_t ID_HASH(uint32_t id) {
+  return val_hash_mem(&id, sizeof(uint32_t));
+}
 
-typedef struct {
-  Method* method;   // when NULL, use include_id
-  uint32_t include_id;
-} MethodSearch;
+static uint64_t ID_EQ(uint32_t idl, uint32_t idr) {
+  return idl == idr;
+}
 
-MUT_ARRAY_DECL(Fields, Field);
-MUT_ARRAY_DECL(MethodSearches, MethodSearch);
+MUT_MAP_DECL(IdMethods, uint32_t, Method*, ID_HASH, ID_EQ);
+MUT_ARRAY_DECL(Includes, uint32_t);
+MUT_MAP_DECL(IdFieldIndexes, uint32_t, uint32_t, ID_HASH, ID_EQ);
+MUT_ARRAY_DECL(Fields, NbStructField);
 
 // class metadata
 typedef struct {
   ValHeader h; // user1: is_struct
-  uint32_t id;
-  uint32_t pad;
+  uint32_t id; // index in runtime.klasses
+  uint32_t parent_id; // parent namespace, 0 if no parent
   Val name;
-  Val parent_id; // parent namespace, 0 if no parent
 
-  struct Fields fields; // struct only
-  struct MethodSearches method_searches;
+  struct IdMethods id_methods; // {id => Method*}
+  struct Includes includes; // [uint32_t]
+
+  // struct only:
+  struct IdFieldIndexes id_field_indexes; // {id => field_index}
+  struct Fields fields; // [NbStructField]
 
   ValCallbackFunc destruct_func;
   ValCallbackFunc delete_func;
   ValCallbackFunc debug_func;
-  // cache hash and eq func?
+  // todo cache hash and eq func?
 } Klass;
 
 #define KLASS_IS_STRUCT(k) (k)->h.user1

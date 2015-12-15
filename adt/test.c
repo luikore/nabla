@@ -13,6 +13,7 @@ void dict_suite();
 void sym_table_suite();
 void string_suite();
 void cons_suite();
+void struct_suite();
 
 #pragma mark ### tests for basic assumptions
 
@@ -269,6 +270,7 @@ int main (int argc, char const *argv[]) {
   ccut_run_suite(sym_table_suite);
   ccut_run_suite(string_suite);
   ccut_run_suite(cons_suite);
+  ccut_run_suite(struct_suite);
   ccut_print_stats();
   return 0;
 }

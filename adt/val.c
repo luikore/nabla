@@ -59,9 +59,14 @@ static void _init() {
   }
 
   Klasses.init(&runtime.klasses, KLASS_USER + 10);
+  KlassSearchMap.init(&runtime.klass_search_map);
   GlobalRefCounts.init(&runtime.global_ref_counts);
 
   runtime.literal_table = nb_sym_table_new();
+
+  for (int i = 0; i < KLASS_USER; i++) {
+    Klasses.push(&runtime.klasses, NULL);
+  }
 
   nb_box_init_module();
   nb_array_init_module();
@@ -126,8 +131,19 @@ static Klass* _klass_new(uint32_t klass_id, Val name, uint32_t parent) {
   k->id = klass_id;
   k->name = name;
   k->parent_id = parent;
+
+  IdMethods.init(&k->id_methods);
+  Includes.init(&k->includes, 0);
+  IdFieldIndexes.init(&k->id_field_indexes);
   Fields.init(&k->fields, 0);
-  MethodSearches.init(&k->method_searches, 0);
+
+  k->destruct_func = NULL;
+  k->delete_func = NULL;
+  k->debug_func = NULL;
+
+  KlassSearchKey key = {.parent = parent, .name_str = VAL_TO_STR(name)};
+  KlassSearchMap.insert(&runtime.klass_search_map, key, klass_id);
+
   val_perm(k);
   return k;
 }
@@ -141,32 +157,28 @@ static Method* _method_new(uint32_t method_id, int argc, bool is_final) {
   return meth;
 }
 
-static Method* _shallow_search_method(Klass* klass, uint32_t method_id) {
-  int size = MethodSearches.size(&klass->method_searches);
-  for (int i = size - 1; i >= 0; i--) {
-    MethodSearch* s = MethodSearches.at(&klass->method_searches, i);
-    if (s->method && s->method->method_id == method_id) {
-      return s->method;
-    }
+static Method* _search_own_method(Klass* klass, uint32_t method_id) {
+  Method* method;
+  if (IdMethods.find(&klass->id_methods, method_id, &method)) {
+    return method;
+  } else {
+    return NULL;
   }
-  return NULL;
 }
 
 static Method* _deep_search_method(Klass* klass, uint32_t method_id) {
-  int size = MethodSearches.size(&klass->method_searches);
+  Method* m = _search_own_method(klass, method_id);
+  if (m) {
+    return m;
+  }
+
+  int size = Includes.size(&klass->includes);
   for (int i = size - 1; i >= 0; i--) {
-    MethodSearch* s = MethodSearches.at(&klass->method_searches, i);
-    if (s->method) {
-      if (s->method->method_id == method_id) {
-        return s->method;
-      }
-    } else {
-      uint32_t include_id = s->include_id;
-      Klass* include_klass = *Klasses.at(&runtime.klasses, include_id);
-      Method* m = _deep_search_method(include_klass, method_id);
-      if (m) {
-        return m;
-      }
+    uint32_t include_id = *Includes.at(&klass->includes, i);
+    Klass* include_klass = *Klasses.at(&runtime.klasses, include_id);
+    Method *m = _deep_search_method(include_klass, method_id);
+    if (m) {
+      return m;
     }
   }
   return NULL;
@@ -176,17 +188,9 @@ static Method* _deep_search_method(Klass* klass, uint32_t method_id) {
 
 void klass_def_internal(uint32_t klass_id, uint32_t name_id) {
   Val name = VAL_FROM_STR(name_id);
-  if (Klasses.size(&runtime.klasses) <= klass_id) {
-    while (Klasses.size(&runtime.klasses) < klass_id) {
-      Klasses.push(&runtime.klasses, NULL);
-    }
-    Klass* k = _klass_new(klass_id, name, 0);
-    Klasses.push(&runtime.klasses, k);
-  } else {
-    Klass** k = Klasses.at(&runtime.klasses, klass_id);
-    assert(*k == NULL);
-    *k = _klass_new(klass_id, name, 0);
-  }
+  Klass** k = Klasses.at(&runtime.klasses, klass_id);
+  assert(*k == NULL);
+  *k = _klass_new(klass_id, name, 0);
 }
 
 uint32_t klass_find(Val name, uint32_t parent) {
@@ -204,14 +208,15 @@ uint32_t klass_ensure(Val name, uint32_t parent) {
   if (res) {
     return res;
   } else {
-    KlassSearchKey key = {.parent = parent, .name_str = VAL_TO_STR(name)};
     uint32_t klass_id = Klasses.size(&runtime.klasses);
-    KlassSearchMap.insert(&runtime.klass_search_map, key, klass_id);
-
     Klass* k = _klass_new(klass_id, name, parent);
     Klasses.push(&runtime.klasses, k);
     return klass_id;
   }
+}
+
+Val klass_val(uint32_t klass_id) {
+  return (Val)(*Klasses.at(&runtime.klasses, klass_id));
 }
 
 void klass_set_destruct_func(uint32_t klass_id, ValCallbackFunc func) {
@@ -232,15 +237,11 @@ void klass_set_debug_func(uint32_t klass_id, ValCallbackFunc func) {
   klass->debug_func = func;
 }
 
-void klass_def_fields(uint32_t klass_id, Val fields) {
-
-}
-
 // negative for arbitrary argc
 void klass_def_method(uint32_t klass_id, uint32_t method_id, int argc, ValMethodFunc func, bool is_final) {
   Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
 
-  Method* prev_meth = _shallow_search_method(klass, method_id);
+  Method* prev_meth = _search_own_method(klass, method_id);
   if (prev_meth) {
     if (METHOD_IS_FINAL(prev_meth)) {
       assert(false);
@@ -252,9 +253,19 @@ void klass_def_method(uint32_t klass_id, uint32_t method_id, int argc, ValMethod
   METHOD_IS_CFUNC(meth) = true;
   meth->as.func = func;
 
-  MethodSearch s = {.method = meth};
-  // NOTE if method was defined before, should not remove it so we can invoke `super`
-  MethodSearches.push(&klass->method_searches, s);
+  IdMethods.insert(&klass->id_methods, method_id, meth);
+}
+
+void klass_include(uint32_t klass_id, uint32_t included_id) {
+  Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
+  int size = Includes.size(&klass->includes);
+  for (int i = size - 1; i >= 0; i--) {
+    if (included_id == *Includes.at(&klass->includes, i)) {
+      Includes.remove(&klass->includes, i);
+      break;
+    }
+  }
+  Includes.push(&klass->includes, included_id);
 }
 
 #pragma mark ### misc func
@@ -345,6 +356,11 @@ Val val_send(Val obj, uint32_t method_id, int32_t argc, Val* args) {
   } else {
     return VAL_UNDEF;
   }
+}
+
+noreturn void val_throw(Val obj) {
+  // todo
+  _Exit(-2);
 }
 
 #pragma mark ### memory function interface
