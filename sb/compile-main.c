@@ -7,7 +7,7 @@
 #define ERROR(info) // todo
 
 static void _compile_pattern_ins(void* arena, Val e, Spellbreak* spellbreak) {
-  TokenNode* name = (TokenNode*)AT(e, 0);
+  Val name = AT(e, 0);
   Val pattern = AT(e, 1);
   Val res;
   if (IS_A(pattern, "Regexp") || IS_WRAPPER(pattern)) {
@@ -16,7 +16,7 @@ static void _compile_pattern_ins(void* arena, Val e, Spellbreak* spellbreak) {
     ERROR("expect regexp or string");
   }
 
-  REPLACE(spellbreak->patterns_dict, nb_dict_insert(spellbreak->patterns_dict, name->loc.s, name->loc.size, res));
+  REPLACE(spellbreak->patterns_dict, nb_dict_insert(spellbreak->patterns_dict, nb_token_loc(name)->s, nb_token_loc(name)->size, res));
 }
 
 #pragma mark ## exposed interfaces
@@ -33,11 +33,11 @@ Spellbreak* nb_spellbreak_compile_main(void* arena, Val node) {
     if (IS_A(e, "PatternIns")) {
       _compile_pattern_ins(arena, e, spellbreak);
     } else if (IS_A(e, "VarDecl")) {
-      TokenNode* name_tok = (TokenNode*)AT(e, 0);
-      size_t size = name_tok->loc.size + 1;
+      Val name_tok = AT(e, 0);
+      size_t size = nb_token_loc(name_tok)->size + 1;
       char name_buf[size];
       name_buf[0] = ':';
-      memcpy(name_buf + 1, name_tok->loc.s, size - 1);
+      memcpy(name_buf + 1, nb_token_loc(name_tok)->s, size - 1);
       REPLACE(spellbreak->vars_dict, nb_dict_insert(spellbreak->vars_dict, name_buf, size, VAL_TRUE));
     } else if (IS_A(e, "Lex") || IS_A(e, "Peg") || e == VAL_UNDEF) {
     } else {
@@ -48,17 +48,17 @@ Spellbreak* nb_spellbreak_compile_main(void* arena, Val node) {
   for (Val lines = AT(node, 0); lines != VAL_NIL; lines = TAIL(lines)) {
     Val e = HEAD(lines);
     if (IS_A(e, "Lex")) {
-      TokenNode* name_tok = (TokenNode*)AT(e, 0);
-      // printf("lex: %.*s\n", name_tok->loc.size, name_tok->loc.s);
+      Val name_tok = AT(e, 0);
+      // printf("lex: %.*s\n", nb_token_loc(name_tok)->size, nb_token_loc(name_tok)->s);
       VmLex* vm_lex = nb_vm_lex_compile(arena, AT(e, 1), spellbreak);
       Val lex = nb_box_new((uint64_t)vm_lex);
-      REPLACE(spellbreak->lex_dict, nb_dict_insert(spellbreak->lex_dict, name_tok->loc.s, name_tok->loc.size, lex));
+      REPLACE(spellbreak->lex_dict, nb_dict_insert(spellbreak->lex_dict, nb_token_loc(name_tok)->s, nb_token_loc(name_tok)->size, lex));
     } else if (IS_A(e, "Peg")) {
-      TokenNode* name_tok = (TokenNode*)AT(e, 0);
-      // printf("peg: %.*s\n", name_tok->loc.size, name_tok->loc.s);
+      Val name_tok = AT(e, 0);
+      // printf("peg: %.*s\n", nb_token_loc(name_tok)->size, nb_token_loc(name_tok)->s);
       VmPeg* vm_peg = nb_vm_peg_compile(arena, AT(e, 1), spellbreak);
       Val peg = nb_box_new((uint64_t)vm_peg);
-      REPLACE(spellbreak->peg_dict, nb_dict_insert(spellbreak->peg_dict, name_tok->loc.s, name_tok->loc.size, peg));
+      REPLACE(spellbreak->peg_dict, nb_dict_insert(spellbreak->peg_dict, nb_token_loc(name_tok)->s, nb_token_loc(name_tok)->size, peg));
     }
   }
 

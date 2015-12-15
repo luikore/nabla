@@ -90,8 +90,8 @@ static void _traverse(Val node, VmCallback* cb, Spellbreak* sb) {
 
   } else if (IS_A(node, "Call")) {
     int arity = _push_list(AT(node, 1), cb, sb);
-    TokenNode* fname_tok = (TokenNode*)AT(node, 0);
-    void* func = nb_spellbreak_find_action(sb, fname_tok->loc.s, fname_tok->loc.size, arity);
+    Val fname_tok = AT(node, 0);
+    void* func = nb_spellbreak_find_action(sb, nb_token_loc(fname)->s, nb_token_loc(fname)->size, arity);
     _append(cb, PUSH, 0);
     _append_val(cb, (Val)func);
     _append(cb, CALL, arity);
@@ -139,10 +139,10 @@ VmCallback* nb_vm_callback_compile(void* arena, Val node, Spellbreak* sb, Val le
       } else if (is_begin) {
         int lex_name_size = nb_string_byte_size(lex_name);
         char* lex_name_s = nb_string_ptr(lex_name);
-        TokenNode* name_tok = (TokenNode*)AT(stmt, 0);
-        int name_size = name_tok->loc.size + lex_name_size + 1;
+        Val name_tok = AT(stmt, 0);
+        int name_size = nb_token_loc(name)->size + lex_name_size + 1;
         char name[name_size + 1];
-        sprintf(name, "%.*s:%.*s", lex_name_size, lex_name_s, name_size, name_tok->loc.s);
+        sprintf(name, "%.*s:%.*s", lex_name_size, lex_name_s, name_size, nb_token_loc(name)->s);
         REPLACE(sb->vars_dict, nb_dict_insert(sb->vars_dict, name, name_size, VAL_TRUE));
       } else {
         // todo allow more flexible var decl?

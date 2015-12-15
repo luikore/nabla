@@ -32,18 +32,16 @@ int64_t nb_vm_regexp_exec(VmRegexp* regexp, Ctx* ctx);
 
 #pragma mark ## some helper macros for compiling
 
-#define LOC(tok) (((TokenNode*)(tok))->loc)
+#define LOC(tok) nb_token_loc(tok)
 
 #define S nb_string_new_literal_c
 
-#define AT(node, i) (((SyntaxNode*)(node))->attrs[i])
+#define AT(node, i) nb_struct_get(node, i)
 
 #define IS_A(node, ty) (!VAL_IS_IMM(node) && nb_syntax_node_is((node), (ty)))
 
-#define IS_WRAPPER(node) (!VAL_IS_IMM(node) && nb_node_is_wrapper(node))
+#define TAIL(node) nb_cons_tail(node)
 
-#define TAIL(node) ((ConsNode*)(node))->list
-
-#define HEAD(node) ((ConsNode*)(node))->e
+#define HEAD(node) nb_cons_head(node)
 
 #define COMPILE_ERROR(M, ...) printf(M, ##__VA_ARGS__); _Exit(-1)

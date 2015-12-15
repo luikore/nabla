@@ -11,7 +11,7 @@ void nb_spellbreak_build_patterns_map(void* arena, Val main_node, Spellbreak* sp
       continue;
     }
     if (IS_A(e, "PatternIns")) {
-      TokenNode* name_tok = (TokenNode*)AT(e, 0);
+      Val name_tok = AT(e, 0);
       Val pattern = AT(e, 1);
       REPLACE(spellbreak->patterns_dict, nb_dict_insert(spellbreak->patterns_dict, name_tok->loc.s, name_tok->loc.size, pattern));
     }

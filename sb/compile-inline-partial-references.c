@@ -30,7 +30,6 @@ static void _expand_lex_def(void* arena, struct ContextMap* context_map, Val nam
   Val curr;
   bool found = ContextMap.find(context_map, name, &curr);
   assert(found);
-  ConsNode* rules = (ConsNode*)curr;
   Val res = VAL_NIL;
 
   for (; curr != VAL_NIL; curr = TAIL(curr)) {

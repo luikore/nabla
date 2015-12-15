@@ -48,12 +48,12 @@ static void _append_u8(char* s, int64_t* pos, int32_t c) {
 }
 
 static Val _char_hex(Ctx* ctx, Val v_tok, Val v_from, Val v_to) {
-  TokenNode* tok = (TokenNode*)v_tok;
-  const char* s = tok->loc.s;
+  Val tok = v_tok;
+  const char* s = nb_token_loc(tok)->s;
   int64_t from = VAL_TO_INT(v_from);
   int64_t to = VAL_TO_INT(v_to);
   if (to < 0) {
-    to = tok->loc.size + 1 + to;
+    to = nb_token_loc(tok)->size + 1 + to;
   }
   assert(to > from);
 
@@ -67,7 +67,7 @@ static Val _char_hex(Ctx* ctx, Val v_tok, Val v_from, Val v_to) {
 
 static Val _char_escape_sp(Ctx* ctx, Val tok, Val v_index) {
   int i = VAL_TO_INT(v_index);
-  char c = ((TokenNode*)tok)->loc.s[i];
+  char c = nb_token_loc(tok)->s[i];
   switch (c) {
     case 'a': return VAL_FROM_INT('\a');
     case 'b': return VAL_FROM_INT('\b');
@@ -90,9 +90,8 @@ static Val char_hex_1(Ctx* ctx, Val tok) {
 }
 
 // TODO utf-8 char
-static Val char_no_escape_1(Ctx* ctx, Val v_tok) {
-  TokenNode* tok = (TokenNode*)v_tok;
-  return VAL_FROM_INT(tok->loc.s[0]);
+static Val char_no_escape_1(Ctx* ctx, Val tok) {
+  return VAL_FROM_INT(nb_token_loc(tok)->s[0]);
 }
 
 static Val compile_spellbreak_1(Ctx* ctx, Val tree) {
@@ -121,11 +120,10 @@ static Val parse_0(Ctx* ctx) {
   return VAL_NIL;
 }
 
-static Val parse_int_1(Ctx* ctx, Val v_tok) {
-  TokenNode* tok = (TokenNode*)v_tok;
-  const char* s = tok->loc.s;
+static Val parse_int_1(Ctx* ctx, Val tok) {
+  const char* s = nb_token_loc(tok)->s;
   char* end;
-  int size = tok->loc.size;
+  int size = nb_token_loc(tok)->size;
   int64_t i = strtoll(s, &end, 10);
   if ((const char*)end - s != 0) {
     // TODO just terminate the parser
