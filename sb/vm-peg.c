@@ -2,7 +2,7 @@
 
 #include "compile.h"
 
-VmPeg* nb_vm_peg_compile(PdlexNodeArena* arena, Val peg_node, Spellbreak* spellbreak) {
+VmPeg* nb_vm_peg_compile(void* arena, Val peg_node, Spellbreak* spellbreak) {
   return NULL;
 }
 

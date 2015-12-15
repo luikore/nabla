@@ -122,7 +122,7 @@ static void _traverse(Val node, VmCallback* cb, Spellbreak* sb) {
   }
 }
 
-VmCallback* nb_vm_callback_compile(PdlexNodeArena* arena, Val node, Spellbreak* sb, Val lex_name) {
+VmCallback* nb_vm_callback_compile(void* arena, Val node, Spellbreak* sb, Val lex_name) {
   VmCallback* code = malloc(sizeof(VmCallback));
   code->cap = 10;
   code->insts = malloc(sizeof(Inst) * 10);

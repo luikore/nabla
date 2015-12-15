@@ -39,8 +39,7 @@ typedef struct {
   size_t pos;
   size_t size;
 
-  PdlexNodeMeta* meta;
-  PdlexNodeArena* arena;
+  void* arena;
   Val lex_dict; // {name: box(lexer*)}, copied when initializing
   Val peg_dict; // {name: box(parser*)}, copied when initializing
 
@@ -65,4 +64,4 @@ void nb_spellbreak_delete(Spellbreak* sb);
 Val nb_spellbreak_bootstrap();
 
 // returns pointer of spellbreak, not boxed
-Spellbreak* nb_spellbreak_compile_main(PdlexNodeMeta* meta, PdlexNodeArena* arena, Val main_node);
+Spellbreak* nb_spellbreak_compile_main(void* arena, Val main_node);

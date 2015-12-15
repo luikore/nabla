@@ -26,7 +26,7 @@ static bool _pop_zero_deg_node(DepNode** list, int size, Val* res) {
 }
 
 // expand partial ref (it is ensured to be leaf by toposort), and eliminate nil rules
-static void _expand_lex_def(PdlexNodeArena* arena, struct ContextMap* context_map, Val name) {
+static void _expand_lex_def(void* arena, struct ContextMap* context_map, Val name) {
   Val curr;
   bool found = ContextMap.find(context_map, name, &curr);
   assert(found);
@@ -90,7 +90,7 @@ static DepNode* _dep_node_new(Arena* node_arena) {
 
 // TODO integrate with external language definition
 // topological sort lex contexts, and inline all refs
-void nb_spellbreak_inline_partial_references(PdlexNodeArena* arena, Val main_node) {
+void nb_spellbreak_inline_partial_references(void* arena, Val main_node) {
   // build partial node map and dep graph
   Val ins_list = AT(main_node, 0);
 

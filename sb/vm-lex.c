@@ -17,7 +17,7 @@ struct VmLexStruct {
   LexerRule rules[];
 };
 
-VmLex* nb_vm_lex_compile(PdlexNodeArena* arena, Val lex_node, Spellbreak* spellbreak) {
+VmLex* nb_vm_lex_compile(void* arena, Val lex_node, Spellbreak* spellbreak) {
   return NULL;
 }
 

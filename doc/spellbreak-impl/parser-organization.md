@@ -15,7 +15,6 @@ Regexp match struct structure:
 
 Lexer meta struct structure:
 
-    node_meta # for creating node_arena
     variables # with immutable default values, only for lexer use
     match_evaluators[]
     parser_metas {context_type: parser_meta}
@@ -24,7 +23,6 @@ Lexer meta struct structure:
 Lexer struct structure:
 
     lexer_meta
-    node_meta
     node_arena
     ctx          # user passed struct for parser invocation
     input_stream # and current pos

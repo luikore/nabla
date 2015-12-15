@@ -1,9 +1,9 @@
 target = libsb.a
 default: $(target)
 
-files = node bootstrap sb compile-* vm-lex vm-peg vm-regexp vm-callback
+files = bootstrap sb compile-* vm-lex vm-peg vm-regexp vm-callback
 objects = $(addsuffix .o, $(files))
-test_srcs = node-test.c bootstrap-test.c vm-*-test.c test.c
+test_srcs = bootstrap-test.c vm-*-test.c test.c
 test_srcs += $(addsuffix .c, $(files))
 
 -include ../makefile-config

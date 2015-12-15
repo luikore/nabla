@@ -5,9 +5,9 @@
 #include "spellbreak.h"
 #include <adt/dict.h>
 
-void nb_spellbreak_inline_partial_references(PdlexNodeArena* arena, Val main_node);
+void nb_spellbreak_inline_partial_references(void* arena, Val main_node);
 
-void nb_spellbreak_build_patterns_map(PdlexNodeArena* arena, Val main_node, Spellbreak* spellbreak);
+void nb_spellbreak_build_patterns_map(void* arena, Val main_node, Spellbreak* spellbreak);
 
 struct VmLexStruct;
 struct VmPegStruct;
@@ -19,10 +19,10 @@ typedef struct VmPegStruct VmPeg;
 typedef struct VmCallbackStruct VmCallback;
 typedef struct VmRegexpStruct VmRegexp;
 
-VmLex* nb_vm_lex_compile(PdlexNodeArena* arena, Val node, Spellbreak* spellbreak);
-VmPeg* nb_vm_peg_compile(PdlexNodeArena* arena, Val node, Spellbreak* spellbreak);
-VmCallback* nb_vm_callback_compile(PdlexNodeArena* arena, Val node, Spellbreak* spellbreak, Val lex_name);
-VmRegexp* nb_vm_regexp_compile(PdlexNodeArena* arena, Val node, Spellbreak* spellbreak);
+VmLex* nb_vm_lex_compile(void* arena, Val node, Spellbreak* spellbreak);
+VmPeg* nb_vm_peg_compile(void* arena, Val node, Spellbreak* spellbreak);
+VmCallback* nb_vm_callback_compile(void* arena, Val node, Spellbreak* spellbreak, Val lex_name);
+VmRegexp* nb_vm_regexp_compile(void* arena, Val node, Spellbreak* spellbreak);
 VmRegexp* nb_vm_regexp_from_string(Val node);
 
 int64_t nb_vm_lex_exec(VmLex* lex, Ctx* ctx);

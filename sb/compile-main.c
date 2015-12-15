@@ -6,7 +6,7 @@
 
 #define ERROR(info) // todo
 
-static void _compile_pattern_ins(PdlexNodeArena* arena, Val e, Spellbreak* spellbreak) {
+static void _compile_pattern_ins(void* arena, Val e, Spellbreak* spellbreak) {
   TokenNode* name = (TokenNode*)AT(e, 0);
   Val pattern = AT(e, 1);
   Val res;
@@ -22,7 +22,7 @@ static void _compile_pattern_ins(PdlexNodeArena* arena, Val e, Spellbreak* spell
 #pragma mark ## exposed interfaces
 
 // returns pointer, not boxed
-Spellbreak* nb_spellbreak_compile_main(PdlexNodeMeta* meta, PdlexNodeArena* arena, Val node) {
+Spellbreak* nb_spellbreak_compile_main(void* arena, Val node) {
   Spellbreak* spellbreak = nb_spellbreak_new();
 
   nb_spellbreak_inline_partial_references(arena, node);

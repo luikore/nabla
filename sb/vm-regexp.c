@@ -46,7 +46,7 @@ int64_t nb_vm_regexp_exec(VmRegexp* regexp, Ctx* ctx) {
   return 0;
 }
 
-VmRegexp* nb_vm_regexp_compile(PdlexNodeArena* arena, Val node, Spellbreak* spellbreak) {
+VmRegexp* nb_vm_regexp_compile(void* arena, Val node, Spellbreak* spellbreak) {
   return NULL;
 }
 

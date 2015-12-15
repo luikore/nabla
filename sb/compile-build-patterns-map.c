@@ -2,7 +2,7 @@
 #include <adt/dict.h>
 
 // build patterns map, not checking loop dependency, because only regexp knows the AST structure
-void nb_spellbreak_build_patterns_map(PdlexNodeArena* arena, Val main_node, Spellbreak* spellbreak) {
+void nb_spellbreak_build_patterns_map(void* arena, Val main_node, Spellbreak* spellbreak) {
   Val lines = AT(main_node, 0);
 
   for(; lines != VAL_NIL; lines = TAIL(lines)) {
