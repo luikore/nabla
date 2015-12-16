@@ -75,6 +75,7 @@ typedef struct {
   ValCallbackFunc destruct_func;
   ValCallbackFunc delete_func;
   ValCallbackFunc debug_func;
+  void* data; // some klasses require custom data
   // todo cache hash and eq func?
 } Klass;
 

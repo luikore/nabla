@@ -233,6 +233,16 @@ Val klass_name(uint32_t klass_id) {
   return klass->name;
 }
 
+void klass_set_data(uint32_t klass_id, void* data) {
+  Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
+  klass->data = data;
+}
+
+void* klass_get_data(uint32_t klass_id) {
+  Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
+  return klass->data;
+}
+
 void klass_set_destruct_func(uint32_t klass_id, ValCallbackFunc func) {
   Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
   assert(klass);

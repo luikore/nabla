@@ -251,6 +251,10 @@ Val klass_val(uint32_t klass_id);
 
 Val klass_name(uint32_t klass_id);
 
+// assoc data to klass
+void klass_set_data(uint32_t klass_id, void* data);
+void* klass_get_data(uint32_t klass_id);
+
 // register destructor before val_free() is called on the object of the klass.
 // to avoid memory leak, a standard implementaion is to call val_release on all Val members.
 void klass_set_destruct_func(uint32_t klass_id, ValCallbackFunc func);
