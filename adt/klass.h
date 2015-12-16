@@ -6,30 +6,35 @@
 #include "utils/mut-array.h"
 #include "utils/mut-map.h"
 
+// def foo a b c      # min_argc = max_argc = 3
+// def foo [a, *b]    # min_argc = 1, max_argc = -1
+// def foo a b c=3    # min_argc = 2, max_argc = 3
 typedef struct {
   ValHeader h; // user1: is_cfunc, user2: is_final
   uint32_t method_id;
-  int32_t argc;
+  int32_t min_argc;
+  int32_t max_argc; // -1 if not limited
+  int32_t func_takes_argv;
   union {
     void* code;
     ValMethodFunc func;
+    ValMethodFunc2 func2;
   } as;
 } Method;
 
 #define METHOD_ID(m) (m)->method_id
-#define METHOD_ARGC(m) (m)->argc
+#define METHOD_MIN_ARGC(m) (m)->min_argc
+#define METHOD_MAX_ARGC(m) (m)->max_argc
+#define METHOD_FUNC_TAKES_ARGV(m) m->func_takes_argv
 #define METHOD_IS_CFUNC(m) (m)->h.user1
 #define METHOD_IS_FINAL(m) (m)->h.user2
 
 static bool METHOD_ARGC_MATCH(Method* m, int argc) {
-  int m_argc = METHOD_ARGC(m);
-  if (m_argc == argc) {
-    return true;
+  if (METHOD_MAX_ARGC(m) == -1) {
+    return METHOD_MIN_ARGC(m) <= argc;
+  } else {
+    return METHOD_MIN_ARGC(m) <= argc && METHOD_MAX_ARGC(m) >= argc;
   }
-  if (m_argc < 0) {
-    return argc >= (-m_argc);
-  }
-  return false;
 }
 
 static Val METHOD_INVOKE(Val obj, Method* m, int argc, Val* argv) {
@@ -38,9 +43,13 @@ static Val METHOD_INVOKE(Val obj, Method* m, int argc, Val* argv) {
       // TODO raise error
       assert(false);
     }
-    return val_c_call2(obj, m->as.func, argc, argv);
+    if (m->func_takes_argv) {
+      return m->as.func2(obj, argc, argv);
+    } else {
+      return val_c_call2(obj, m->as.func, argc, argv);
+    }
   } else {
-    // TODO
+    // TODO bytecode method
     return VAL_UNDEF;
   }
 }

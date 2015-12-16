@@ -237,8 +237,10 @@ typedef void (*ValCallbackFunc)(void*);
 # endif
 #endif
 typedef Val (*ValMethodFunc)(ANYARGS);
+typedef Val (*ValMethodFunc2)(Val, int32_t, Val*);
 
 // define klass_id < KLASS_USER
+// todo do not expose this func
 void klass_def_internal(uint32_t klass_id, uint32_t name_id);
 
 // return 0 if not exist
@@ -264,8 +266,11 @@ void klass_set_delete_func(uint32_t klass_id, ValCallbackFunc func);
 
 void klass_set_debug_func(uint32_t klass_id, ValCallbackFunc func);
 
-// negative for arbitrary argc
-void klass_def_method(uint32_t klass_id, uint32_t method_id, int argc, ValMethodFunc func, bool is_final);
+// for fixed argc
+void klass_def_method(uint32_t klass_id, uint32_t method_id, int32_t argc, ValMethodFunc func, bool is_final);
+
+// for fixed or variadic argc
+void klass_def_method2(uint32_t klass_id, uint32_t method_id, int32_t min_argc, int32_t max_argc, ValMethodFunc2 func, bool is_final);
 
 void klass_include(uint32_t klass_id, uint32_t included_id);
 

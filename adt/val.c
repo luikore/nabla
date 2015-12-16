@@ -156,11 +156,12 @@ static Klass* _klass_new(uint32_t klass_id, Val name, uint32_t parent) {
   return k;
 }
 
-static Method* _method_new(uint32_t method_id, int argc, bool is_final) {
+static Method* _method_new(uint32_t method_id, int32_t min_argc, int32_t max_argc, bool is_final) {
   Method* meth = val_alloc(KLASS_METHOD, sizeof(Method));
   METHOD_ID(meth) = method_id;
   METHOD_IS_FINAL(meth) = is_final;
-  METHOD_ARGC(meth) = argc;
+  METHOD_MIN_ARGC(meth) = min_argc;
+  METHOD_MAX_ARGC(meth) = max_argc;
   val_perm(meth);
   return meth;
 }
@@ -171,6 +172,16 @@ static Method* _search_own_method(Klass* klass, uint32_t method_id) {
     return method;
   } else {
     return NULL;
+  }
+}
+
+static void _check_final_method_conflict(Klass* klass, uint32_t method_id) {
+  Method* prev_meth = _search_own_method(klass, method_id);
+  if (prev_meth) {
+    if (METHOD_IS_FINAL(prev_meth)) {
+      assert(false);
+      // TODO raise error
+    }
   }
 }
 
@@ -261,21 +272,27 @@ void klass_set_debug_func(uint32_t klass_id, ValCallbackFunc func) {
   klass->debug_func = func;
 }
 
-// negative for arbitrary argc
-void klass_def_method(uint32_t klass_id, uint32_t method_id, int argc, ValMethodFunc func, bool is_final) {
+void klass_def_method(uint32_t klass_id, uint32_t method_id, int32_t argc, ValMethodFunc func, bool is_final) {
   Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
+  _check_final_method_conflict(klass, method_id);
 
-  Method* prev_meth = _search_own_method(klass, method_id);
-  if (prev_meth) {
-    if (METHOD_IS_FINAL(prev_meth)) {
-      assert(false);
-      // TODO raise error
-    }
-  }
-
-  Method* meth = _method_new(method_id, argc, is_final);
+  Method* meth = _method_new(method_id, argc, argc, is_final);
   METHOD_IS_CFUNC(meth) = true;
+  METHOD_FUNC_TAKES_ARGV(meth) = false;
   meth->as.func = func;
+
+  IdMethods.insert(&klass->id_methods, method_id, meth);
+  
+}
+
+void klass_def_method2(uint32_t klass_id, uint32_t method_id, int32_t min_argc, int32_t max_argc, ValMethodFunc2 func, bool is_final) {
+  Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
+  _check_final_method_conflict(klass, method_id);
+
+  Method* meth = _method_new(method_id, min_argc, max_argc, is_final);
+  METHOD_IS_CFUNC(meth) = true;
+  METHOD_FUNC_TAKES_ARGV(meth) = true;
+  meth->as.func2 = func;
 
   IdMethods.insert(&klass->id_methods, method_id, meth);
 }

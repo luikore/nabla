@@ -3,6 +3,12 @@
 #include "klass.h"
 #include <ccut.h>
 
+static Val foo_sum(Val self, int32_t argc, Val* argv) {
+  assert(2 == argc);
+  int64_t res = VAL_TO_INT(argv[0]) + VAL_TO_INT(argv[1]);
+  return VAL_FROM_INT(res);
+}
+
 static bool klass_prepared = false;
 
 void struct_suite() {
@@ -12,7 +18,8 @@ void struct_suite() {
       {.matcher = VAL_UNDEF, .field_id = val_strlit_new_c("bar")},
       {.matcher = VAL_UNDEF, .field_id = val_strlit_new_c("baz")}
     };
-    nb_struct_def(nb_string_new_literal_c("Foo"), 0, 3, fields);
+    uint32_t klass = nb_struct_def(nb_string_new_literal_c("Foo"), 0, 3, fields);
+    klass_def_method2(klass, val_strlit_new_c("sum"), 2, 2, foo_sum, true);
     klass_prepared = true;
   }
 
@@ -32,6 +39,9 @@ void struct_suite() {
     assert_eq(VAL_TRUE, nb_struct_get(st, 0));
     assert_eq(VAL_FALSE, nb_struct_get(st, 1));
     assert_eq(VAL_NIL, nb_struct_get(st, 2));
+
+    Val res = val_send(st, val_strlit_new_c("sum"), 2, (Val[]){VAL_FROM_INT(3), VAL_FROM_INT(4)});
+    assert_eq(VAL_FROM_INT(7), res);
 
     RELEASE(st);
     val_end_check_memory();
