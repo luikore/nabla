@@ -8,6 +8,8 @@ typedef struct {
   NbTokenLoc loc;
 } Token;
 
+#define QWORDS_TOKEN ((sizeof(Token) + 7) / 8)
+
 static Val _token_eq(Val l, Val r) {
   if (VAL_KLASS(r) != KLASS_TOKEN) {
     return false;
@@ -45,7 +47,7 @@ Val nb_token_new_c(Val name, const char* content) {
 }
 
 Val nb_token_anew(void* arena, Val name, NbTokenLoc loc) {
-  Token* t = val_arena_alloc(arena, KLASS_TOKEN, sizeof(Token));
+  Token* t = val_arena_alloc(arena, KLASS_TOKEN, QWORDS_TOKEN);
   t->loc = loc;
   return (Val)t;
 }
