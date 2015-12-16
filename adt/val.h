@@ -220,6 +220,8 @@ const char* val_strlit_ptr(uint32_t l);
 
 noreturn void val_throw(Val obj);
 
+void val_def_const(uint32_t namespace, uint32_t name_str, Val v);
+
 #define FATAL(msg, ...) ({ fprintf(stderr, (msg), ##__VA_ARGS__); _Exit(-1); })
 #define ASSERT(expr, msg, ...) if (!(expr)) { VAL_FATAL((msg), ##__VA_ARGS__) }
 

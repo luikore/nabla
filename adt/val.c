@@ -16,23 +16,25 @@ typedef union {
 typedef struct {
   uint32_t parent;
   uint32_t name_str;
-} KlassSearchKey;
+} ConstSearchKey;
 
-static uint64_t _klass_search_key_hash(KlassSearchKey k) {
-  return val_hash_mem(&k, sizeof(KlassSearchKey));
+static uint64_t _const_search_key_hash(ConstSearchKey k) {
+  return val_hash_mem(&k, sizeof(ConstSearchKey));
 }
 
-static uint64_t _klass_search_key_eq(KlassSearchKey k1, KlassSearchKey k2) {
+static uint64_t _const_search_key_eq(ConstSearchKey k1, ConstSearchKey k2) {
   return k1.parent == k2.parent && k1.name_str == k2.name_str;
 }
 
 MUT_ARRAY_DECL(Klasses, Klass*);
 MUT_MAP_DECL(GlobalRefCounts, Val, int64_t, val_hash, val_eq);
-MUT_MAP_DECL(KlassSearchMap, KlassSearchKey, uint32_t, _klass_search_key_hash, _klass_search_key_eq);
+MUT_MAP_DECL(KlassSearchMap, ConstSearchKey, uint32_t, _const_search_key_hash, _const_search_key_eq);
+MUT_MAP_DECL(ConstSearchMap, ConstSearchKey, Val, _const_search_key_hash, _const_search_key_eq);
 
 typedef struct {
   struct Klasses klasses; // array index by klass_id
   struct KlassSearchMap klass_search_map; // { (parent, name_str_lit) => klass* }
+  struct ConstSearchMap const_search_map; // { (parent, name_str_lit) => Val }
   struct GlobalRefCounts global_ref_counts;
   bool global_tracing; // for begin/end trace
   NbSymTable* literal_table;
@@ -63,6 +65,7 @@ static void _init() {
   Klasses.init(&runtime.klasses, KLASS_USER + 10);
   KlassSearchMap.init(&runtime.klass_search_map);
   GlobalRefCounts.init(&runtime.global_ref_counts);
+  ConstSearchMap.init(&runtime.const_search_map);
 
   runtime.literal_table = nb_sym_table_new();
 
@@ -144,11 +147,12 @@ static Klass* _klass_new(uint32_t klass_id, Val name, uint32_t parent) {
   k->destruct_func = NULL;
   k->delete_func = NULL;
   k->debug_func = NULL;
-
-  KlassSearchKey key = {.parent = parent, .name_str = VAL_TO_STR(name)};
-  KlassSearchMap.insert(&runtime.klass_search_map, key, klass_id);
-
   val_perm(k);
+
+  ConstSearchKey key = {.parent = parent, .name_str = VAL_TO_STR(name)};
+  KlassSearchMap.insert(&runtime.klass_search_map, key, klass_id);
+  ConstSearchMap.insert(&runtime.const_search_map, key, (Val)k);
+
   return k;
 }
 
@@ -198,7 +202,7 @@ void klass_def_internal(uint32_t klass_id, uint32_t name_id) {
 }
 
 uint32_t klass_find(Val name, uint32_t parent) {
-  KlassSearchKey k = {.parent = parent, .name_str = VAL_TO_STR(name)};
+  ConstSearchKey k = {.parent = parent, .name_str = VAL_TO_STR(name)};
   uint32_t res;
   if (KlassSearchMap.find(&runtime.klass_search_map, k, &res)) {
     return res;
@@ -220,6 +224,7 @@ uint32_t klass_ensure(Val name, uint32_t parent) {
 }
 
 Val klass_val(uint32_t klass_id) {
+  // todo throw if not klass
   return (Val)(*Klasses.at(&runtime.klasses, klass_id));
 }
 
@@ -370,6 +375,20 @@ Val val_send(Val obj, uint32_t method_id, int32_t argc, Val* args) {
 noreturn void val_throw(Val obj) {
   // todo
   _Exit(-2);
+}
+
+void val_def_const(uint32_t namespace, uint32_t name_str, Val v) {
+  Klass* k = (Klass*)klass_val(namespace);
+  ConstSearchKey key = {.parent = namespace, .name_str = name_str};
+  Val existed;
+  if (ConstSearchMap.find(&runtime.const_search_map, key, &existed)) {
+    val_throw(nb_string_new_literal_c("const already defined")); // todo error types
+  } else {
+    if (!VAL_IS_IMM(v)) {
+      val_perm((void*)v);
+    }
+    ConstSearchMap.insert(&runtime.const_search_map, key, v);
+  }
 }
 
 #pragma mark ### memory function interface
