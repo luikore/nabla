@@ -19,10 +19,10 @@ test_srcs += $(addsuffix -test.c, $(c_bases))
 # CFLAGS += -g -UNDEBUG
 
 %-debug.o: %.c
-	$(CC) -c $(CFLAGS_DEBUG) $^ -o $@
+	$(CC) -c $(CFLAGS_DEBUG) $< -o $@
 
 asm/%-debug.o: asm/%.S
-	$(CC) -c $(CFLAGS_DEBUG) $^ -o $@
+	$(CC) -c $(CFLAGS_DEBUG) $< -o $@
 
 asm/%.o: asm/%.S
 	$(CC) -c $(CFLAGS) $^ -o $@
