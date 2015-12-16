@@ -27,7 +27,7 @@ void cons_suite() {
     Val tail = list;
     for (int i = 0; i < 3; i++) {
       Val head = nb_cons_head(tail);
-      assert_eq(VAL_FROM_INT(i), head);
+      assert_eq(VAL_FROM_INT(2 - i), head);
       tail = nb_cons_tail(tail);
     }
 

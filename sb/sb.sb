@@ -80,7 +80,7 @@ peg Lex = [
            / kw.begin Callback? Rule+ { :return BeginCallback[$2, $3] }
            / kw.end Callback Rule+ { :return EndCallback[$2, $3] }
            / space.eol { }
-  Rule : Pattern space.pre-callback* Callback? { :return Rule[$1, $3] }
+  Rule : Pattern space.pre-callback* Callback? { :return LexRule[$1, $3] }
   Pattern : String { :return $1 }
           / Regexp { :return $1 }
           / name.var { :return VarRef[$1] }
@@ -112,7 +112,7 @@ lex Peg = [
 
 peg Peg = [
   Peg : begin.peg Rule* end.peg { :return $2 }
-  Rule : name.rule op.def space.eol? RuleBody space.eol { :return Rule[$1, $4] }
+  Rule : name.rule op.def space.eol? RuleBody space.eol { :return PegRule[$1, $4] }
        / space.eol { }
   RuleBody : SeqRule { [$1] } >* space.eol? BranchRight { :return :cons $3 $1 }
   BranchRight : op.branch.quantified SeqRule { :return BranchRight[$1, $2] }

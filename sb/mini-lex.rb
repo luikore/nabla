@@ -8,73 +8,75 @@ class MiniLex
   CALLBACK_RE = /\{("(\\.|[^"])"|[^\}])*\}/
 
   Lex = Struct.new :context, :rules
+  Klasses.add 'Lex', ['context', 'rules']
   class Lex
     def eval
-      multi = MiniCallback.build_multi rules.map &:eval
-      "NODE(Lex, Lex, 2, #{context.eval}, #{multi})"
+      multi = build_list rules.map &:eval
+      "NODE(Lex, 2, #{context.eval}, #{multi})"
     end
   end
 
   # see also `lex String` and `peg String`
   Str = Struct.new :str
+  Klasses.add 'String', ['str']
   class Str
     def eval
-      "NODE(String, String, 1, nb_string_new_literal_c(#{str.inspect}))"
+      "NODE(String, 1, nb_string_new_literal_c(#{str.inspect}))"
     end
   end
 
   RefPartialContext = Struct.new :name
+  Klasses.add 'RefPartialContext', ['name']
   class RefPartialContext
     def eval
-      "NODE(Lex, RefPartialContext, 1, #{name.eval})"
+      "NODE(RefPartialContext, 1, #{name.eval})"
     end
   end
 
   RefContext = Struct.new :name
+  Klasses.add 'RefContext', ['name']
   class RefContext
     def eval
-      "NODE(Lex, RefContext, 1, #{name.eval})"
+      "NODE(RefContext, 1, #{name.eval})"
     end
   end
 
   SeqLexRules = Struct.new :rules
+  Klasses.add 'SeqLexRules', ['rules']
   class SeqLexRules
     def eval
-      multi_rules = MiniCallback.build_multi rules.map &:eval
-      "NODE(Lex, SeqLexRules, 1, #{multi_rules})"
+      multi_rules = build_list rules.map &:eval
+      "NODE(SeqLexRules, 1, #{multi_rules})"
     end
   end
 
   BeginCallback = Struct.new :first_cb, :rules
+  Klasses.add 'BeginCallback', ['first_cb', 'rules']
   class BeginCallback
     def eval
       cb = first_cb ? first_cb.eval : "VAL_NIL"
-      multi_rules = MiniCallback.build_multi rules.map &:eval
-      "NODE(Lex, BeginCallback, 2, #{cb}, #{multi_rules})"
+      multi_rules = build_list rules.map &:eval
+      "NODE(BeginCallback, 2, #{cb}, #{multi_rules})"
     end
   end
 
   EndCallback = Struct.new :first_cb, :rules
+  Klasses.add 'EndCallback', ['first_cb', 'rules']
   class EndCallback
     def eval
       cb = first_cb ? first_cb.eval : "VAL_NIL"
-      multi_rules = MiniCallback.build_multi rules.map &:eval
-      "NODE(Lex, EndCallback, 2, #{cb}, #{multi_rules})"
+      multi_rules = build_list rules.map &:eval
+      "NODE(EndCallback, 2, #{cb}, #{multi_rules})"
     end
   end
 
-  Rule = Struct.new :pattern, :code
-  class Rule
+  # pattern can be string or regex
+  LexRule = Struct.new :pattern, :code
+  Klasses.add 'LexRule', ['pattern', 'code']
+  class LexRule
     def eval
-      multi_rules = MiniCallback.build_multi code.map &:eval
-      "NODE(Lex, Rule, 2, #{pattern.eval}, #{multi_rules})"
-    end
-  end
-
-  Token = Struct.new :type, :s
-  class Token
-    def eval
-      "TOKEN(#{type.inspect}, #{s.inspect})"
+      maybe_code = build_list code.map &:eval
+      "NODE(LexRule, 2, #{pattern.eval}, #{maybe_code})"
     end
   end
 
@@ -105,7 +107,7 @@ class MiniLex
     Lex.new @ctx, lines
   end
 
-  # RuleLine : name.context.partial / Rule+ / Callback / kw.begin Callback? Rule* / kw.end Callback? Rule* / space.eol
+  # RuleLine : name.context.partial / LexRule+ / Callback / kw.begin Callback? LexRule* / kw.end Callback? LexRule* / space.eol
   def parse_rule_line
     @s.skip(/[\ \t]+/)
     partial_context_name = @s.scan(/\*[A-Z]\w*/)
@@ -139,7 +141,7 @@ class MiniLex
     end
   end
 
-  # Rule*
+  # LexRule*
   def parse_rules
     rules = []
     loop do
@@ -154,13 +156,13 @@ class MiniLex
     rules
   end
 
-  # Rule : Pattern space.pre-callback* Callback? / name.context
+  # LexRule : Pattern space.pre-callback* Callback? / name.context
   def parse_rule
     pattern = parse_pattern
     if pattern
       @s.skip(/[\ \t]*/)
       callback = parse_callback
-      Rule.new pattern, (callback ? [callback] : [])
+      LexRule.new pattern, (callback ? [callback] : [])
     elsif c = @s.scan(/[A-Z]\w*/)
       RefContext.new Token.new("name.context", c)
     end

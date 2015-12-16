@@ -241,8 +241,13 @@ void klass_def_internal(uint32_t klass_id, uint32_t name_id);
 
 // return 0 if not exist
 uint32_t klass_find(Val name, uint32_t parent_id);
+
+// create if not exist
 uint32_t klass_ensure(Val name, uint32_t parent_id);
+
 Val klass_val(uint32_t klass_id);
+
+Val klass_name(uint32_t klass_id);
 
 // register destructor before val_free() is called on the object of the klass.
 // to avoid memory leak, a standard implementaion is to call val_release on all Val members.

@@ -12,66 +12,65 @@
 #   - no predef unicode class
 #   - assume all special chars inside [] are escaped
 
-require "strscan"
+require_relative "mini-common"
 
 class MiniRegexp
 
-  def self.build_multi arr
-    res = "VAL_NIL"
-    arr.each{|e|
-      res = "CONS(#{e},\n#{res})"
-    }
-    res
-  end
-
   Reg = Struct.new :reg
+  Klasses.add 'Regexp', ['reg']
   class Reg
     def eval
-      "NODE(Regexp, Regexp, 1, #{reg.eval})"
+      "NODE(Regexp, 1, #{reg.eval})"
     end
   end
 
   Branches = Struct.new :branches
+  Klasses.add 'Branches', ['branches']
   class Branches
     def eval
       if branches.empty?
         raise "no branches found!"
       end
-      MiniRegexp.build_multi branches.map &:eval
+      build_list branches.map &:eval
     end
   end
 
   Seq = Struct.new :seq
+  Klasses.add 'Seq', ['seq']
   class Seq
     def eval
-      content = MiniRegexp.build_multi seq.map &:eval
-      "NODE(Regexp, Seq, 1, #{content})"
+      content = build_list seq.map &:eval
+      "NODE(Seq, 1, #{content})"
     end
   end
-  
+
   PredefAnchor = Struct.new :anchor
+  Klasses.add 'PredefAnchor', ['anchor']
   class PredefAnchor
     def eval
-      "NODE(Regexp, PredefAnchor, 1, #{anchor.eval})"
+      "NODE(PredefAnchor, 1, #{anchor.eval})"
     end
   end
 
   Flag = Struct.new :flag
+  Klasses.add 'Flag', ['flag']
   class Flag
     def eval
-      "NODE(Regexp, Flag, 1, #{flag.eval})"
+      "NODE(Flag, 1, #{flag.eval})"
     end
   end
 
   Quantified = Struct.new :unit, :quantifier
+  Klasses.add 'Quantified', ['unit', 'quantifier']
   class Quantified
     def eval
-      "NODE(Regexp, Quantified, 2, #{unit.eval}, #{quantifier.eval})"
+      "NODE(Quantified, 2, #{unit.eval}, #{quantifier.eval})"
     end
   end
 
   # c is int
   Char = Struct.new :c
+  Klasses.add 'Char', ['c']
   class Char
     def eval
       "VAL_FROM_INT(#{c})"
@@ -79,39 +78,36 @@ class MiniRegexp
   end
 
   Group = Struct.new :special, :branches
+  Klasses.add 'Group', ['special', 'branches']
   class Group
     def eval
-      "NODE(Regexp, Group, 2, #{special.eval}, #{branches.eval})"
+      "NODE(Group, 2, #{special.eval}, #{branches.eval})"
     end
   end
 
   CharGroupPredef = Struct.new :tok
+  Klasses.add 'CharGroupPredef', ['tok']
   class CharGroupPredef
     def eval
-      "NODE(Regexp, CharGroupPredef, 1, #{tok.eval})"
+      "NODE(CharGroupPredef, 1, #{tok.eval})"
     end
   end
 
   BracketCharGroup = Struct.new :beg_tok, :char_classes
+  Klasses.add 'BracketCharGroup', ['beg_tok', 'char_classes']
   class BracketCharGroup
     def eval
-      multi = MiniRegexp.build_multi char_classes.map &:eval rescue pp char_classes
-      "NODE(Regexp, BracketCharGroup, 2, #{beg_tok.eval}, #{multi})"
+      multi = build_list char_classes.map &:eval rescue pp char_classes
+      "NODE(BracketCharGroup, 2, #{beg_tok.eval}, #{multi})"
     end
   end
 
   # from and to are int
   CharRange = Struct.new :from, :to
+  Klasses.add 'CharRange', ['from', 'to']
   class CharRange
     def eval
-      "NODE(Regexp, CharRange, 2, VAL_FROM_INT(#{from}), VAL_FROM_INT(#{to}))"
-    end
-  end
-
-  Token = Struct.new :type, :s
-  class Token
-    def eval
-      "TOKEN(#{type.inspect}, #{s.inspect})"
+      "NODE(CharRange, 2, VAL_FROM_INT(#{from}), VAL_FROM_INT(#{to}))"
     end
   end
 
@@ -262,7 +258,7 @@ class MiniRegexp
       return char_group
     end
     @s.pos = pos
-    
+
     c = parse_char_group_char
     if !c
       return

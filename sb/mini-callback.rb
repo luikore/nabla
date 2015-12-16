@@ -7,30 +7,24 @@
 # NOTE
 # literals are translated into immediate values `VAL_NIL` (no need boxing, since strings are literals)
 
-require "strscan"
+require_relative "mini-common"
 
 class MiniCallback
 
-  def self.build_multi arr
-    res = "VAL_NIL"
-    arr.each{|e|
-      res = "CONS(#{e},\n#{res})"
-    }
-    res
-  end
-
   Callback = Struct.new :stmts
+  Klasses.add 'Callback', ['stmts']
   class Callback
     def eval
-      multi = MiniCallback.build_multi stmts.map &:eval
-      "NODE(Callback, Callback, 1, #{multi})"
+      multi = build_list stmts.map &:eval
+      "NODE(Callback, 1, #{multi})"
     end
   end
 
   VarDecl = Struct.new :var_name
+  Klasses.add 'VarDecl', ['var_name']
   class VarDecl
     def eval
-      "NODE(Callback, VarDecl, 1, #{var_name.eval})"
+      "NODE(VarDecl, 1, #{var_name.eval})"
     end
 
     def to_s
@@ -40,13 +34,15 @@ class MiniCallback
 
   # in bootstrap, no assign expression needed yet
   Assign = Struct.new :var_name, :expr
+  Klasses.add 'Assign', ['var_name', 'expr']
   class Assign
     def eval
-      "NODE(Callback, Assign, 2, #{var_name.eval}, #{expr.eval})"
+      "NODE(Assign, 2, #{var_name.eval}, #{expr.eval})"
     end
   end
 
   Call = Struct.new :func_name, :args
+  Klasses.add 'Call', ['func_name', 'args']
   class Call
     def self.funcs
       @funcs ||= []
@@ -55,8 +51,8 @@ class MiniCallback
     def eval
       Call.funcs << [func_name.to_s, args.size]
 
-      multi = MiniCallback.build_multi args.map &:eval
-      "NODE(Callback, Call, 2, #{func_name.eval}, #{multi})"
+      multi = build_list args.map &:eval
+      "NODE(Call, 2, #{func_name.eval}, #{multi})"
     end
   end
 
@@ -72,43 +68,36 @@ class MiniCallback
   end
 
   CreateNode = Struct.new :ty, :elems
+  Klasses.add 'CreateNode', ['ty', 'elems']
   class CreateNode
     def eval
-      multi = MiniCallback.build_multi elems.map &:eval
-      "NODE(Callback, CreateNode, 2, #{ty.eval}, #{multi})"
+      multi = build_list elems.map &:eval
+      "NODE(CreateNode, 2, #{ty.eval}, #{multi})"
     end
   end
 
   CreateList = Struct.new :elems
+  Klasses.add 'CreateList', ['elems']
   class CreateList
     def eval
-      multi = MiniCallback.build_multi elems.map &:eval
-      "NODE(Callback, CreateList, 1, #{multi})"
+      multi = build_list elems.map &:eval
+      "NODE(CreateList, 1, #{multi})"
     end
   end
 
   Capture = Struct.new :var_name
+  Klasses.add 'Capture', ['var_name']
   class Capture
     def eval
-      "NODE(Callback, Capture, 1, #{var_name.eval})"
+      "NODE(Capture, 1, #{var_name.eval})"
     end
   end
 
   VarRef = Struct.new :var_name
+  Klasses.add 'VarRef', ['var_name']
   class VarRef
     def eval
-      "NODE(Callback, VarRef, 1, #{var_name.eval})"
-    end
-  end
-
-  Token = Struct.new :type, :s
-  class Token
-    def eval
-      "TOKEN(#{type.inspect}, #{s.inspect})"
-    end
-
-    def to_s
-      s
+      "NODE(VarRef, 1, #{var_name.eval})"
     end
   end
 

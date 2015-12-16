@@ -9,49 +9,46 @@ class MiniPeg
   TOKEN_RE = /[a-z]\w*(\-\w+)*(\.\w+(\-\w+)*)*/
 
   Peg = Struct.new :context, :rules
+  Klasses.add 'Peg', ['context', 'rules']
   class Peg
     def eval
-      multi = MiniCallback.build_multi rules.map &:eval
-      "NODE(Peg, Peg, 2, #{context.eval}, #{multi})"
+      multi = build_list rules.map &:eval
+      "NODE(Peg, 2, #{context.eval}, #{multi})"
     end
   end
 
-  Rule = Struct.new :name, :body
-  class Rule
+  PegRule = Struct.new :name, :body
+  Klasses.add 'PegRule', ['name', 'body']
+  class PegRule
     def eval
-      multi = MiniCallback.build_multi body.map &:eval
-      "NODE(Peg, Rule, 2, #{name.eval}, #{multi})"
+      multi = build_list body.map &:eval
+      "NODE(PegRule, 2, #{name.eval}, #{multi})"
     end
   end
 
-  # code can be [] or [callback]
   SeqRule = Struct.new :terms, :code
+  Klasses.add 'SeqRule', ['terms', 'code']
   class SeqRule
     def eval
-      terms_multi = MiniCallback.build_multi terms.map &:eval
-      code_multi = MiniCallback.build_multi code.map &:eval
-      "NODE(Peg, Rule, 2, #{terms_multi}, #{code_multi})"
+      terms_multi = build_list terms.map &:eval
+      maybe_code = build_list code.map &:eval
+      "NODE(SeqRule, 2, #{terms_multi}, #{maybe_code})"
     end
   end
   
   BranchRight = Struct.new :branch_op, :rhs
+  Klasses.add 'BranchRight', ['branch_op', 'rhs']
   class BranchRight
     def eval
-      "NODE(Peg, BranchRight, 2, #{branch_op.eval}, #{rhs.eval})"
+      "NODE(BranchRight, 2, #{branch_op.eval}, #{rhs.eval})"
     end
   end
 
   Term = Struct.new :name, :affix
+  Klasses.add 'Term', ['name', 'affix']
   class Term
     def eval
-      "NODE(Peg, Term, 2, #{name.eval}, #{affix ? affix.eval : 'VAL_NIL'})"
-    end
-  end
-
-  Token = Struct.new :type, :s
-  class Token
-    def eval
-      "TOKEN(#{type.inspect}, #{s.inspect})"
+      "NODE(Term, 2, #{name.eval}, #{affix ? affix.eval : 'VAL_NIL'})"
     end
   end
 
@@ -60,7 +57,7 @@ class MiniPeg
     @s = StringScanner.new src
   end
 
-  # Peg : name.context begin.peg space.eol* Rule* end.peg
+  # Peg : name.context begin.peg space.eol* PegRule* end.peg
   def parse
     parse_eols
     rules = []
@@ -73,7 +70,7 @@ class MiniPeg
     Peg.new @ctx, rules
   end
 
-  # Rule : name.rule op.def RuleBody space.eol
+  # PegRule : name.rule op.def RuleBody space.eol
   def parse_rule
     @s.skip(/[\t\ ]+/)
     name = @s.scan(RULE_RE)
@@ -84,7 +81,7 @@ class MiniPeg
     raise "expect rule body : #{@s.inspect}" if !rule_body
     eol = parse_eols
     raise "expect eol : #{@s.inspect}" if !eol
-    Rule.new Token.new("name.rule", name), rule_body
+    PegRule.new Token.new("name.rule", name), rule_body
   end
 
   # RuleBody : SeqRule >* space.eol? BranchRight
@@ -105,7 +102,7 @@ class MiniPeg
     if res.any?(&:nil?)
       raise "nil entry in #{res.inspect}"
     end
-    res # parse_rule will use build_multi
+    res # parse_rule will use build_list
   end
 
   # SeqRule : Term+ Callback?
@@ -173,8 +170,8 @@ end
 if __FILE__ == $PROGRAM_NAME
   require "pp"
   pegcode = <<-PEGCODE
-  Peg : name.context begin.peg space.eol* Rule* end.peg { :node "Peg" $1 $4 }
-  Rule : name.rule op.def RuleBody space.eol { :node "Rule" $1 $3 }
+  Peg : name.context begin.peg space.eol* Rule* end.peg { Peg[$1, $4] }
+  Rule : name.rule op.def RuleBody space.eol { :node "PegRule" $1 $3 }
   RuleBody : SeqRule { :arr_node $1 } >* space.eol? BranchRight { :push_arr_node $1 $3 }
   BranchRight : op.branch.quantified SeqRule
               / op.branch SeqRule
