@@ -56,6 +56,14 @@ class MiniCallback
     end
   end
 
+  SplatEntry = Struct.new :expr
+  Klasses.add 'SplatEntry', ['expr']
+  class SplatEntry
+    def eval
+      "NODE(SplatEntry, 1, #{expr.eval})"
+    end
+  end
+
   Lit = Struct.new :lit
   class Lit
     def eval
@@ -209,23 +217,47 @@ class MiniCallback
     end
   end
 
-  # CreateNode: name.type begin.list Line* end.list
+  # CreateNode: name.type begin.list Entry* end.list
   def parse_create_node
     if ty = @s.scan(/[A-Z]\w*/)
       raise "expect '[': #{@s.inspect}" if !@s.scan(/\[\ */)
-      args = expect :parse_lines
+      args = expect :parse_entries
       raise "expect ']': #{@s.inspect}" if !@s.scan(/\ *\]/)
       CreateNode.new Token.new('name.type', ty), args
     end
   end
 
-  # CreateList: begin.list Line* end.list
+  # CreateList: begin.list Entry* end.list
   def parse_create_list
     if @s.scan(/\[\ */)
-      args = expect :parse_lines
+      args = expect :parse_entries
       raise "expect ']': #{@s.inspect}" if !@s.scan(/\ *\]/)
       CreateList.new args
     end
+  end
+
+  # Entry: Expr / op.prefix.splat Expr / space.eol
+  def parse_entries
+    entries = []
+    loop do
+      @s.skip(/ +/)
+      pos = @s.pos
+      if e = parse_expr
+        entries << e
+        if @s.pos == pos
+          raise "pos not advanced: #{@s.inspect}"
+        end
+      elsif @s.scan(/\*/)
+        @s.skip(/ +/)
+        e = expect :parse_expr
+        entries << (SplatEntry.new e)
+      elsif @s.scan(/\n|,/)
+      else
+        @s.pos = pos
+        break
+      end
+    end
+    entries
   end
 
   # expr / eol
@@ -314,6 +346,9 @@ if __FILE__ == $PROGRAM_NAME
     r.is_a?(Array) and r.size == 2
   end
   t ':return, :token "end.lex"', :parse_stmts do |r|
+    r.is_a?(Array) and r.size == 2
+  end
+  t '*a, *b', :parse_entries do |r|
     r.is_a?(Array) and r.size == 2
   end
   node = MiniCallback.new(<<-NABLA).parse
