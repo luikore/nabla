@@ -43,16 +43,16 @@ lex Main = [
 ]
 
 peg Main = [
-  Main : Line* { :return Main[$1] }
+  Main : Line* { Main[$1] }
 
-  Line : space.eol { } / Ins { :return $1 }
+  Line : space.eol { } / Ins { $1 }
 
-  Ins : kw.pattern name.pattern space.pre-eq op.eq Pattern { :return PatternIns[$2, $5] }
-      / kw.var name.var { :return VarDecl[$2] }
-      / kw.lex name.context Lex { :return Lex[$2, $3] }
-      / kw.peg name.context Peg { :return Peg[$2, $3] }
+  Ins : kw.pattern name.pattern space.pre-eq op.eq Pattern { PatternIns[$2, $5] }
+      / kw.var name.var { VarDecl[$2] }
+      / kw.lex name.context Lex { Lex[$2, $3] }
+      / kw.peg name.context Peg { Peg[$2, $3] }
 
-  Pattern : String { :return $1 } / Regexp { :return $1 }
+  Pattern : String { $1 } / Regexp { $1 }
 ]
 
 lex Lex = [
@@ -73,18 +73,18 @@ lex Lex = [
 ]
 
 peg Lex = [
-  Lex : begin.lex RuleLine* end.lex { :return $2 }
-  RuleLine : name.context.partial { :return RefPartialContext[$1] }
-           / name.context { :return RefContext[$1] }
-           / Rule+ { :return SeqLexRules[$1] }
-           / kw.begin Callback? Rule+ { :return BeginCallback[$2, $3] }
-           / kw.end Callback Rule+ { :return EndCallback[$2, $3] }
+  Lex : begin.lex RuleLine* end.lex { $2 }
+  RuleLine : name.context.partial { RefPartialContext[$1] }
+           / name.context { RefContext[$1] }
+           / Rule+ { SeqLexRules[$1] }
+           / kw.begin Callback? Rule+ { BeginCallback[$2, $3] }
+           / kw.end Callback Rule+ { EndCallback[$2, $3] }
            / space.eol { }
-  Rule : Pattern space.pre-callback* Callback? { :return LexRule[$1, $3] }
-  Pattern : String { :return $1 }
-          / Regexp { :return $1 }
-          / name.var { :return VarRef[$1] }
-          / name.var.global { :return GlobalVarRef[$1] }
+  Rule : Pattern space.pre-callback* Callback? { LexRule[$1, $3] }
+  Pattern : String { $1 }
+          / Regexp { $1 }
+          / name.var { VarRef[$1] }
+          / name.var.global { GlobalVarRef[$1] }
 ]
 
 lex Peg = [
@@ -111,24 +111,24 @@ lex Peg = [
 ]
 
 peg Peg = [
-  Peg : begin.peg Rule* end.peg { :return $2 }
-  Rule : name.rule op.def space.eol? RuleBody space.eol { :return PegRule[$1, $4] }
+  Peg : begin.peg Rule* end.peg { $2 }
+  Rule : name.rule op.def space.eol? RuleBody space.eol { PegRule[$1, $4] }
        / space.eol { }
-  RuleBody : SeqRule { [$1] } >* space.eol? BranchRight { :return :cons $3 $1 }
-  BranchRight : op.branch.quantified SeqRule { :return BranchRight[$1, $2] }
-              / op.branch SeqRule            { :return BranchRight[$1, $2] }
-              / op.branch.op-table           { :return OpBranchRight[$1] }
-  SeqRule : Term+ Callback? { :return SeqRule[$1, $2] }
-  Term : Name op.quantified    { :return Term[$1, $2] }
-       / Name op.extract       { :return Term[$1, $2] }
-       / Name op.extract.maybe { :return Term[$1, $2] }
-       / Name                  { :return Term[$1, nil] }
-       / op.lookahead LookaheadName { :return Lookahead[$1, $2] }
-  Name : name.token { :return $1 }
-       / name.rule  { :return $1 }
-  LookaheadName : name.token   { :return $1 }
-                / name.rule    { :return $1 }
-                / name.pattern { :return $1 }
+  RuleBody : SeqRule { [$1] } >* space.eol? BranchRight { [*$1, $3] }
+  BranchRight : op.branch.quantified SeqRule { BranchRight[$1, $2] }
+              / op.branch SeqRule            { BranchRight[$1, $2] }
+              / op.branch.op-table           { OpBranchRight[$1] }
+  SeqRule : Term+ Callback? { SeqRule[$1, $2] }
+  Term : Name op.quantified    { Term[$1, $2] }
+       / Name op.extract       { Term[$1, $2] }
+       / Name op.extract.maybe { Term[$1, $2] }
+       / Name                  { Term[$1, nil] }
+       / op.lookahead LookaheadName { Lookahead[$1, $2] }
+  Name : name.token { $1 }
+       / name.rule  { $1 }
+  LookaheadName : name.token   { $1 }
+                / name.rule    { $1 }
+                / name.pattern { $1 }
 ]
 
 lex Callback = [
@@ -143,23 +143,25 @@ lex Callback = [
   /if\b/     { :token "kw.if" }
   /else\n/   { :token "kw.else" }
   /end\b/    { :token "kw.end" }
-  /nil\b/    { :token "lit.nil" }
-  /true\n/   { :token "lit.true" }
-  /false\n/  { :token "lit.const" }
+  /nil\b/    { :token "lit.nil" $0 nil }
+  /true\n/   { :token "lit.true" $0 true }
+  /false\n/  { :token "lit.const" $0 false }
   /var\b/    { :token "kw.var" }
-  /-?\d+/    { :token "lit.int" }
+  /-?\d+/    { :token "lit.int" $0 :parse_int $0 }
   /[a-z]\w*/ { :token "name.var" }
 
   /&&|\|\|/         { :token "op.infix.logic" }
   />|<|>=|<=|==|!=/ { :token "op.infix.compare" }
   /\+|-|\^|&|\|/    { :token "op.infix.additive" }
   /\*\*|\*|\/|%|@/  { :token "op.infix.multitive" } # TODO ** should be separated for right-assoc
+  /(\[)\s*(\*)/ { :token "begin.list" $1, :token "op.prefix.splat" $2 }
   "[" { :token "begin.list" }
   "]" { :token "end.list" }
   "(" { :token "begin.paren" }
   ")" { :token "end.paren" }
   "=" { :token "op.eq" }
   "!" { :token "op.prefix" }
+  /(,)\s*(\*)/ { :token "space.eol" $1, token "op.prefix.splat" $2 }
   /[,\n]/ { :token "space.eol" }
 
   /\#[^\n]*/   { :style "comment" $0 }
@@ -168,45 +170,48 @@ lex Callback = [
 ]
 
 peg Callback = [
-  Callback : begin.code Stmt* end.code { :return Callback[$2] }
-  Stmt : Expr { :return $1 }
+  Callback : begin.code Stmt* end.code { Callback[$2] }
+  Stmt : Expr { $1 }
        / space.eol { }
-       / kw.var name.var { :return VarDecl[$2] }
-  Expr : Infix.Logic { :return $1 }
+       / kw.var name.var { VarDecl[$2] }
+  Expr : Infix.Logic { $1 }
 
-  Infix.Logic : Infix.Compare { :return $1 }
-              >* op.infix.logic Infix.Compare { :return InfixLogic[$2, [$3, $1]] }
+  Infix.Logic : Infix.Compare { $1 }
+              >* op.infix.logic Infix.Compare { InfixLogic[$2, [$3, $1]] }
 
-  Infix.Compare : Infix.Additive { :return $1 }
-                >* op.infix.compare Infix.Additive { :return Call[$2, [$3, $1]] }
+  Infix.Compare : Infix.Additive { $1 }
+                >* op.infix.compare Infix.Additive { Call[$2, [$3, $1]] }
 
-  Infix.Additive : Infix.Multitive { :return $1 }
-                 >* op.infix.additive Infix.Multitive { :return Call[$2, [$3, $1]] }
+  Infix.Additive : Infix.Multitive { $1 }
+                 >* op.infix.additive Infix.Multitive { Call[$2, [$3, $1]] }
 
-  Infix.Multitive : Unit { :return $1 }
-                  >* op.infix.multitive Unit { :return Call[$2, [$3, $1]] }
+  Infix.Multitive : Unit { $1 }
+                  >* op.infix.multitive Unit { Call[$2, [$3, $1]] }
 
-  Unit : begin.paren Expr end.paren { :return $2 }
+  Unit : begin.paren Expr end.paren { $2 }
        / op.prefix Unit { Call[$1, $2] }
-       / lit.int   { :return :parse_int $1 }
-       / lit.true  { :return true }
-       / lit.false { :return false }
-       / lit.nil   { :return nil }
-       / String    { :return $1 }
-       / name.var.capture { :return Capture[$1] }
-       / name.type begin.list Line* end.list { :return CreateNode[$1, $3] }
-       / begin.list Line* end.list { :return CreateList[$2] }
-       / name.func Expr* { :return Call[$1, $2] }
-       / name.var { :return VarRef[$1] }
-       / If { :return $1 }
-       / name.var space.pre-eq op.eq Expr { :return Assign[$1, $4] }
+       / lit.int   { $1 }
+       / lit.true  { $1 }
+       / lit.false { $1 }
+       / lit.nil   { $1 }
+       / String    { $1 }
+       / name.var.capture { Capture[$1] }
+       / name.type begin.list Entry* end.list { CreateNode[$1, $3] }
+       / begin.list Entry* end.list { CreateList[$2] }
+       / name.func Expr* { Call[$1, $2] }
+       / name.var { VarRef[$1] }
+       / If { $1 }
+       / name.var space.pre-eq op.eq Expr { Assign[$1, $4] }
 
-  Line : Expr { :return $1 }
+  Entry : Expr { $1 }
+        / op.prefix.splat Expr { SplatEntry[$2] }
+        / space.eol { }
+  Line : Expr { $1 }
        / space.eol { }
-  If : kw.if Expr space.eol Line* If.Else { :return If[$2, $4, $5] }
+  If : kw.if Expr space.eol Line* If.Else { If[$2, $4, $5] }
   If.Else : kw.end { }
-          / kw.else Line* kw.end { :return $2 }
-          / kw.else If { :return $2 }
+          / kw.else Line* kw.end { $2 }
+          / kw.else If { $2 }
 ]
 
 lex String = [
@@ -234,7 +239,7 @@ lex Regexp = [
 
   "|" { :token "op.branch" }
 
-  /\[\^?/ { :token "begin.char-group", cg_stack = :cons true cg_stack }
+  /\[\^?/ { :token "begin.char-group", cg_stack = [*cg_stack, true] }
   "]"    { :token "end.char-group", cg_stack = :tail cg_stack }
   "-"    { if cg_stack, :token "op.minus", else :token "char" }
 
@@ -251,34 +256,34 @@ lex Regexp = [
   ")" { :token "end.group" }
 
   /\s+/ {} # only useful in pretty print
-  /[^\n\s]/ { :token "char" }
+  /[^\n\s]/ { :token "char" $0 :char_no_escape $0 }
 ]
 
 peg Regexp = [
-  Regexp : begin.regexp Branches end.regexp { :return Regexp[$2] }
-  Branches : Seq { :return [$1] } >* op.branch Seq { :return :cons $3 $1 }
-  Seq : SeqUnit* { :return Seq[$1] }
-  SeqUnit : anchor { :return PredefAnchor[$1] }
-          / flag.case-insensitive { :return Flag[$1] }
-          / flag.case-sensitive { :return Flag[$1] }
-          / flag.encoding { :return Flag[$1] }
-          / Unit quantifier { :return Quantified[$1, $2] }
-          / Unit begin.quantifier quantifier.range.from quantifier.range.to? end.quantifier quantifier.kind { :return QuantifiedRange[$1, $3, $4, $6] }
-          / Unit { :return Unit[$1] }
-  Unit : SingleChar { :return $1 }
-       / CharGroup  { :return $1 }
-       / Group { :return $1 }
-       / interpolate.predef { :return $1 }
-  SingleChar : RegexpEscape { :return $1 }
-             / char         { :return :char_no_escape $1 }
-  Group : begin.group group.special Branches end.group { :return Group[$2, $3] }
+  Regexp : begin.regexp Branches end.regexp { Regexp[$2] }
+  Branches : Seq { [$1] } >* op.branch Seq { [*$1, $3] }
+  Seq : SeqUnit* { Seq[$1] }
+  SeqUnit : anchor { PredefAnchor[$1] }
+          / flag.case-insensitive { Flag[$1] }
+          / flag.case-sensitive { Flag[$1] }
+          / flag.encoding { Flag[$1] }
+          / Unit quantifier { Quantified[$1, $2] }
+          / Unit begin.quantifier quantifier.range.from quantifier.range.to? end.quantifier quantifier.kind { QuantifiedRange[$1, $3, $4, $6] }
+          / Unit { Unit[$1] }
+  Unit : SingleChar { $1 }
+       / CharGroup  { $1 }
+       / Group { $1 }
+       / interpolate.predef { $1 }
+  SingleChar : RegexpEscape { $1 }
+             / char         { $1 }
+  Group : begin.group group.special Branches end.group { Group[$2, $3] }
 
-  CharGroup : char-group.predef  { :return CharGroupPredef[$1] }
-            / unicode-char-class { :return UnicodeCharClass[$1] }
-            / begin.char-group CharClass+ end.char-group { :return BracketCharGroup[$1, $2] }
-  CharClass : CharGroup { :return $1 }
-            / SingleChar op.minus SingleChar { :return CharRange[$1, $3] }
-            / SingleChar { :return CharRange[$1, $1] }
+  CharGroup : char-group.predef  { CharGroupPredef[$1] }
+            / unicode-char-class { UnicodeCharClass[$1] }
+            / begin.char-group CharClass+ end.char-group { BracketCharGroup[$1, $2] }
+  CharClass : CharGroup { $1 }
+            / SingleChar op.minus SingleChar { CharRange[$1, $3] }
+            / SingleChar { CharRange[$1, $1] }
 ]
 
 lex RegexpEscape = [

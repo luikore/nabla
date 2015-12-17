@@ -292,6 +292,12 @@ Another example,
 
 This rule generates 2 tokens: `keyword-alias` and `alias-name` with corresponding matching string (and matching positions), while ignoring the arbitrary lengthed spaces in between.
 
+Token can be associated with a value (the third argument). Example parsing integer:
+
+    /\d+/ {
+      :token "integer" $1 (:parse_int $1)
+    }
+
 ### On token naming
 
 Tokens is best to be named in top-down categorized form -- for classification convenience and syntax highlight styling.
@@ -335,11 +341,10 @@ A special action to invoke lexer for block, anchors like `^`, `$` will apply to 
 
 NOTE: we should not use indentations instead of a special action, it will create many limits for the definition of the embeded language.
 
-## Lists: `:cons`, `[]`, `:head`, `:tail`
+## Lists: `[]`, `:head`, `:tail`
 
-The following 2 are the same:
+Building a list with 3 elements (head at last)
 
-    :cons 1 :cons 2 :cons 3 nil # [1,2,3]
     [1, 2, 3]
 
 To retrieve member or part from the list
@@ -348,6 +353,11 @@ To retrieve member or part from the list
     :tail [1,2,3] # [2,3]
     :init [1,2,3] # [1,2]
     :last [1,2,3] # 3
+
+List building also accepts splats
+
+    [*foo, bar]
+    [foo, *bar]
 
 ## Which context does the token belongs to?
 
@@ -526,7 +536,7 @@ Now match-and-return becomes simple:
 
     lex Main = [
       begin { $here_delimiter_q = nil }
-      /<<(\w+)/ { $here_delimiter_q = :cons $1 $here_delimiter_q, if !$here_delimiter, $here_delimiter = $1, end }
+      /<<(\w+)/ { $here_delimiter_q = [*$here_delimiter_q, $1], if !$here_delimiter, $here_delimiter = $1, end }
       Heredoc
     ]
 

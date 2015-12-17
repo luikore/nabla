@@ -35,13 +35,13 @@ https://github.com/pegjs/pegjs/issues/231#issuecomment-54756322
 
 We may just fall back to focus just on left-associative meaning of the rule
 
-    A : B C { bc } >* op D { $1 = acc; $2 = op; $3 = right }
+    A : B C { bc } >* op D { } # $1 = acc, $2 = op, $3 = right
 
 Same for destructive right-associative meaning
 
-    A : B C { bc } <* op D {  $1 = left; $2 = op; $3 = acc }
+    A : B C { bc } <* op D { } # $1 = left, $2 = op, $3 = acc
 
-There is also `>+` but no `>?`, and it is transformed the same way as `>*` does
+There is also `>+` and `<+` but no `>?` nor `<?`, and they are transformed the same way as `>*` does
 
     A : B >* C  ==>  A : B C*
     A : B >+ C  ==>  A : B C+
@@ -58,21 +58,33 @@ Further, we may introduce a dynamic operator system.
 
 A default action is used, which rewrites the ST node name (with context and branch info) into the rule name (without context and branch info) and returns the ST node.
 
-### Action
+### Building AST nodes in rule callbacks
+
+It can just take the value associated on the token (if no value associated, raises error)
+
+    some.token { $1 }
 
 To build a node, use node creating syntax
 
-    Foo[attr1, attr2, attr3]
+    { Foo[attr1, attr2, attr3] }
 
-To set returning node, use the special variable `$$`, (It is `nil` if not set)
+Or a list building syntax
 
-    $$ = Foo[]
+    { [$1, $2, $3] }
 
-You can set the node and then do something else.
+Splat building list
 
-NOTE: Actions must be pure function, and you should keep them light-weight.
+    { [*$1, $2] }
 
-TODO: in future we may allow some actions to visit global states if the path to it is definitive.
+Or recursively
+
+    { [$1, Foo[$2, [$3, $4]]] }
+
+Function calls and variable visits are forbidden in syntax action.
+
+An empty brace ignores the rule and doesn't return anything
+
+    { }
 
 ### Extracting
 
@@ -80,9 +92,9 @@ We may append a `!` to return the node as the action result. This is called "ext
 
 Example:
 
-    Foo : Xip Bar! / Baz { $$ = Foo[$1] }
+    Foo : Xip Bar! / Baz { Foo[$1] }
     # is equivalent to
-    Foo : Xip Bar { $$ = $2 } / Baz { $$ = Foo[$1] }
+    Foo : Xip Bar { $2 } / Baz { Foo[$1] }
 
 Only one `!` is allowed before every branch, and it can not be mixed with `?` or `*`.
 
