@@ -20,6 +20,24 @@ void cons_suite() {
     val_arena_delete(arena);
   }
 
+  ccut_test("cons node new rev") {
+    val_begin_check_memory();
+
+    Val node;
+    REPLACE(node, nb_cons_new_rev(VAL_NIL, VAL_FROM_INT(1)));
+    REPLACE(node, nb_cons_new_rev(node, VAL_FROM_INT(2)));
+    REPLACE(node, nb_cons_new_rev(node, VAL_FROM_INT(3)));
+
+    int i = 1;
+    for (Val curr = node; curr != VAL_NIL; curr = nb_cons_tail(curr), i++) {
+      assert_eq(VAL_FROM_INT(i), nb_cons_head(curr));
+    }
+
+    RELEASE(node);
+
+    val_end_check_memory();
+  }
+
   ccut_test("build list") {
     val_begin_check_memory();
 
@@ -35,4 +53,5 @@ void cons_suite() {
 
     val_end_check_memory();
   }
+
 }

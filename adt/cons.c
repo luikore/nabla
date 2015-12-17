@@ -28,11 +28,30 @@ Val nb_cons_new(Val head, Val tail) {
   return (Val)node;
 }
 
+Val nb_cons_new_rev(Val init, Val last) {
+  if (init == VAL_NIL) {
+    return nb_cons_new(last, VAL_NIL);
+  }
+  Val head = nb_cons_head(init);
+  Val tail = nb_cons_tail(init);
+  return nb_cons_new(head, tail);
+}
+
 Val nb_cons_anew(void* arena, Val head, Val tail) {
   Cons* node = val_arena_alloc(arena, KLASS_CONS, QWORDS_CONS);
   node->head = head;
   node->tail = tail;
   return (Val)node;
+}
+
+Val nb_cons_anew_rev(void* arena, Val init, Val last) {
+  if (init == VAL_NIL) {
+    return nb_cons_anew(arena, last, VAL_NIL);
+  }
+  Val head = nb_cons_head(init);
+  Val tail = nb_cons_tail(init);
+  tail = nb_cons_anew_rev(arena, tail, last);
+  return nb_cons_anew(arena, head, tail);
 }
 
 Val nb_cons_reverse(Val list) {
