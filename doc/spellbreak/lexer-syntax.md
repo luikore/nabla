@@ -104,7 +104,7 @@ To use context names from other languages (TODO)
 
 - nil: `nil`, default to 
 - string: `"foo"`
-- matched string: `$2`, which inherits string, but with `:begin` and `:end` methods
+- matched string: `:capture 2`, which inherits string, but with `:begin` and `:end` methods
 - boolean: `true`, `false`
 - integer: `123`, `-1`
 
@@ -138,7 +138,7 @@ interpolate predefined char class (unicode char classes)
 to achieve the back-reference effect, we can also store a state variable and reference it.
 
     lex Normal = [
-      /<<-(\w+)/ { heredoc = $1, :call 'heredoc' }
+      /<<-(\w+)/ { heredoc = :capture 1, :call 'heredoc' }
     ]
 
     lex Heredoc = [
@@ -150,7 +150,7 @@ to achieve the back-reference effect, we can also store a state variable and ref
 
 [NOTE] for syntax simplicity, only interpolating var is allowed, no interpolating methods. to achieve the effect, pre-compute the value you want to put:
 
-    { :push v $2, v_top = $2 }
+    { :push v :capture 2, v_top = :capture 2 }
     { v_top = :pop v }
 
 set ignore case flag
@@ -246,20 +246,21 @@ Actions are in a simple lisp-like language.
 For example, the code below invokes an action named `:token`, which may produce a token for the lexer, or highlight for a text editor with predefined styles.
 
     lex String = [
-      /\\\h\h/ { :token "escape" $0 }
+      /\\\h\h/ { :token "escape" 0 }
     ]
 
-[design NOTE] Similar to QUEX a `=>` to simplify the case for `:token "escape" $0` ? but it makes the syntax more complex and not very consistent, plus not flexible for ordering `:return`s, so no need to add it.
+[design NOTE] Similar to QUEX a `=>` to simplify the case for `:token "escape" 0` ? but it makes the syntax more complex and not very consistent, plus not flexible for ordering `:return`s, so no need to add it.
 
 In actions, you can:
 
-ref capture group
+ref capture group text
 
-    $1 $2
+    :capture 1
+    :capture 2
 
 ref whole text
 
-    $0
+    :capture 0
 
 use or set values for var
 
@@ -286,16 +287,16 @@ This rule matches string `true`, and generates a token named `const-true`.
 Another example,
 
     /(alias)\ +(\w+)\ +/ {
-      :token "keyword-alias" $1
-      :token "alias-name" $2
+      :token "keyword.alias" 1 # set token name for the 1st group
+      :token "alias.name" 2    # set token name for the 2nd group
     }
 
-This rule generates 2 tokens: `keyword-alias` and `alias-name` with corresponding matching string (and matching positions), while ignoring the arbitrary lengthed spaces in between.
+This rule generates 2 tokens: `keyword.alias` and `alias.name` with corresponding matching string (and matching positions), while ignoring the arbitrary lengthed spaces in between.
 
 Token can be associated with a value (the third argument). Example parsing integer:
 
     /\d+/ {
-      :token "integer" $1 (:parse_int $1)
+      :token "integer" 1 (:parse_int 1)
     }
 
 ### On token naming
@@ -317,8 +318,8 @@ First usage is like `:token` action, but is used only for syntax highlighter. It
 For dynamic styling with CSS
 
     /\#\h+/ {
-      :style 'color' $0
-      :style 'background' (:contrast_color $0)
+      :style 'color' 0
+      :style 'background' (:contrast_color 0)
     }
 
 NOTE: under only very few conditions the `:style` action should be used. Many meaningless tokens are required in the AST for code re-formatting to work.
@@ -363,15 +364,15 @@ List building also accepts splats
 
 If a token is generated before `:call`, it belongs to the caller context, else it belongs to the callee context
 
-    :token "foo" $1 # belongs to the caller
+    :token "foo" 1 # belongs to the caller
     :call Bar
-    :token "bar" $2 # belongs to the callee
+    :token "bar" 2 # belongs to the callee
 
 Same in `:return`
 
-    :token "bar" $1 # belongs to the child
+    :token "bar" 1 # belongs to the child
     :return
-    :token "foo" $2 # belongs to the parent
+    :token "foo" 2 # belongs to the parent
 
 ## Helper Statements for Simple Tasks
 
@@ -381,11 +382,11 @@ error
 
 error with expectation
 
-    :expect "var-name" $2 # expect a "var-name" token in the location of $2, may also report the expected rule definition
+    :expect "var-name" 2 # expect a "var-name" token in the location of 2, may also report the expected rule definition
 
 compute the closing symbol for the arg
 
-    :closing $2
+    :closing 2
 
 you can use custom statements through api (todo)
 
@@ -426,14 +427,6 @@ When used as a library, it is extended to nabla and ST calling is changed to use
 Literals
 
     nil true false 123 -4
-
-Match references (when match is string, the reference is untyped token)
-
-    $1 $2 $-2
-
-Yield variable (parser action only)
-
-    $$
 
 Assignment
 
@@ -499,12 +492,12 @@ Define vars that are used in indents
 Set the var when we have indent
 
     /^ +/ {
-        if $0.size > $indent.size
+        if (:capture_size 0) > $indent.size
             :token 'indent'
-        else if $0.size < $indent.size
+        else if (:capture_size 0) < $indent.size
             :token 'dedent'
         end
-        $indent = $0
+        $indent = :capture 0
     }
 
 #### Way 2: `:call_block`
@@ -536,13 +529,21 @@ Now match-and-return becomes simple:
 
     lex Main = [
       begin { $here_delimiter_q = nil }
-      /<<(\w+)/ { $here_delimiter_q = [*$here_delimiter_q, $1], if !$here_delimiter, $here_delimiter = $1, end }
+      /<<(\w+)/ {
+        $here_delimiter_q = [*$here_delimiter_q, :capture 1]
+        if !$here_delimiter
+          $here_delimiter = :capture 1
+        end
+      }
       Heredoc
     ]
 
     lex Heredoc = [
       begin $here_delimiter { }
-      end $here_delimiter { $here_delimiter_q = :tail $here_delimiter_q, $here_delimiter = :head $here_delimiter_q }
+      end $here_delimiter {
+        $here_delimiter_q = :tail $here_delimiter_q
+        $here_delimiter = :head $here_delimiter_q
+      }
     ]
 
 This is not beautiful code, but way better than making one huge regexp with backref and putting all patterns inside it yet not being able to recognize all kinds of heredoc forms (see https://github.com/textmate/ruby.tmbundle/blob/master/Syntaxes/Ruby.plist#L1757-L2331).

@@ -30,7 +30,7 @@ It may help building a more strict syntax checker, for example, we know that aft
       } /\w+/ {
         :token "name"
       } /\ *(=)/ {
-        :token "op-eq" $1
+        :token "op.eq" 1
       }
     ]
 

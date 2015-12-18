@@ -30,10 +30,10 @@
 lex Main = [
   end /\z/ { :compile_spellbreak :parse }
 
-  /pattern\b/ { :token "kw.pattern" } /\ +(@\w+)/ { :token "name.pattern" $1 } /\ *=\ /
-  /var\b/ { :token "kw.var" } /\ +([a-z]\w*)/    { :token "name.var" $1 }
-  /lex\b/ { :token "kw.lex" } /\ +(\*?[A-Z]\w*)/ { :token "name.context" $1 } /\ *=\ / Lex
-  /peg\b/ { :token "kw.peg" } /\ +([A-Z]\w*)/    { :token "name.context" $1 } /\ *=\ / Peg
+  /pattern\b/ { :token "kw.pattern" } /\ +(@\w+)/ { :token "name.pattern" 1 } /\ *=\ /
+  /var\b/ { :token "kw.var" } /\ +([a-z]\w*)/    { :token "name.var" 1 }
+  /lex\b/ { :token "kw.lex" } /\ +(\*?[A-Z]\w*)/ { :token "name.context" 1 } /\ *=\ / Lex
+  /peg\b/ { :token "kw.peg" } /\ +([A-Z]\w*)/    { :token "name.context" 1 } /\ *=\ / Peg
   # TODO cfg, tag, ...
 
   String
@@ -143,28 +143,28 @@ lex Callback = [
   /if\b/     { :token "kw.if" }
   /else\n/   { :token "kw.else" }
   /end\b/    { :token "kw.end" }
-  /nil\b/    { :token "lit.nil" $0 nil }
-  /true\n/   { :token "lit.true" $0 true }
-  /false\n/  { :token "lit.const" $0 false }
+  /nil\b/    { :token "lit.nil" 0 nil }
+  /true\n/   { :token "lit.true" 0 true }
+  /false\n/  { :token "lit.const" 0 false }
   /var\b/    { :token "kw.var" }
-  /-?\d+/    { :token "lit.int" $0 :parse_int $0 }
+  /-?\d+/    { :token "lit.int" 0 :parse_int 0 }
   /[a-z]\w*/ { :token "name.var" }
 
   /&&|\|\|/         { :token "op.infix.logic" }
   />|<|>=|<=|==|!=/ { :token "op.infix.compare" }
   /\+|-|\^|&|\|/    { :token "op.infix.additive" }
   /\*\*|\*|\/|%|@/  { :token "op.infix.multitive" } # TODO ** should be separated for right-assoc
-  /(\[)\s*(\*)/ { :token "begin.list" $1, :token "op.prefix.splat" $2 }
+  /(\[)\s*(\*)/ { :token "begin.list" 1, :token "op.prefix.splat" 2 }
   "[" { :token "begin.list" }
   "]" { :token "end.list" }
   "(" { :token "begin.paren" }
   ")" { :token "end.paren" }
   "=" { :token "op.eq" }
   "!" { :token "op.prefix" }
-  /(,)\s*(\*)/ { :token "space.eol" $1, token "op.prefix.splat" $2 }
+  /(,)\s*(\*)/ { :token "space.eol" 1, token "op.prefix.splat" 2 }
   /[,\n]/ { :token "space.eol" }
 
-  /\#[^\n]*/   { :style "comment" $0 }
+  /\#[^\n]*/   { :style "comment" }
   /\ +(?=\=)/ { :token "space.pre-eq" }
   /\ +/ { }
 ]
@@ -218,12 +218,12 @@ lex String = [
   begin /"/ { var buf, buf = "", :token "begin.string" }
   end /"/ { :token "end.string", :yield buf }
 
-  /\\x(\h\h)/     { :token "char.hex",       buf = :concat_char buf :char_hex $1 }
-  /\\u\{(\h+)\}/  { :token "char.ux",        buf = :concat_char buf :char_hex $1 }
-  /\\u(\h\h\h\h)/ { :token "char.u4",        buf = :concat_char buf :char_hex $1 }
-  /\\([abftnr])/  { :token "char.escape.sp", buf = :concat_char buf :char_escape_sp $1 }
-  /\\([^\n])/     { :token "char.escape",    buf = :concat_char buf :char_no_escape $1 }
-  /./             { :token "char",           buf = :concat_char buf :char_no_escape $0 }
+  /\\x(\h\h)/     { :token "char.hex",       buf = :concat_char buf :char_hex 1 }
+  /\\u\{(\h+)\}/  { :token "char.ux",        buf = :concat_char buf :char_hex 1 }
+  /\\u(\h\h\h\h)/ { :token "char.u4",        buf = :concat_char buf :char_hex 1 }
+  /\\([abftnr])/  { :token "char.escape.sp", buf = :concat_char buf :char_escape_sp 1 }
+  /\\([^\n])/     { :token "char.escape",    buf = :concat_char buf :char_no_escape 1 }
+  /./             { :token "char",           buf = :concat_char buf :char_no_escape 0 }
 ]
 
 lex Regexp = [
@@ -250,13 +250,13 @@ lex Regexp = [
   /\(\?e:\w+(-\w+)?\)/ { :token "flag.encoding" }
 
   /(\()(\?:|\?=|\?!|\?<=|\?<!|\?>)?/ {
-    :token "begin.group" $1
-    :token "group.special" $2
+    :token "begin.group" 1
+    :token "group.special" 2
   }
   ")" { :token "end.group" }
 
   /\s+/ {} # only useful in pretty print
-  /[^\n\s]/ { :token "char" $0 :char_no_escape $0 }
+  /[^\n\s]/ { :token "char" 0 :char_no_escape 0 }
 ]
 
 peg Regexp = [
@@ -288,11 +288,11 @@ peg Regexp = [
 
 lex RegexpEscape = [
   begin "\\" { :token "char.escape" }
-  end /x(\h\h)/     { :token "char.escape", :yield :char_hex $1 }
-  end /u\{(\h+)\}/  { :token "char.escape", :yield :char_hex $1 }
-  end /u(\h\h\h\h)/ { :token "char.escape", :yield :char_hex $1 }
-  end /[abftnr]/    { :token "char.escape", :yield :char_escape_sp $0 }
-  end /[^\n]/       { :token "char.escape", :yield :char_no_escape $0 }
+  end /x(\h\h)/     { :token "char.escape", :yield :char_hex 1 }
+  end /u\{(\h+)\}/  { :token "char.escape", :yield :char_hex 1 }
+  end /u(\h\h\h\h)/ { :token "char.escape", :yield :char_hex 1 }
+  end /[abftnr]/    { :token "char.escape", :yield :char_escape_sp 0 }
+  end /[^\n]/       { :token "char.escape", :yield :char_no_escape 0 }
 ]
 
 lex *RegexpQuantifier = [
@@ -301,18 +301,18 @@ lex *RegexpQuantifier = [
   }
 
   /(\{) (\d+) (\}) ([\*\?]?)/ {
-    :token "begin.quantifier" $1
-    :token "quantifier.range.from" $2
-    :token "end.quantifier" $3
-    :token "quantifier.kind" $4
+    :token "begin.quantifier" 1
+    :token "quantifier.range.from" 2
+    :token "end.quantifier" 3
+    :token "quantifier.kind" 4
   }
 
   /(\{) (\d+) , (\d*) (\}) ([\*\?]?)/ {
-    :token "begin.quantifier" $1
-    :token "quantifier.range.from" $2
-    :token "quantifier.range.to" $3
-    :token "end.quantifier" $4
-    :token "quantifier.kind" $5
+    :token "begin.quantifier" 1
+    :token "quantifier.range.from" 2
+    :token "quantifier.range.to" 3
+    :token "end.quantifier" 4
+    :token "quantifier.kind" 5
   }
 ]
 
@@ -320,7 +320,7 @@ lex *Spaces = [
   /\ +(?=\{)/   { :token "space.pre-callback" }
   /\ +(?=\=)/   { :token "space.pre-eq" }
 
-  /\ *(\#[^\n]*)?(\n|\z)/ { :token "space.eol", :style "comment" $1 }
+  /\ *(\#[^\n]*)?(\n|\z)/ { :token "space.eol", :style "comment" 1 }
 
   /\ +/ { } # ignore
 ]
