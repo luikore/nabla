@@ -60,7 +60,7 @@ A default action is used, which rewrites the ST node name (with context and bran
 
 ### Building AST nodes in rule callbacks
 
-It can just take the value associated on the token (if no value associated, raises error)
+It can just take the value associated on the token. By default the associated value is a string literal, but you can customize it by setting value in `:token` call in lexer.
 
     some.token { $1 }
 

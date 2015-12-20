@@ -20,7 +20,8 @@ end
 Token = Struct.new :type, :s
 class Token
   def eval
-    "TOKEN(#{type.inspect}, #{s.inspect})"
+    # "TOKEN(#{type.inspect}, #{s.inspect}, VAL_NIL)"
+    "STR(#{s.inspect})"
   end
 
   def to_s

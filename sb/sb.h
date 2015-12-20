@@ -1,67 +1,60 @@
 #pragma once
 
-#include "node.h"
+#include <adt/token.h>
+#include <adt/struct.h>
 #include <adt/string.h>
+#include <adt/cons.h>
+#include <adt/utils/mut-array.h>
 
-// represent a language
+// klass data
+// definition of a language
+// NOTE:
+//   actions are defined as instance methods
+//   nodes are defined as structs inside the klass
 typedef struct {
-  // intermediate data, clear after parse
-  int64_t success;  // whether parse is success (TODO extend it for more error types)
-  Val patterns_dict; // {"name": box(regexp*)}
-  Val actions_dict;  // {"fname/arity": box(function_pointer*)}
-  Val vars_dict;     // {"context:name": true}
-
   // for initializing Ctx
-  Val lex_dict; // {name: box(lexer*)}, copied when initializing
-  Val peg_dict; // {name: box(parser*)}, copied when initializing
+  Val lex_dict; // perm {name: lexer*}
+  Val peg_dict; // perm {name: parser*}
+
+  // intermediate data, cleared after constructed
+  int64_t success;   // whether parse is success (TODO extend it for more error types)
+  Val patterns_dict; // {"name": regexp_node}
+  Val vars_dict;     // {"context:name": true}
+} SpellbreakMData;
+
+MUT_ARRAY_DECL(Vals, Val);
+MUT_ARRAY_DECL(ContextStack, int32_t);
+MUT_ARRAY_DECL(CurrStack, const char*);
+
+// instance data
+// to make online-parser efficient, spellbreak should be able to be easily copied
+// assume each instance consumes 200 bytes, 1k save points takes about ~200k memory, which is sufficient for in-screen
+typedef struct {
+  ValHeader h;
+  const char* s; // src init pointer
+  int64_t size;  // src size
+  const char* curr; // curr src
+
+  int32_t captures[20]; // begin: i*2, end: i*2+1
+  void* arena;
+  Val lex_dict; // {name: lexer*}, from mdata
+  Val peg_dict; // {name: parser*}, from mdata
+
+  struct ContextStack context_stack;
+  struct CurrStack curr_stack;
+  struct Vals token_stream;
+  struct Vals vars; // for all globals and locals
 } Spellbreak;
 
-// the structure of token stream:
-//   [e1, e2, e3, ...]
-// memoize table:
-//   array of tok_stream_size * rule_size
-// parser checking types:
-//   if type is token or context, check the entry in token stream
-//   else check memoize table (uint32_t for each slot)
-//   else parse
-typedef struct {
-  int32_t token;
-  int32_t pos;
-  int32_t size;
-  int32_t line;
-  Val v; // VAL_UNDEF when not containing value
-         // NOTE no need to save a little bit space for token stream, the memoize table takes much more
-} TokenStreamEntry;
+#define CAPTURE_BEGIN(c, i) (c)->captures[(i) * 2]
+#define CAPTURE_END(c, i) (c)->captures[(i) * 2 + 1]
 
-// running Ctx
-typedef struct {
-  const char* s;
-  size_t pos;
-  size_t size;
+// returns the spellbreak syntax klass
+uint32_t sb_init_module(void);
 
-  void* arena;
-  Val lex_dict; // {name: box(lexer*)}, copied when initializing
-  Val peg_dict; // {name: box(parser*)}, copied when initializing
+// returns syntax klass by generating from node
+uint32_t sb_new_syntax(uint32_t name_str);
 
-  Val captures[10];
-  Val context_stack;
-  Val context_start_pos_stack;
+void sb_syntax_gen(uint32_t klass, Val node);
 
-  TokenStreamEntry* token_stream;
-  size_t token_stream_size;
-  size_t token_stream_cap;
-
-  Val vars[]; // vars array for all globals and locals
-} Ctx;
-
-Spellbreak* nb_spellbreak_new(void);
-
-void* nb_spellbreak_find_action(Spellbreak* sb, char* name, int32_t name_size, int8_t arity);
-
-void nb_spellbreak_delete(Spellbreak* sb);
-
-// return boot strap ast
-Val nb_spellbreak_bootstrap();
-
-// returns pointer of spellbreak, not boxed
-Spellbreak* nb_spellbreak_compile_main(void* arena, Val main_node);
+Spellbreak* sb_new(uint32_t syntax_klass, const char* src, int64_t size);

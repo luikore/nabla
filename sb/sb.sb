@@ -28,7 +28,7 @@
 # a second :token action using the same object, will duplicate it
 
 lex Main = [
-  end /\z/ { :compile_spellbreak :parse }
+  end /\z/ { :parse }
 
   /pattern\b/ { :token "kw.pattern" } /\ +(@\w+)/ { :token "name.pattern" 1 } /\ *=\ /
   /var\b/ { :token "kw.var" } /\ +([a-z]\w*)/    { :token "name.var" 1 }

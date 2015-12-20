@@ -5,10 +5,10 @@
 // XXX sizeof((Val[]){__VA_ARGS__}) can explode clang's memory
 #define NODE(type, argc, ...) nb_struct_new(klass_find(STR(#type), namespace), argc, (Val[]){__VA_ARGS__})
 
-#define TOKEN(type_name, content) nb_token_new_c(STR(type_name), content)
+// #define TOKEN(type_name, content, val) nb_token_new_c(STR(type_name), content, val)
 
 #define LIST(...) nb_cons_list(sizeof((Val[]){__VA_ARGS__}) / sizeof(Val), (Val[]){__VA_ARGS__})
 
-Val nb_spellbreak_bootstrap(Ctx* ctx, uint32_t namespace) {
+Val nb_spellbreak_bootstrap(Spellbreak* ctx, uint32_t namespace) {
 # include "bootstrap.inc"
 }
