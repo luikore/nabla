@@ -9,6 +9,6 @@
 
 #define LIST(...) nb_cons_list(sizeof((Val[]){__VA_ARGS__}) / sizeof(Val), (Val[]){__VA_ARGS__})
 
-Val nb_spellbreak_bootstrap(Spellbreak* ctx, uint32_t namespace) {
+Val sb_bootstrap_ast(void* arena, uint32_t namespace) {
 # include "bootstrap.inc"
 }

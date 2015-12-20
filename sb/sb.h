@@ -15,11 +15,7 @@ typedef struct {
   // for initializing Ctx
   Val lex_dict; // perm {name: lexer*}
   Val peg_dict; // perm {name: parser*}
-
-  // intermediate data, cleared after constructed
-  int64_t success;   // whether parse is success (TODO extend it for more error types)
-  Val patterns_dict; // {"name": regexp_node}
-  Val vars_dict;     // {"context:name": true}
+  bool compiled;
 } SpellbreakMData;
 
 MUT_ARRAY_DECL(Vals, Val);
@@ -49,12 +45,44 @@ typedef struct {
 #define CAPTURE_BEGIN(c, i) (c)->captures[(i) * 2]
 #define CAPTURE_END(c, i) (c)->captures[(i) * 2 + 1]
 
+Val sb_bootstrap_ast(void* arena, uint32_t namespace);
+
 // returns the spellbreak syntax klass
 uint32_t sb_init_module(void);
 
 // returns syntax klass by generating from node
 uint32_t sb_new_syntax(uint32_t name_str);
 
-void sb_syntax_gen(uint32_t klass, Val node);
+// read *.sb call-seq:
+//   klass = sb_new_syntax(...);
+//   ... define additional actions on it
+//   sb = sb_new_sb();
+//   ast = sb_parse(sb, src, size);
+//   sb_syntax_compile(sb->arena, src, size, klass);
+//   val_free(sb);
+void sb_syntax_compile(void* arena, Val ast, uint32_t target_klass);
 
-Spellbreak* sb_new(uint32_t syntax_klass, const char* src, int64_t size);
+// NOTE separated for online-parsing
+Spellbreak* sb_new(uint32_t klass);
+
+Spellbreak* sb_new_sb();
+
+// parse call-seq:
+//   sb = sb_new(klass);
+//   ast = sb_parse(klass, src, size);
+Val sb_parse(Spellbreak* sb, const char* src, int64_t size);
+
+#pragma mark ### compile functions
+
+typedef struct {
+  Val lex_dict;
+  Val peg_dict;
+
+  void* arena;
+  // intermediate data, cleared after constructed
+  int64_t success;   // whether parse is success (TODO extend it for more error types)
+  Val patterns_dict; // {"name": regexp_node}
+  Val vars_dict;     // {"context:name": true}
+} CompileCtx;
+
+void sb_compile_main(CompileCtx* ctx, Val ast);

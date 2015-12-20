@@ -111,7 +111,7 @@ static Val concat_char(Spellbreak* ctx, Val left_s, Val right_c) {
   return res_s;
 }
 
-// pop current tokens and invoke parser
+// pop current tokens and invoke parser defined in peg_dict
 static Val parse(Spellbreak* ctx) {
   // todo
   return VAL_NIL;
@@ -195,16 +195,18 @@ uint32_t sb_init_module(void) {
   METHOD(spellbreak_klass, concat_char, 2);
   METHOD(spellbreak_klass, parse_int, 1);
 
+  void* arena = val_arena_new();
+  Val ast = sb_bootstrap_ast(arena, spellbreak_klass);
+  sb_syntax_compile(arena, spellbreak_klass, ast);
+  val_arena_delete(arena);
+
   return spellbreak_klass;
 }
 
 uint32_t sb_new_syntax(uint32_t name_str) {
   uint32_t klass = klass_ensure(name_str, klass_ensure(STR("Lang"), 0));
   SpellbreakMData* mdata = malloc(sizeof(SpellbreakMData));
-  mdata->patterns_dict = nb_dict_new();
-  mdata->vars_dict = nb_dict_new();
-  mdata->lex_dict = nb_dict_new();
-  mdata->peg_dict = nb_dict_new();
+  mdata->compiled = false;
   klass_set_data(klass, mdata);
   klass_set_destruct_func(klass, _sb_destruct);
 
@@ -221,13 +223,14 @@ uint32_t sb_new_syntax(uint32_t name_str) {
 #undef METHOD2
 #undef METHOD
 
-Spellbreak* sb_new(uint32_t syntax_klass, const char* src, int64_t size) {
+Spellbreak* sb_new(uint32_t syntax_klass) {
   SpellbreakMData* mdata = klass_get_data(syntax_klass);
 
-  Spellbreak* s = val_alloc(spellbreak_klass, sizeof(Spellbreak));
-  s->curr = s->s = src;
-  s->size = size;
-  s->arena = val_arena_new();
+  if (!mdata->compiled) {
+    val_throw(STR("klass not compiled"));
+  }
+
+  Spellbreak* s = val_alloc(syntax_klass, sizeof(Spellbreak));
 
   s->lex_dict = mdata->lex_dict;
   s->peg_dict = mdata->peg_dict;
@@ -238,4 +241,51 @@ Spellbreak* sb_new(uint32_t syntax_klass, const char* src, int64_t size) {
   Vals.init(&s->vars, 0);
 
   return s;
+}
+
+Spellbreak* sb_new_sb() {
+  return sb_new(spellbreak_klass);
+}
+
+Val sb_parse(Spellbreak* s, const char* src, int64_t size) {
+  s->curr = s->s = src;
+  s->size = size;
+  s->arena = val_arena_new();
+
+  Val lexer;
+  if (!nb_dict_find(s->lex_dict, "Main", strlen("Main"), &lexer)) {
+    val_throw(STR("can't find main lex"));
+  }
+  Val err = VAL_UNDEF;
+  Val ast = sb_lex_exec(s, lexer, &err);
+  if (err == VAL_UNDEF) {
+    val_throw(STR("parse error"));
+  }
+  return ast;
+}
+
+void sb_syntax_compile(void* arena, Val ast, uint32_t target_klass) {
+  CompileCtx ctx = {
+    .success = false,
+    .lex_dict = nb_dict_new(),
+    .peg_dict = nb_dict_new(),
+    .patterns_dict = nb_dict_new(),
+    .vars_dict = nb_dict_new()
+  };
+  sb_compile_main(&ctx, ast);
+
+  if (!ctx.success) {
+    RELEASE(ctx.lex_dict);
+    RELEASE(ctx.peg_dict);
+    RELEASE(ctx.patterns_dict);
+    RELEASE(ctx.vars_dict);
+    val_throw(STR("compile failed"));
+  }
+
+  SpellbreakMData* mdata = klass_get_data(target_klass);
+  mdata->lex_dict = ctx.lex_dict;
+  mdata->peg_dict = ctx.peg_dict;
+  mdata->compiled = true;
+  RELEASE(ctx.patterns_dict);
+  RELEASE(ctx.vars_dict);
 }
