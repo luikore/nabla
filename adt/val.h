@@ -253,6 +253,10 @@ Val klass_val(uint32_t klass_id);
 
 Val klass_name(uint32_t klass_id);
 
+// to avoid extension methods segfault
+// klass with unsafe methods should be tagged to avoid being included
+void klass_set_unsafe(uint32_t klass_id);
+
 // assoc data to klass
 void klass_set_data(uint32_t klass_id, void* data);
 void* klass_get_data(uint32_t klass_id);

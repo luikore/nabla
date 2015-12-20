@@ -244,6 +244,11 @@ Val klass_name(uint32_t klass_id) {
   return klass->name;
 }
 
+void klass_set_unsafe(uint32_t klass_id) {
+  Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
+  KLASS_IS_UNSAFE(klass) = true;
+}
+
 void klass_set_data(uint32_t klass_id, void* data) {
   Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
   klass->data = data;
@@ -299,6 +304,11 @@ void klass_def_method2(uint32_t klass_id, uint32_t method_id, int32_t min_argc, 
 
 void klass_include(uint32_t klass_id, uint32_t included_id) {
   Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
+  Klass* included_klass = *Klasses.at(&runtime.klasses, included_id);
+  if (KLASS_IS_UNSAFE(included_klass)) {
+    val_throw(nb_string_new_literal_c("can not include unsafe klass!"));
+  }
+
   int size = Includes.size(&klass->includes);
   for (int i = size - 1; i >= 0; i--) {
     if (included_id == *Includes.at(&klass->includes, i)) {

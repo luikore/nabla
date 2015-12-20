@@ -69,7 +69,7 @@ MUT_ARRAY_DECL(Fields, NbStructField);
 
 // class metadata
 typedef struct {
-  ValHeader h; // user1: is_struct
+  ValHeader h; // user1: is_struct, user2: is_unsafe
   uint32_t id; // index in runtime.klasses
   uint32_t parent_id; // parent namespace, 0 if no parent
   Val name;
@@ -89,3 +89,4 @@ typedef struct {
 } Klass;
 
 #define KLASS_IS_STRUCT(k) (k)->h.user1
+#define KLASS_IS_UNSAFE(k) (k)->h.user2
