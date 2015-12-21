@@ -9,7 +9,7 @@ struct DepNodeStruct {
   DepNode* next;
 };
 
-MUT_MAP_DECL(ContextMap, Val, Val, val_hash, nb_string_eql);
+MUT_MAP_DECL(ContextMap, Val, Val, val_hash, val_eq);
 
 // true: removed, false: not found
 static bool _pop_zero_deg_node(DepNode** list, int size, Val* res) {
@@ -34,22 +34,22 @@ static void _expand_lex_def(void* arena, struct ContextMap* context_map, Val nam
 
   for (; curr != VAL_NIL; curr = TAIL(curr)) {
     if (IS_A(HEAD(curr), "RefPartialContext")) {
-      Val tok = AT(HEAD(curr), 0);
+      Val ref_name = AT(HEAD(curr), 0);
       Val child_nodes;
-      bool found = ContextMap.find(context_map, nb_token_node_to_s_literal(tok), &child_nodes);
+      bool found = ContextMap.find(context_map, ref_name, &child_nodes);
       if (!found) {
-        COMPILE_ERROR("partial context not found: %.*s", LOC(tok).size, LOC(tok).s);
+        COMPILE_ERROR("partial context not found: %.*s", (int)nb_string_byte_size(ref_name), nb_string_ptr(ref_name));
       }
       for (Val child_curr = child_nodes; child_curr != VAL_NIL; child_curr = TAIL(child_curr)) {
         if (child_curr != VAL_NIL) {
-          res = nb_cons_node_new(arena, child_curr, res);
+          res = nb_cons_anew(arena, child_curr, res);
         }
       }
     }
   }
 
   // yes it allocs more, but necessary to keep the order consistent
-  ContextMap.insert(context_map, name, nb_cons_node_reverse(arena, res));
+  ContextMap.insert(context_map, name, nb_cons_areverse(arena, res));
 }
 
 static void _remove_edges(DepNode** dep_network, int size, Val name) {
@@ -58,7 +58,7 @@ static void _remove_edges(DepNode** dep_network, int size, Val name) {
     DepNode* prev = node;
     DepNode* tail = node->next;
     while (tail) {
-      if (nb_string_eql(name, tail->ctx_name)) {
+      if (val_eq(name, tail->ctx_name)) {
         prev->next = tail->next;
         tail = prev->next;
       } else {
@@ -87,11 +87,11 @@ static DepNode* _dep_node_new(Arena* node_arena) {
   return node;
 }
 
-// TODO integrate with external language definition
 // topological sort lex contexts, and inline all refs
-void nb_spellbreak_inline_partial_references(void* arena, Val main_node) {
+// TODO integrate with external language definition
+void sb_inline_partial_references(CompileCtx* ctx) {
   // build partial node map and dep graph
-  Val ins_list = AT(main_node, 0);
+  Val ins_list = AT(ctx->ast, 0);
 
   // node map for query
   struct ContextMap context_map;
@@ -99,8 +99,8 @@ void nb_spellbreak_inline_partial_references(void* arena, Val main_node) {
   size_t size = 0;
   for (Val curr_ins = ins_list; curr_ins != VAL_NIL; curr_ins = TAIL(curr_ins)) {
     Val child = HEAD(curr_ins);
-    if (IS_A(child, "Lex")) {
-      Val name = nb_token_node_to_s_literal(AT(child, 0));
+    if (IS_A(child, "Lex")) { // Lex[context, rules]
+      Val name = AT(child, 0);
       // todo error for duplicated lex name
       ContextMap.insert(&context_map, name, AT(child, 1));
       size++;
@@ -122,10 +122,10 @@ void nb_spellbreak_inline_partial_references(void* arena, Val main_node) {
     Val rule_body = it.slot->v;
     for (Val rule_cons = rule_body; rule_cons != VAL_NIL; rule_cons = TAIL(rule_cons)) {
       Val rule = HEAD(rule_cons);
-      if (IS_A(rule, "RefPartialContext")) {
+      if (IS_A(rule, "RefPartialContext")) { // RefPartialContext[context]
         tail->next = _dep_node_new(node_arena);
         tail = tail->next;
-        tail->ctx_name = nb_token_node_to_s_literal(AT(rule, 0));
+        tail->ctx_name = AT(rule, 0);
       }
     }
     dep_network_size++;
@@ -138,7 +138,7 @@ void nb_spellbreak_inline_partial_references(void* arena, Val main_node) {
       dep_network_size--;
       // _print_network(dep_network, dep_network_size);
       _remove_edges(dep_network, dep_network_size, name);
-      _expand_lex_def(arena, &context_map, name);
+      _expand_lex_def(ctx->arena, &context_map, name);
     } else {
       log_err("loop dependency found:");
       _print_network(dep_network, dep_network_size);
@@ -152,18 +152,19 @@ void nb_spellbreak_inline_partial_references(void* arena, Val main_node) {
   Val res = VAL_NIL;
   for (Val curr_ins = ins_list; curr_ins != VAL_NIL; curr_ins = TAIL(curr_ins)) {
     Val child = HEAD(curr_ins);
-    if (IS_A(child, "Lex")) {
-      Val name = nb_token_node_to_s_literal(AT(child, 0));
+    if (IS_A(child, "Lex")) { // Lex[context, rules]
+      Val name = AT(child, 0);
       if (nb_string_ptr(name)[0] != '*') {
         Val converted;
         ContextMap.find(&context_map, name, &converted);
-        res = nb_cons_node_new(arena, child, res);
+        res = nb_cons_anew(ctx->arena, child, res);
       }
     } else {
-      res = nb_cons_node_new(arena, child, res);
+      res = nb_cons_anew(ctx->arena, child, res);
     }
   }
-  AT(main_node, 0) = res;
+
+  REPLACE(ctx->ast, nb_struct_set(ctx->ast, 0, res));
 
   ContextMap.cleanup(&context_map);
   arena_delete(node_arena);

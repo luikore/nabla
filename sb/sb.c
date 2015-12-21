@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <adt/utils/dbg.h>
 #include <adt/dict.h>
-#include <adt/box.h>
 
 static uint32_t _hex_to_uint(char c) {
   if (c >= '0' && c <= '9') {
@@ -111,9 +110,25 @@ static Val concat_char(Spellbreak* ctx, Val left_s, Val right_c) {
   return res_s;
 }
 
-// pop current tokens and invoke parser defined in peg_dict
+// invoke parser defined in peg_dict, set result in context_stack
+// NOTE ending current context is managed in lex vm
 static Val parse(Spellbreak* ctx) {
-  // todo
+  size_t context_stack_size = ContextStack.size(&ctx->context_stack);
+  assert(context_stack_size);
+  ContextEntry* ce = ContextStack.at(&ctx->context_stack, context_stack_size);
+  Val s = VAL_FROM_STR(ce->name_str);
+  int token_pos = ce->token_pos;
+
+  Val parser;
+  if (!nb_dict_find(ctx->peg_dict, nb_string_ptr(s), nb_string_byte_size(s), &parser)) {
+    val_throw(nb_string_new_literal_c("bad context name str"));
+  }
+  Val err;
+  Val val = sb_peg_exec(ctx, (void*)parser, token_pos, &err);
+  if (err != VAL_UNDEF) {
+    val_throw(err);
+  }
+
   return VAL_NIL;
 }
 
@@ -132,6 +147,7 @@ static Val parse_int(Spellbreak* ctx, Val capture_i) {
 }
 
 static Val style(Spellbreak* ctx, int32_t argc, Val* argv) {
+  // todo
   return VAL_NIL;
 }
 
@@ -139,22 +155,19 @@ static Val token(Spellbreak* ctx, int32_t argc, Val* argv) {
   Val name = argv[0];
   int group = ((argc > 1) ? VAL_FROM_INT(argv[1]) : 0);
   Val val = (argc == 3 ? argv[2] : VAL_UNDEF);
-  // set registers
 
-  NbTokenLoc loc = {
-    .s = ctx->curr + CAPTURE_BEGIN(ctx, group),
-    .size = CAPTURE_END(ctx, group) - CAPTURE_BEGIN(ctx, group),
+  Token tok = {
     .pos = ctx->curr - ctx->s,
+    .size = CAPTURE_END(ctx, group) - CAPTURE_BEGIN(ctx, group),
     .v = val
   };
-  Val tok = nb_token_anew(ctx->arena, name, loc);
+  TokenStream.push(&ctx->token_stream, tok);
 
-  Vals.push(&ctx->token_stream, tok);
   return VAL_NIL;
 }
 
 static Val yield(Spellbreak* ctx, Val obj) {
-  // TODO
+  
   return VAL_NIL;
 }
 
@@ -236,8 +249,7 @@ Spellbreak* sb_new(uint32_t syntax_klass) {
   s->peg_dict = mdata->peg_dict;
 
   ContextStack.init(&s->context_stack, 0);
-  CurrStack.init(&s->curr_stack, 0);
-  Vals.init(&s->token_stream, 0);
+  TokenStream.init(&s->token_stream, 0);
   Vals.init(&s->vars, 0);
 
   return s;
@@ -257,6 +269,12 @@ Val sb_parse(Spellbreak* s, const char* src, int64_t size) {
     val_throw(STR("can't find main lex"));
   }
   Val err = VAL_UNDEF;
+  ContextEntry ce = {
+    .name_str = val_strlit_new_c("Main"),
+    .token_pos = TokenStream.size(&s->token_stream),
+    .curr = s->curr
+  };
+  ContextStack.push(&s->context_stack, ce);
   Val ast = sb_lex_exec(s, lexer, &err);
   if (err == VAL_UNDEF) {
     val_throw(STR("parse error"));
@@ -270,9 +288,11 @@ void sb_syntax_compile(void* arena, Val ast, uint32_t target_klass) {
     .lex_dict = nb_dict_new(),
     .peg_dict = nb_dict_new(),
     .patterns_dict = nb_dict_new(),
-    .vars_dict = nb_dict_new()
+    .vars_dict = nb_dict_new(),
+    .arena = arena,
+    .ast = ast
   };
-  sb_compile_main(&ctx, ast);
+  sb_compile_main(&ctx);
 
   if (!ctx.success) {
     RELEASE(ctx.lex_dict);

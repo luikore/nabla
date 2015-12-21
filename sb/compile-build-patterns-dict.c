@@ -2,7 +2,7 @@
 #include <adt/dict.h>
 
 // build patterns map, not checking loop dependency, because only regexp knows the AST structure
-void nb_spellbreak_build_patterns_map(void* arena, Val main_node, Spellbreak* spellbreak) {
+void sb_build_patterns_map(CompileCtx* ctx, Val main_node) {
   Val lines = AT(main_node, 0);
 
   for(; lines != VAL_NIL; lines = TAIL(lines)) {
@@ -11,9 +11,9 @@ void nb_spellbreak_build_patterns_map(void* arena, Val main_node, Spellbreak* sp
       continue;
     }
     if (IS_A(e, "PatternIns")) {
-      Val name_tok = AT(e, 0);
+      Val name = AT(e, 0);
       Val pattern = AT(e, 1);
-      REPLACE(spellbreak->patterns_dict, nb_dict_insert(spellbreak->patterns_dict, name_tok->loc.s, name_tok->loc.size, pattern));
+      REPLACE(ctx->patterns_dict, nb_dict_insert(ctx->patterns_dict, nb_string_ptr(name), nb_string_byte_size(name), pattern));
     }
   }
 }

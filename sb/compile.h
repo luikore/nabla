@@ -2,12 +2,8 @@
 
 // functions that are only used in compile
 
-#include "spellbreak.h"
+#include "sb.h"
 #include <adt/dict.h>
-
-void nb_spellbreak_inline_partial_references(void* arena, Val main_node);
-
-void nb_spellbreak_build_patterns_map(void* arena, Val main_node, Spellbreak* spellbreak);
 
 struct VmLexStruct;
 struct VmPegStruct;
@@ -19,16 +15,16 @@ typedef struct VmPegStruct VmPeg;
 typedef struct VmCallbackStruct VmCallback;
 typedef struct VmRegexpStruct VmRegexp;
 
-VmLex* nb_vm_lex_compile(void* arena, Val node, Spellbreak* spellbreak);
-VmPeg* nb_vm_peg_compile(void* arena, Val node, Spellbreak* spellbreak);
-VmCallback* nb_vm_callback_compile(void* arena, Val node, Spellbreak* spellbreak, Val lex_name);
-VmRegexp* nb_vm_regexp_compile(void* arena, Val node, Spellbreak* spellbreak);
-VmRegexp* nb_vm_regexp_from_string(Val node);
+VmLex* sb_vm_lex_compile(void* arena, Val node, Spellbreak* spellbreak);
+VmPeg* sb_vm_peg_compile(void* arena, Val node, Spellbreak* spellbreak);
+VmCallback* sb_vm_callback_compile(void* arena, Val node, Spellbreak* spellbreak, Val lex_name);
+VmRegexp* sb_vm_regexp_compile(void* arena, Val node, Spellbreak* spellbreak);
+VmRegexp* sb_vm_regexp_from_string(Val node);
 
-int64_t nb_vm_lex_exec(VmLex* lex, Ctx* ctx);
-int64_t nb_vm_peg_exec(VmPeg* peg, Ctx* ctx);
-int64_t nb_vm_callback_exec(VmCallback* callback, Ctx* ctx);
-int64_t nb_vm_regexp_exec(VmRegexp* regexp, Ctx* ctx);
+int64_t sb_vm_lex_exec(VmLex* lex, Spellbreak* ctx);
+int64_t sb_vm_peg_exec(VmPeg* peg, Spellbreak* ctx);
+int64_t sb_vm_callback_exec(VmCallback* callback, Spellbreak* ctx);
+int64_t sb_vm_regexp_exec(VmRegexp* regexp, Spellbreak* ctx);
 
 #pragma mark ## some helper macros for compiling
 
@@ -38,7 +34,7 @@ int64_t nb_vm_regexp_exec(VmRegexp* regexp, Ctx* ctx);
 
 #define AT(node, i) nb_struct_get(node, i)
 
-#define IS_A(node, ty) (!VAL_IS_IMM(node) && nb_syntax_node_is((node), (ty)))
+#define IS_A(node, ty) (klass_name(VAL_KLASS(node)) == S(ty))
 
 #define TAIL(node) nb_cons_tail(node)
 

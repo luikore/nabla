@@ -2,16 +2,13 @@
 
 #include "compile.h"
 #include <stdlib.h>
-#include <adt/box.h>
-
-#define ERROR(info) // todo
 
 static void _compile_pattern_ins(void* arena, Val e, Spellbreak* spellbreak) {
   Val name = AT(e, 0);
   Val pattern = AT(e, 1);
   Val res;
-  if (IS_A(pattern, "Regexp") || IS_WRAPPER(pattern)) {
-    res = nb_node_to_val(pattern);
+  if (IS_A(pattern, "Regexp") || IS_A(pattern, "String")) {
+    res = pattern;
   } else {
     ERROR("expect regexp or string");
   }
@@ -22,11 +19,9 @@ static void _compile_pattern_ins(void* arena, Val e, Spellbreak* spellbreak) {
 #pragma mark ## exposed interfaces
 
 // returns pointer, not boxed
-Spellbreak* nb_spellbreak_compile_main(void* arena, Val node) {
-  Spellbreak* spellbreak = nb_spellbreak_new();
-
-  nb_spellbreak_inline_partial_references(arena, node);
-  nb_spellbreak_build_patterns_map(arena, node, spellbreak);
+void sb_compile_main(CompileCtx* ctx, Val node) {
+  sb_inline_partial_references(ctx->arena, node);
+  sb_build_patterns_map(ctx, node);
 
   for (Val lines = AT(node, 0); lines != VAL_NIL; lines = TAIL(lines)) {
     Val e = HEAD(lines);
@@ -50,13 +45,13 @@ Spellbreak* nb_spellbreak_compile_main(void* arena, Val node) {
     if (IS_A(e, "Lex")) {
       Val name_tok = AT(e, 0);
       // printf("lex: %.*s\n", nb_token_loc(name_tok)->size, nb_token_loc(name_tok)->s);
-      VmLex* vm_lex = nb_vm_lex_compile(arena, AT(e, 1), spellbreak);
+      VmLex* vm_lex = sb_vm_lex_compile(arena, AT(e, 1), spellbreak);
       Val lex = nb_box_new((uint64_t)vm_lex);
       REPLACE(spellbreak->lex_dict, nb_dict_insert(spellbreak->lex_dict, nb_token_loc(name_tok)->s, nb_token_loc(name_tok)->size, lex));
     } else if (IS_A(e, "Peg")) {
       Val name_tok = AT(e, 0);
       // printf("peg: %.*s\n", nb_token_loc(name_tok)->size, nb_token_loc(name_tok)->s);
-      VmPeg* vm_peg = nb_vm_peg_compile(arena, AT(e, 1), spellbreak);
+      VmPeg* vm_peg = sb_vm_peg_compile(arena, AT(e, 1), spellbreak);
       Val peg = nb_box_new((uint64_t)vm_peg);
       REPLACE(spellbreak->peg_dict, nb_dict_insert(spellbreak->peg_dict, nb_token_loc(name_tok)->s, nb_token_loc(name_tok)->size, peg));
     }

@@ -18,9 +18,21 @@ typedef struct {
   bool compiled;
 } SpellbreakMData;
 
+typedef struct {
+  int32_t pos, size, line, col;
+  Val v; // VAL_UNDEF when no associated
+} Token;
+
+typedef struct {
+  uint32_t name_str;
+  int32_t token_pos; // start index of token stream
+  const char* curr;  // start src ptr
+  Val result;        // from yield or parse
+} ContextEntry;
+
+MUT_ARRAY_DECL(TokenStream, Token);
+MUT_ARRAY_DECL(ContextStack, ContextEntry);
 MUT_ARRAY_DECL(Vals, Val);
-MUT_ARRAY_DECL(ContextStack, int32_t);
-MUT_ARRAY_DECL(CurrStack, const char*);
 
 // instance data
 // to make online-parser efficient, spellbreak should be able to be easily copied
@@ -31,14 +43,14 @@ typedef struct {
   int64_t size;  // src size
   const char* curr; // curr src
 
-  int32_t captures[20]; // begin: i*2, end: i*2+1
   void* arena;
+  int32_t captures[20]; // begin: i*2, end: i*2+1
+  struct TokenStream token_stream; // not copied
+
   Val lex_dict; // {name: lexer*}, from mdata
   Val peg_dict; // {name: parser*}, from mdata
 
   struct ContextStack context_stack;
-  struct CurrStack curr_stack;
-  struct Vals token_stream;
   struct Vals vars; // for all globals and locals
 } Spellbreak;
 
@@ -75,6 +87,8 @@ Val sb_parse(Spellbreak* sb, const char* src, int64_t size);
 #pragma mark ### compile functions
 
 typedef struct {
+  Val ast; // we may transform ast
+
   Val lex_dict;
   Val peg_dict;
 
@@ -85,4 +99,8 @@ typedef struct {
   Val vars_dict;     // {"context:name": true}
 } CompileCtx;
 
-void sb_compile_main(CompileCtx* ctx, Val ast);
+void sb_inline_partial_references(CompileCtx* ctx);
+
+void sb_build_patterns_map(CompileCtx* ctx);
+
+void sb_compile_main(CompileCtx* ctx);
