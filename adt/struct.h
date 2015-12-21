@@ -16,5 +16,7 @@ int32_t nb_struct_field_i(uint32_t klass_id, uint32_t field_id);
 
 Val nb_struct_get(Val st, uint32_t i);
 Val nb_struct_set(Val st, uint32_t i, Val field_value);
+Val nb_struct_aset(void* arena, Val vst, uint32_t i, Val field_value);
+
 // mutable set field
 void nb_struct_mset(Val st, uint32_t i, Val field_value);

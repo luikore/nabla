@@ -72,9 +72,24 @@ Val nb_struct_get(Val st, uint32_t i) {
   return ((Struct*)st)->fields[i];
 }
 
-Val nb_struct_set(Val st, uint32_t i, Val field_value) {
-  // todo
-  return st;
+Val nb_struct_set(Val vst, uint32_t i, Val field_value) {
+  Struct* st = (Struct*)vst;
+  uint32_t klass_id = st->h.klass;
+  Klass* k = (Klass*)klass_val(klass_id);
+  int argc = Fields.size(&k->fields);
+  Struct* new_st = (Struct*)nb_struct_new(klass_id, argc, st->fields);
+  REPLACE(new_st->fields[i], field_value);
+  return (Val)new_st;
+}
+
+Val nb_struct_aset(void* arena, Val vst, uint32_t i, Val field_value) {
+  Struct* st = (Struct*)vst;
+  uint32_t klass_id = st->h.klass;
+  Klass* k = (Klass*)klass_val(klass_id);
+  int argc = Fields.size(&k->fields);
+  Struct* new_st = (Struct*)nb_struct_anew(arena, klass_id, argc, st->fields);
+  REPLACE(new_st->fields[i], field_value);
+  return (Val)new_st;
 }
 
 // mutable set field

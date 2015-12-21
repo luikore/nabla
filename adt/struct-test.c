@@ -47,6 +47,22 @@ void struct_suite() {
     val_end_check_memory();
   }
 
+  ccut_test("set field") {
+    val_begin_check_memory();
+
+    uint32_t klass_id = klass_find(nb_string_new_literal_c("Foo"), 0);
+    Val attrs[] = {VAL_TRUE, VAL_FALSE, VAL_NIL};
+    Val st = nb_struct_new(klass_id, 3, attrs);
+
+    REPLACE(st, nb_struct_set(st, 1, VAL_FROM_INT(2)));
+    assert_eq(VAL_TRUE, nb_struct_get(st, 0));
+    assert_eq(VAL_FROM_INT(2), nb_struct_get(st, 1));
+    assert_eq(VAL_NIL, nb_struct_get(st, 2));
+
+    RELEASE(st);
+    val_end_check_memory();
+  }
+
   ccut_test("mset") {
     val_begin_check_memory();
 
