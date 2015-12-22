@@ -1,15 +1,15 @@
 #include "sb.h"
 #include <ccut.h>
 
-static Ctx ctx;
+static void* arena;
 
 static void _setup() {
   val_begin_check_memory();
-  ctx.arena = val_arena_new(ctx.meta);
+  arena = val_arena_new();
 }
 
 static void _teadown() {
-  val_arena_delete(ctx.arena);
+  val_arena_delete(arena);
   val_end_check_memory();
 }
 
@@ -17,7 +17,7 @@ void bootstrap_suite() {
   ccut_test("bootstrap ast") {
     _setup();
 
-    Val node = nb_spellbreak_bootstrap(&ctx);
+    Val node = sb_bootstrap_ast(arena, sb_klass());
 
     _teadown();
   }
@@ -25,8 +25,7 @@ void bootstrap_suite() {
   ccut_test("bootstrap compile") {
     _setup();
 
-    Val node = nb_spellbreak_bootstrap(&ctx);
-    Spellbreak* spellbreak = sb_compile_main(ctx.meta, ctx.arena, node);
+    sb_init_module();
 
     _teadown();
   }

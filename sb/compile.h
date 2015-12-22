@@ -4,27 +4,17 @@
 
 #include "sb.h"
 #include <adt/dict.h>
+#include <adt/utils/mut-array.h>
 
-struct VmLexStruct;
-struct VmPegStruct;
-struct VmCallbackStruct;
-struct VmRegexpStruct;
+void sb_inline_partial_references(CompileCtx* ctx);
+void sb_build_patterns_dict(CompileCtx* ctx);
+void sb_build_vars_dict(CompileCtx* ctx);
 
-typedef struct VmLexStruct VmLex;
-typedef struct VmPegStruct VmPeg;
-typedef struct VmCallbackStruct VmCallback;
-typedef struct VmRegexpStruct VmRegexp;
+VmLex* sb_vm_lex_compile(CompileCtx* ctx, Val node, Val* err);
+VmPeg* sb_vm_peg_compile(CompileCtx* ctx, Val node, Val* err);
+VmRegexp* sb_vm_regexp_compile(CompileCtx* ctx, Val node);
 
-VmLex* sb_vm_lex_compile(void* arena, Val node, Spellbreak* spellbreak);
-VmPeg* sb_vm_peg_compile(void* arena, Val node, Spellbreak* spellbreak);
-VmCallback* sb_vm_callback_compile(void* arena, Val node, Spellbreak* spellbreak, Val lex_name);
-VmRegexp* sb_vm_regexp_compile(void* arena, Val node, Spellbreak* spellbreak);
-VmRegexp* sb_vm_regexp_from_string(Val node);
-
-int64_t sb_vm_lex_exec(VmLex* lex, Spellbreak* ctx);
-int64_t sb_vm_peg_exec(VmPeg* peg, Spellbreak* ctx);
-int64_t sb_vm_callback_exec(VmCallback* callback, Spellbreak* ctx);
-int64_t sb_vm_regexp_exec(VmRegexp* regexp, Spellbreak* ctx);
+MUT_ARRAY_DECL(Iseq, uint32_t);
 
 #pragma mark ## some helper macros for compiling
 
@@ -41,3 +31,16 @@ int64_t sb_vm_regexp_exec(VmRegexp* regexp, Spellbreak* ctx);
 #define HEAD(node) nb_cons_head(node)
 
 #define COMPILE_ERROR(M, ...) printf(M, ##__VA_ARGS__); _Exit(-1)
+
+static void ENCODE32(struct Iseq* iseq, uint32_t ins) {
+  Iseq.push(iseq, ins);
+}
+
+static void ENCODE64(struct Iseq* iseq, uint64_t ins) {
+  Iseq.push(iseq, 0);
+  Iseq.push(iseq, 0);
+  uint32_t* pc = Iseq.at(iseq, Iseq.size(iseq) - 2);
+  ((uint64_t*)pc)[0] = ins;
+}
+
+#define DECODE(ty, pc) ({ty d = *((ty*)pc); pc++; d;})

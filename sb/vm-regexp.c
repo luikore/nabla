@@ -41,15 +41,15 @@
  * OPEN,CLOSE  ...are numbered at compile time.
  */
 
+VmRegexp* sb_vm_regexp_compile(CompileCtx* ctx, Val node) {
+  return NULL;
+}
+
+VmRegexp* sb_vm_regexp_from_string(Val s) {
+  return NULL;
+}
+
 // returns match number, 0 for no match
-int64_t nb_vm_regexp_exec(VmRegexp* regexp, Ctx* ctx) {
+int64_t sb_vm_regexp_exec(Spellbreak* sb, VmRegexp* regexp) {
   return 0;
-}
-
-VmRegexp* nb_vm_regexp_compile(void* arena, Val node, Spellbreak* spellbreak) {
-  return NULL;
-}
-
-VmRegexp* nb_vm_regexp_from_string(Val s) {
-  return NULL;
 }

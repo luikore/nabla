@@ -62,6 +62,9 @@ Val sb_bootstrap_ast(void* arena, uint32_t namespace);
 // returns the spellbreak syntax klass
 uint32_t sb_init_module(void);
 
+// returns the klass representing Spellbreak syntax
+uint32_t sb_klass();
+
 // returns syntax klass by generating from node
 uint32_t sb_new_syntax(uint32_t name_str);
 
@@ -99,8 +102,21 @@ typedef struct {
   Val vars_dict;     // {"context:name": true}
 } CompileCtx;
 
-void sb_inline_partial_references(CompileCtx* ctx);
-
-void sb_build_patterns_map(CompileCtx* ctx);
-
 void sb_compile_main(CompileCtx* ctx);
+
+#pragma mark ### exec functions
+
+struct VmLexStruct;
+struct VmPegStruct;
+struct VmCallbackStruct;
+struct VmRegexpStruct;
+
+typedef struct VmLexStruct VmLex;
+typedef struct VmPegStruct VmPeg;
+typedef struct VmCallbackStruct VmCallback;
+typedef struct VmRegexpStruct VmRegexp;
+
+Val sb_vm_lex_exec(Spellbreak* sb, VmLex* lex, Val* err);
+Val sb_vm_peg_exec(Spellbreak* sb, VmPeg* peg, int32_t token_pos, Val* err);
+int64_t sb_vm_callback_exec(Spellbreak* sb, VmCallback* callback);
+int64_t sb_vm_regexp_exec(Spellbreak* sb, VmRegexp* regexp);

@@ -1,8 +1,7 @@
 target = libsb.a
 default: $(target)
 
-files = bootstrap sb
-# compile-* vm-lex vm-peg vm-regexp vm-callback
+files = bootstrap sb compile* vm-lex vm-peg vm-regexp
 objects = $(addsuffix .o, $(files))
 test_srcs = bootstrap-test.c vm-*-test.c test.c
 test_srcs += $(addsuffix .c, $(files))

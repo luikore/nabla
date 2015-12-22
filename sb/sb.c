@@ -124,7 +124,7 @@ static Val parse(Spellbreak* ctx) {
     val_throw(nb_string_new_literal_c("bad context name str"));
   }
   Val err;
-  Val val = sb_peg_exec(ctx, (void*)parser, token_pos, &err);
+  Val val = sb_vm_peg_exec(ctx, (void*)parser, token_pos, &err);
   if (err != VAL_UNDEF) {
     val_throw(err);
   }
@@ -216,6 +216,10 @@ uint32_t sb_init_module(void) {
   return spellbreak_klass;
 }
 
+uint32_t sb_klass() {
+  return spellbreak_klass;
+}
+
 uint32_t sb_new_syntax(uint32_t name_str) {
   uint32_t klass = klass_ensure(name_str, klass_ensure(STR("Lang"), 0));
   SpellbreakMData* mdata = malloc(sizeof(SpellbreakMData));
@@ -275,7 +279,7 @@ Val sb_parse(Spellbreak* s, const char* src, int64_t size) {
     .curr = s->curr
   };
   ContextStack.push(&s->context_stack, ce);
-  Val ast = sb_lex_exec(s, lexer, &err);
+  Val ast = sb_vm_lex_exec(s, (void*)lexer, &err);
   if (err == VAL_UNDEF) {
     val_throw(STR("parse error"));
   }

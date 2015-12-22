@@ -1,18 +1,7 @@
 #include "compile.h"
 #include <stdlib.h>
 
-enum OpCodes {
-  PUSH_CAPTURE=0, // n:(0..9)
-  PUSH,           // val:(in next opcode)
-  PUSH_VAR,       // name:(val_str)
-  POP_VAR,        // name:(val_str)
-  CALL,           // argsize:(uint32)     # pop stack for func name
-  CREATE_NODE,    // argsize:(uint32)     # pop stack for class name
-  JIF,            // offset:(int32)       # pop stack for value test
-  MATCH,          // reg:(in next opcode) # match reg, and push match result on to stack
-  END,            //                      # end vm
-  OP_CODES_SIZE   //
-};
+
 
 typedef struct {
   uint32_t op;
@@ -66,7 +55,7 @@ static int64_t _to_i(Val tok) {
 // NOTE the list is right-to-left
 static int32_t _push_list(Val list, VmCallback* cb, Spellbreak* sb) {
   int32_t size = 0;
-  list = nb_cons_node_reverse(sb->arena, list);
+  list = nb_cons_areverse(sb->arena, list);
   for (; list != VAL_NIL; list = TAIL(list)) {
     Val node = HEAD(list);
     if (node != VAL_UNDEF) {
@@ -122,12 +111,12 @@ static void _traverse(Val node, VmCallback* cb, Spellbreak* sb) {
   }
 }
 
-VmCallback* nb_vm_callback_compile(void* arena, Val node, Spellbreak* sb, Val lex_name) {
+VmCallback* sb_vm_callback_compile(void* arena, Val node, Spellbreak* sb, Val lex_name) {
   VmCallback* code = malloc(sizeof(VmCallback));
   code->cap = 10;
   code->insts = malloc(sizeof(Inst) * 10);
   code->size = 0;
-  Val cons_node = nb_cons_node_reverse(arena, AT(node, 0));
+  Val cons_node = nb_cons_areverse(arena, AT(node, 0));
 
   bool is_begin = true;
   for (; cons_node != VAL_NIL; cons_node = TAIL(cons_node)) {
@@ -160,7 +149,7 @@ VmCallback* nb_vm_callback_compile(void* arena, Val node, Spellbreak* sb, Val le
 #define GET_VAR(ctx, i) ctx->vars[i]
 #define SET_VAR(ctx, i, v) ctx->vars[i] = v
 
-int64_t nb_vm_callback_exec(VmCallback* code, Ctx* ctx) {
+int64_t sb_vm_callback_exec(VmCallback* code, Ctx* ctx) {
   static const void* labels[] = {
     [PUSH_CAPTURE] = &&label_PUSH_CAPTURE,
     [PUSH] = &&label_PUSH,

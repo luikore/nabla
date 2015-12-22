@@ -2,8 +2,8 @@
 #include <adt/dict.h>
 
 // build patterns map, not checking loop dependency, because only regexp knows the AST structure
-void sb_build_patterns_map(CompileCtx* ctx, Val main_node) {
-  Val lines = AT(main_node, 0);
+void sb_build_patterns_dict(CompileCtx* ctx) {
+  Val lines = AT(ctx->ast, 0);
 
   for(; lines != VAL_NIL; lines = TAIL(lines)) {
     Val e = HEAD(lines);

@@ -1,6 +1,5 @@
 #include <ccut.h>
-#include "node.h"
-#include "spellbreak.h"
+#include "sb.h"
 
 void vm_callback_suite() {
   ccut_test("execute") {

@@ -1,11 +1,19 @@
-// a VM similar to LPEG https://github.com/LuaDist/lpeg/blob/master/lpvm.c
+// a VM similar to LPEG (https://github.com/LuaDist/lpeg/blob/master/lpvm.c) but much simpler
+
+// list and node instructions
+
+/*
+- ret : return from a rule
+- choice offset : stack a choice, next fail will jump to offset
+- fail: 
+*/
 
 #include "compile.h"
 
-VmPeg* nb_vm_peg_compile(void* arena, Val peg_node, Spellbreak* spellbreak) {
+VmPeg* sb_vm_peg_compile(CompileCtx* ctx, Val peg_node, Val* err) {
   return NULL;
 }
 
-int64_t nb_vm_peg_exec(VmPeg* peg, Ctx* ctx) {
+Val sb_vm_peg_exec(Spellbreak* sb, VmPeg* peg, int32_t token_pos, Val* err) {
   return 0;
 }
