@@ -59,8 +59,7 @@ typedef struct {
 
 Val sb_bootstrap_ast(void* arena, uint32_t namespace);
 
-// returns the spellbreak syntax klass
-uint32_t sb_init_module(void);
+void sb_init_module(void);
 
 // returns the klass representing Spellbreak syntax
 uint32_t sb_klass();

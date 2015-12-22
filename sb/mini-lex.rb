@@ -21,7 +21,7 @@ class MiniLex
   Klasses.add 'String', ['str']
   class Str
     def eval
-      "NODE(String, 1, nb_string_new_literal_c(#{str.inspect}))"
+      "NODE(String, 1, STR(#{str.inspect}))"
     end
   end
 

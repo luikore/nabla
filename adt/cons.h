@@ -23,3 +23,5 @@ Val nb_cons_head(Val node);
 Val nb_cons_tail(Val node);
 
 Val nb_cons_list(int32_t argc, Val* argv);
+
+Val nb_cons_alist(void* arena, int32_t argc, Val* argv);

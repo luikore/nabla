@@ -18,6 +18,7 @@ require_relative "mini-peg"
 class MiniSb
 
   Main = Struct.new :ins
+  Klasses.add 'Main', ['ins']
   class Main
     def eval
       multi_ins = build_list ins.map &:eval

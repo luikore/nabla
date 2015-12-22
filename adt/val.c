@@ -701,7 +701,7 @@ void* val_arena_new() {
 void* val_arena_alloc(void* arena, uint32_t klass_id, uint8_t qword_count) {
   ValHeader* data = arena_slot_alloc(arena, qword_count);
   data->klass = klass_id;
-  val_perm(data);
+  val_perm_f(data); // NOTE should not fall into val_perm_cm
   return data;
 }
 

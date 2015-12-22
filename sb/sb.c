@@ -193,9 +193,9 @@ static void _sb_destruct(void* p) {
 
 #define METHOD(k, func, argc) klass_def_method(k, val_strlit_new_c(#func), argc, func, true)
 #define METHOD2(k, func, min_argc, max_argc) klass_def_method2(k, val_strlit_new_c(#func), min_argc, max_argc, (ValMethodFunc2)func, true)
-#define STR(v) nb_string_new_c(v)
+#define STR(v) nb_string_new_literal_c(v)
 
-uint32_t sb_init_module(void) {
+void sb_init_module(void) {
   spellbreak_klass = sb_new_syntax(STR("Spellbreak"));
 
 # define DEF_NODE(type, ...) _define_node(#type, sizeof((const char*[]){__VA_ARGS__}) / sizeof(const char*), (const char*[]){__VA_ARGS__})
@@ -207,13 +207,13 @@ uint32_t sb_init_module(void) {
   METHOD(spellbreak_klass, char_no_escape, 1);
   METHOD(spellbreak_klass, concat_char, 2);
   METHOD(spellbreak_klass, parse_int, 1);
+}
 
+void sb_bootstrap() {
   void* arena = val_arena_new();
   Val ast = sb_bootstrap_ast(arena, spellbreak_klass);
   sb_syntax_compile(arena, spellbreak_klass, ast);
   val_arena_delete(arena);
-
-  return spellbreak_klass;
 }
 
 uint32_t sb_klass() {

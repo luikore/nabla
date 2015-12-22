@@ -33,3 +33,4 @@ DEF_NODE(PegRule, "name", "body");
 DEF_NODE(SeqRule, "terms", "code");
 DEF_NODE(BranchRight, "branch_op", "rhs");
 DEF_NODE(Term, "name", "affix");
+DEF_NODE(Main, "ins");
