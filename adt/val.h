@@ -284,6 +284,9 @@ typedef struct {
   bool is_splat;
 } NbStructField;
 
+// list all klasses
+void klass_debug();
+
 #pragma mark ### memory functions
 
 // global tracing flag, for debug use

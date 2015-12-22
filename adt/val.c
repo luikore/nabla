@@ -319,6 +319,24 @@ void klass_include(uint32_t klass_id, uint32_t included_id) {
   Includes.push(&klass->includes, included_id);
 }
 
+void klass_debug() {
+  int size = Klasses.size(&runtime.klasses);
+  printf("--- klasses (user=%d) ---\n", KLASS_USER);
+  for (int i = 0; i < size; i++) {
+    Klass* k = *Klasses.at(&runtime.klasses, i);
+    if (k) {
+      printf("index:%d, id:%d, name:%.*s, is_struct:%d, is_unsafe:%d\n",
+      i, k->id, (int)nb_string_ptr(k->name), nb_string_ptr(k->name), (int)KLASS_IS_STRUCT(k), (int)KLASS_IS_UNSAFE(k));
+      ConstSearchKey key = {.parent = k->parent_id, .name_str = VAL_TO_STR(k->name)};
+      uint32_t res;
+      assert(KlassSearchMap.find(&runtime.klass_search_map, key, &res));
+    } else {
+      printf("index:%d, -not-defined-\n", i);
+    }
+  }
+  printf("\n");
+}
+
 #pragma mark ### misc func
 
 uint32_t val_strlit_new(size_t size, const char* s) {
@@ -411,6 +429,9 @@ Val val_send(Val obj, uint32_t method_id, int32_t argc, Val* args) {
 
 noreturn void val_throw(Val obj) {
   // todo
+  if (VAL_KLASS(obj) == KLASS_STRING) {
+    fprintf(stderr, "%.*s\n", (int)nb_string_byte_size(obj), nb_string_ptr(obj));
+  }
   _Exit(-2);
 }
 
