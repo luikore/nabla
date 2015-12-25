@@ -49,6 +49,11 @@
     da->data[da->size++] = e;\
   }\
   \
+  static ElemType MutArrayType##_MUT_ARRAY_pop(struct MutArrayType* da) {\
+    assert(da->size);\
+    return da->data[--da->size];\
+  }\
+  \
   static void MutArrayType##_MUT_ARRAY_remove(struct MutArrayType* da, size_t i) {\
     assert(da->size > i);\
     if (i + 1 != da->size) {\
@@ -79,6 +84,7 @@
     void (*init_dup)(struct MutArrayType* to, struct MutArrayType* from);\
     void (*cleanup)(struct MutArrayType*);\
     void (*push)(struct MutArrayType*, ElemType);\
+    ElemType (*pop)(struct MutArrayType*);\
     void (*remove)(struct MutArrayType*, size_t);\
     void (*reverse)(struct MutArrayType*);\
     size_t (*size)(struct MutArrayType*);\
@@ -88,6 +94,7 @@
     .init_dup = MutArrayType##_MUT_ARRAY_init_dup,\
     .cleanup = MutArrayType##_MUT_ARRAY_cleanup,\
     .push = MutArrayType##_MUT_ARRAY_push,\
+    .pop = MutArrayType##_MUT_ARRAY_pop,\
     .remove = MutArrayType##_MUT_ARRAY_remove,\
     .reverse = MutArrayType##_MUT_ARRAY_reverse,\
     .size = MutArrayType##_MUT_ARRAY_size,\
