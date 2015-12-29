@@ -1049,15 +1049,16 @@ can capture local vars but can not change it
 
 recall note: comma (`,`) means "new line"
 
-quick lambdas (`->` followed by bracket)
+quick lambdas (`->` followed by bracket), inside the bracket is an incomplete infix form or calling form
 
-    ->(4 /)
-    ->(+ 3)
-    ->(.present? 3)
-    ->(4 + )
-    ->(*)
+    ->(4 /)         # -> x, 4 / x;
+    ->(+ 3)         # -> x, x + 3;
+    ->(*)           # -> x y, x * y;
+    ->(.present? 3) # -> x, x.present? 3;
+    ->(:foo)        # :method('foo') # arity depends of method foo
+    ->(:foo 3)      # (:method('foo').curry 1).call 3
 
-[design NOTE]: we can not remove the `()`, because it may give ambiguity on `-> *args`, and with `()` it is more feasible. And `()` is more unified.
+[design NOTE] if we use placeholder lambdas as in scala, then too many meanings are put onto `_`, while saving very few typings.
 
 curry
 
@@ -1065,9 +1066,7 @@ curry
       x + y
     end
     l = _.curry
-    l[1][2]
-
-for lambda
+    (l.call 1).call 2
 
 ## subroutines
 
@@ -1213,6 +1212,8 @@ back arrows can be used inside any syntax structures with `end` or `when` delimi
     if foo
       e <- a.each
     end
+
+back arrows can be considered as monad of the universal sum type. they can be tail-call optimized.
 
 ## matching args
 
