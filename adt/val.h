@@ -193,6 +193,11 @@ inline static int64_t VAL_REF_COUNT(Val v) {
 
 #pragma mark ### misc
 
+typedef struct {
+  Val fst;
+  Val snd;
+} ValPair;
+
 Val val_c_call(void* cfunc, uint64_t argc, Val* argv);
 
 // call with obj as the first arg

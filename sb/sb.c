@@ -112,24 +112,25 @@ static Val concat_char(Spellbreak* ctx, Val left_s, Val right_c) {
 
 // invoke parser defined in peg_dict, set result in context_stack
 // NOTE ending current context is managed in lex vm
-static Val parse(Spellbreak* ctx) {
-  size_t context_stack_size = ContextStack.size(&ctx->context_stack);
+static Val parse(Spellbreak* sb) {
+  size_t context_stack_size = ContextStack.size(&sb->context_stack);
   assert(context_stack_size);
-  ContextEntry* ce = ContextStack.at(&ctx->context_stack, context_stack_size);
+  ContextEntry* ce = ContextStack.at(&sb->context_stack, context_stack_size);
   Val s = VAL_FROM_STR(ce->name_str);
   int token_pos = ce->token_pos;
 
   Val parser;
-  if (!nb_dict_find(ctx->peg_dict, nb_string_ptr(s), nb_string_byte_size(s), &parser)) {
+  if (!nb_dict_find(sb->peg_dict, nb_string_ptr(s), nb_string_byte_size(s), &parser)) {
     val_throw(nb_string_new_literal_c("bad context name str"));
   }
-  Val err;
-  Val val = sb_vm_peg_exec(ctx, (void*)parser, token_pos, &err);
-  if (err != VAL_UNDEF) {
-    val_throw(err);
+  int token_size = TokenStream.size(&sb->token_stream) - ce->token_pos;
+  Token* token_start = TokenStream.at(&sb->token_stream, ce->token_pos);
+  ValPair pair = sb_vm_peg_exec((void*)parser, sb->arena, token_size, token_start);
+  if (pair.snd != VAL_UNDEF) {
+    val_throw(pair.snd);
   }
 
-  return VAL_NIL;
+  return pair.fst;
 }
 
 // TODO support bignum
@@ -188,7 +189,11 @@ static void _define_node(const char* name, int argc, const char** argv) {
 }
 
 static void _sb_destruct(void* p) {
-  Spellbreak* ctx = p;
+  Spellbreak* sb = p;
+  Vals.cleanup(&sb->stack);
+  ContextStack.cleanup(&sb->context_stack);
+  Vals.cleanup(&sb->vars);
+  TokenStream.cleanup(&sb->token_stream);
 }
 
 #define METHOD(k, func, argc) klass_def_method(k, val_strlit_new_c(#func), argc, func, true)
@@ -252,11 +257,26 @@ Spellbreak* sb_new(uint32_t syntax_klass) {
   s->lex_dict = mdata->lex_dict;
   s->peg_dict = mdata->peg_dict;
 
-  ContextStack.init(&s->context_stack, 0);
-  TokenStream.init(&s->token_stream, 0);
-  Vals.init(&s->vars, 0);
+  Vals.init(&s->stack, 10);
+  ContextStack.init(&s->context_stack, 5);
+  TokenStream.init(&s->token_stream, 20);
+  Vals.init(&s->vars, mdata->vars_size);
+
+  for (int i = 0; i < mdata->vars_size; i++) {
+    Vals.at(&s->vars, i)[0] = VAL_NIL;
+  }
 
   return s;
+}
+
+void sb_reset(Spellbreak* s) {
+  s->stack.size = 0;
+  s->context_stack.size = 0;
+  s->token_stream.size = 0;
+  for (int i = 0; i < Vals.size(&s->vars); i++) {
+    Vals.at(&s->vars, i)[0] = VAL_NIL;
+  }
+  s->curr = s->s;
 }
 
 Spellbreak* sb_new_sb() {
@@ -268,27 +288,15 @@ Val sb_parse(Spellbreak* s, const char* src, int64_t size) {
   s->size = size;
   s->arena = val_arena_new();
 
-  Val lexer;
-  if (!nb_dict_find(s->lex_dict, "Main", strlen("Main"), &lexer)) {
-    val_throw(STR("can't find main lex"));
+  ValPair pair = sb_vm_lex_exec(s);
+  if (pair.snd != VAL_UNDEF) {
+    val_throw(pair.snd);
   }
-  Val err = VAL_UNDEF;
-  ContextEntry ce = {
-    .name_str = val_strlit_new_c("Main"),
-    .token_pos = TokenStream.size(&s->token_stream),
-    .curr = s->curr
-  };
-  ContextStack.push(&s->context_stack, ce);
-  Val ast = sb_vm_lex_exec(s, (void*)lexer, &err);
-  if (err == VAL_UNDEF) {
-    val_throw(STR("parse error"));
-  }
-  return ast;
+  return pair.fst;
 }
 
 void sb_syntax_compile(void* arena, Val ast, uint32_t target_klass) {
   CompileCtx ctx = {
-    .success = false,
     .lex_dict = nb_dict_new(),
     .peg_dict = nb_dict_new(),
     .patterns_dict = nb_dict_new(),
@@ -296,19 +304,20 @@ void sb_syntax_compile(void* arena, Val ast, uint32_t target_klass) {
     .arena = arena,
     .ast = ast
   };
-  sb_compile_main(&ctx);
+  Val err = sb_compile_main(&ctx);
 
-  if (!ctx.success) {
+  if (err != VAL_UNDEF) {
     RELEASE(ctx.lex_dict);
     RELEASE(ctx.peg_dict);
     RELEASE(ctx.patterns_dict);
     RELEASE(ctx.vars_dict);
-    val_throw(STR("compile failed"));
+    val_throw(err);
   }
 
   SpellbreakMData* mdata = klass_get_data(target_klass);
   mdata->lex_dict = ctx.lex_dict;
   mdata->peg_dict = ctx.peg_dict;
+  mdata->vars_size = nb_dict_size(ctx.vars_dict);
   mdata->compiled = true;
   RELEASE(ctx.patterns_dict);
   RELEASE(ctx.vars_dict);

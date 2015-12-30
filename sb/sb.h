@@ -15,6 +15,7 @@ typedef struct {
   // for initializing Ctx
   Val lex_dict; // perm {name: lexer*}
   Val peg_dict; // perm {name: parser*}
+  int32_t vars_size;
   bool compiled;
 } SpellbreakMData;
 
@@ -44,12 +45,14 @@ typedef struct {
   const char* curr; // curr src
 
   void* arena;
+  int32_t capture_size;
   int32_t captures[20]; // begin: i*2, end: i*2+1
   struct TokenStream token_stream; // not copied
 
   Val lex_dict; // {name: lexer*}, from mdata
   Val peg_dict; // {name: parser*}, from mdata
 
+  struct Vals stack;
   struct ContextStack context_stack;
   struct Vals vars; // for all globals and locals
 } Spellbreak;
@@ -79,6 +82,9 @@ void sb_syntax_compile(void* arena, Val ast, uint32_t target_klass);
 // NOTE separated for online-parsing
 Spellbreak* sb_new(uint32_t klass);
 
+// reset lexer status
+void sb_reset(Spellbreak* s);
+
 Spellbreak* sb_new_sb();
 
 // parse call-seq:
@@ -95,27 +101,30 @@ typedef struct {
   Val peg_dict;
 
   void* arena;
-  // intermediate data, cleared after constructed
-  int64_t success;   // whether parse is success (TODO extend it for more error types)
   Val patterns_dict; // {"name": regexp_node}
   Val vars_dict;     // {"context:name": true}
 } CompileCtx;
 
-void sb_compile_main(CompileCtx* ctx);
+// returns compile error
+Val sb_compile_main(CompileCtx* ctx);
 
-#pragma mark ### exec functions
+#pragma mark ### vm functions
 
-struct VmLexStruct;
-struct VmPegStruct;
-struct VmCallbackStruct;
-struct VmRegexpStruct;
+MUT_ARRAY_DECL(Iseq, uint16_t);
 
-typedef struct VmLexStruct VmLex;
-typedef struct VmPegStruct VmPeg;
-typedef struct VmCallbackStruct VmCallback;
-typedef struct VmRegexpStruct VmRegexp;
+// updates ctx->lex_dict, returns err
+Val sb_vm_lex_compile(CompileCtx* ctx, Val lex_node);
+// returns {res, err}
+ValPair sb_vm_lex_exec(Spellbreak* sb);
 
-Val sb_vm_lex_exec(Spellbreak* sb, VmLex* lex, Val* err);
-Val sb_vm_peg_exec(Spellbreak* sb, VmPeg* peg, int32_t token_pos, Val* err);
-int64_t sb_vm_callback_exec(Spellbreak* sb, VmCallback* callback);
-int64_t sb_vm_regexp_exec(Spellbreak* sb, VmRegexp* regexp);
+// updates ctx->peg_dict, returns err
+Val sb_vm_peg_compile(CompileCtx* ctx, Val node);
+// returns {res, err}
+ValPair sb_vm_peg_exec(void* peg, void* arena, int32_t token_size, Token* tokens);
+
+// updates iseq, returns err
+Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val node);
+// match size stored in captures[0]
+bool sb_vm_regexp_match(void* reg, int64_t size, const char* str, int32_t* capture_size, int32_t* captures);
+
+bool sb_string_match(Val pattern_str, int64_t size, const char* str, int32_t* capture_size, int32_t* captures);
