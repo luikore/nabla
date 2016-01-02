@@ -10,7 +10,7 @@ typedef struct {
 
 #define QWORDS_TOKEN ((sizeof(Token) + 7) / 8)
 
-static Val _token_eq(Val l, Val r) {
+static bool _token_eq(Val l, Val r) {
   if (VAL_KLASS(r) != KLASS_TOKEN) {
     return false;
   }
@@ -21,15 +21,14 @@ static Val _token_eq(Val l, Val r) {
          str_compare(tl->loc.size, tl->loc.s, tr->loc.size, tr->loc.s) == 0;
 }
 
-static Val _token_hash(Val vt) {
+static uint64_t _token_hash(Val vt) {
   Token* t = (Token*)vt;
   uint64_t h = val_hash(t->name) ^ KLASS_TOKEN_SALT;
   if (t->loc.size) {
     h ^= val_hash_mem(t->loc.s, t->loc.size);
   }
   h ^= val_hash(t->loc.v);
-  // TODO val from uint64
-  return VAL_FROM_INT(h);
+  return h;
 }
 
 static void _token_destruct(void* ptr) {
@@ -40,8 +39,8 @@ static void _token_destruct(void* ptr) {
 void nb_token_init_module() {
   klass_def_internal(KLASS_TOKEN, val_strlit_new_c("Token"));
   klass_set_destruct_func(KLASS_TOKEN, _token_destruct);
-  klass_def_method(KLASS_TOKEN, val_strlit_new_c("=="), 1, _token_eq, true);
-  klass_def_method(KLASS_TOKEN, val_strlit_new_c("hash"), 0, _token_hash, true);
+  klass_set_eq_func(KLASS_TOKEN, _token_eq);
+  klass_set_hash_func(KLASS_TOKEN, _token_hash);
 }
 
 Val nb_token_new(Val name, NbTokenLoc loc) {

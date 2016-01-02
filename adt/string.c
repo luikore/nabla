@@ -21,8 +21,8 @@ typedef struct {
 #define IS_SLICE(s) (s)->h.user1
 #define BYTE_SIZE(s) (s)->byte_size
 
-static Val _hash_func(Val str);
-static Val _eq_func(Val l, Val r);
+static uint64_t _hash_func(Val str);
+static bool _eq_func(Val l, Val r);
 static void _destructor(void* p);
 
 static String* _alloc_string(size_t size);
@@ -31,8 +31,8 @@ static Val _slice_from_literal(Val v, size_t from, size_t len);
 
 void nb_string_init_module() {
   klass_def_internal(KLASS_STRING, val_strlit_new_c("String"));
-  klass_def_method(KLASS_STRING, val_strlit_new_c("hash"), 0, _hash_func, true);
-  klass_def_method(KLASS_STRING, val_strlit_new_c("=="), 1, _eq_func, true);
+  klass_set_hash_func(KLASS_STRING, _hash_func);
+  klass_set_eq_func(KLASS_STRING, _eq_func);
   klass_set_destruct_func(KLASS_STRING, _destructor);
 }
 
@@ -143,21 +143,19 @@ Val nb_string_slice(Val v, size_t from, size_t len) {
   return (Val)r;
 }
 
-static Val _hash_func(Val v) {
-  uint64_t h = val_hash_mem(nb_string_ptr(v), nb_string_byte_size(v));
-  // TODO from uint 64
-  return VAL_FROM_INT(h);
+static uint64_t _hash_func(Val v) {
+  return val_hash_mem(nb_string_ptr(v), nb_string_byte_size(v));
 }
 
-static Val _eq_func(Val l, Val r) {
+static bool _eq_func(Val l, Val r) {
   if (VAL_KLASS(r) == KLASS_STRING) {
     const char* lptr = nb_string_ptr(l);
     size_t lsize = nb_string_byte_size(l);
     const char* rptr = nb_string_ptr(r);
     size_t rsize = nb_string_byte_size(r);
-    return (str_compare(lsize, lptr, rsize, rptr) ? VAL_FALSE : VAL_TRUE);
+    return !str_compare(lsize, lptr, rsize, rptr);
   }
-  return VAL_FALSE;
+  return false;
 }
 
 static void _destructor(void* p) {

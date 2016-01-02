@@ -144,6 +144,8 @@ static Klass* _klass_new(uint32_t klass_id, Val name, uint32_t parent) {
   IdFieldIndexes.init(&k->id_field_indexes);
   Fields.init(&k->fields, 0);
 
+  k->hash_func = NULL;
+  k->eq_func = NULL;
   k->destruct_func = NULL;
   k->delete_func = NULL;
   k->debug_func = NULL;
@@ -277,6 +279,18 @@ void klass_set_debug_func(uint32_t klass_id, ValCallbackFunc func) {
   klass->debug_func = func;
 }
 
+void klass_set_hash_func(uint32_t klass_id, ValHashFunc func) {
+  Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
+  assert(klass);
+  klass->hash_func = func;
+}
+
+void klass_set_eq_func(uint32_t klass_id, ValEqFunc func) {
+  Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
+  assert(klass);
+  klass->eq_func = func;
+}
+
 void klass_def_method(uint32_t klass_id, uint32_t method_id, int32_t argc, ValMethodFunc func, bool is_final) {
   Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
   _check_final_method_conflict(klass, method_id);
@@ -397,18 +411,36 @@ bool val_eq(Val l, Val r) {
   if (VAL_IS_IMM(l) && VAL_IS_IMM(r)) {
     return false;
   }
-  Val argv[] = {l, r};
-  Val res = val_send(l, val_strlit_new_c("=="), 2, argv);
-  return VAL_IS_TRUE(res);
+
+  uint32_t klass_id = VAL_KLASS(l);
+  Klass* k = *Klasses.at(&runtime.klasses, klass_id);
+  if (k->eq_func) {
+    return k->eq_func(l, r);
+  }
+
+  ValPair res = val_send(l, val_strlit_new_c("=="), 1, &r);
+  if (res.snd) {
+    val_throw(res.snd); // error: raise in eq function
+  }
+  return VAL_IS_TRUE(res.fst);
 }
 
 uint64_t val_hash(Val v) {
   if (VAL_IS_IMM(v) && !VAL_IS_STR(v)) {
     return siphash(nb_hash_key, (const uint8_t*)&v, 8);
   } else {
-    Val res = val_send(v, val_strlit_new_c("hash"), 0, NULL);
+    uint32_t klass_id = VAL_KLASS(v);
+    Klass* k = *Klasses.at(&runtime.klasses, klass_id);
+    if (k->hash_func) {
+      return k->hash_func(v);
+    }
+
+    ValPair res = val_send(v, val_strlit_new_c("hash"), 0, NULL);
+    if (res.snd) {
+      val_throw(res.snd); // error: raise in hash function
+    }
     // TODO to uint 64
-    return VAL_TO_INT(res);
+    return VAL_TO_INT(res.fst);
   }
 }
 
@@ -416,14 +448,16 @@ uint64_t val_hash_mem(const void* memory, size_t size) {
   return siphash(nb_hash_key, (const uint8_t*)memory, size);
 }
 
-Val val_send(Val obj, uint32_t method_id, int32_t argc, Val* args) {
+ValPair val_send(Val obj, uint32_t method_id, int32_t argc, Val* args) {
   uint32_t klass_id = VAL_KLASS(obj);
   Klass* k = *Klasses.at(&runtime.klasses, klass_id);
   Method* m = _deep_search_method(k, method_id);
   if (m) {
     return METHOD_INVOKE(obj, m, argc, args);
   } else {
-    return VAL_UNDEF;
+    // TODO error class hierachy
+    Val no_method_err = nb_string_new_literal_c("method not found");
+    return (ValPair){VAL_NIL, no_method_err};
   }
 }
 

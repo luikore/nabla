@@ -2,41 +2,41 @@
 #include <ccut.h>
 #include <stdlib.h>
 
-static Val f0() {
-  return 0;
+static ValPair f0() {
+  return (ValPair){0, 0};
 }
 
-static Val f1(Val a1) {
-  return a1;
+static ValPair f1(Val a1) {
+  return (ValPair){a1, 1};
 }
 
-static Val f2(Val a1, Val a2) {
-  return a1 + a2;
+static ValPair f2(Val a1, Val a2) {
+  return (ValPair){a1 + a2, 2};
 }
 
-static Val f3(Val a1, Val a2, Val a3) {
-  return a1 + a2 + a3;
+static ValPair f3(Val a1, Val a2, Val a3) {
+  return (ValPair){a1 + a2 + a3, 3};
 }
 
-static Val f4(Val a1, Val a2, Val a3, Val a4) {
-  return a1 + a2 + a3 + a4;
+static ValPair f4(Val a1, Val a2, Val a3, Val a4) {
+  return (ValPair){a1 + a2 + a3 + a4, 4};
 }
 
-static Val f5(Val a1, Val a2, Val a3, Val a4, Val a5) {
-  return a1 + a2 + a3 + a4 + a5;
+static ValPair f5(Val a1, Val a2, Val a3, Val a4, Val a5) {
+  return (ValPair){a1 + a2 + a3 + a4 + a5, 5};
 }
 
-static Val f6(Val a1, Val a2, Val a3, Val a4, Val a5, Val a6) {
-  return a1 + a2 + a3 + a4 + a5 + a6;
+static ValPair f6(Val a1, Val a2, Val a3, Val a4, Val a5, Val a6) {
+  return (ValPair){a1 + a2 + a3 + a4 + a5 + a6, 6};
 }
 
-static Val f7(Val a1, Val a2, Val a3, Val a4, Val a5, Val a6, Val a7) {
-  return a1 + a2 + a3 + a4 + a5 + a6 + a7;
+static ValPair f7(Val a1, Val a2, Val a3, Val a4, Val a5, Val a6, Val a7) {
+  return (ValPair){a1 + a2 + a3 + a4 + a5 + a6 + a7, 7};
 }
 
-static Val f8(Val a1, Val a2, Val a3, Val a4, Val a5, Val a6, Val a7, Val a8) {
+static ValPair f8(Val a1, Val a2, Val a3, Val a4, Val a5, Val a6, Val a7, Val a8) {
   // printf("\n%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,\n", a1,a2,a3,a4,a5,a6,a7,a8);
-  return (a1<<1) + (a2<<2) + (a3<<3) + (a4<<4) + (a5<<5) + (a6<<6) + (a7<<7) + (a8<<8);
+  return (ValPair){(a1<<1) + (a2<<2) + (a3<<3) + (a4<<4) + (a5<<5) + (a6<<6) + (a7<<7) + (a8<<8), 8};
 }
 
 void val_suite() {
@@ -115,62 +115,79 @@ void val_suite() {
 
   ccut_test("val_c_call") {
     Val argv[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
-    Val ret;
+    ValPair ret;
 
     ret = val_c_call((void*)f0, 0, argv);
-    assert_eq(0, ret);
+    assert_eq(0, ret.fst);
+    assert_eq(0, ret.snd);
 
     ret = val_c_call((void*)f1, 1, argv);
-    assert_eq(1, ret);
+    assert_eq(1, ret.fst);
+    assert_eq(1, ret.snd);
 
     ret = val_c_call((void*)f2, 2, argv);
-    assert_eq(1+2, ret);
+    assert_eq(1+2, ret.fst);
+    assert_eq(2, ret.snd);
 
     ret = val_c_call((void*)f3, 3, argv);
-    assert_eq(1+2+3, ret);
+    assert_eq(1+2+3, ret.fst);
+    assert_eq(3, ret.snd);
 
     ret = val_c_call((void*)f4, 4, argv);
-    assert_eq(1+2+3+4, ret);
+    assert_eq(1+2+3+4, ret.fst);
+    assert_eq(4, ret.snd);
 
     ret = val_c_call((void*)f5, 5, argv);
-    assert_eq(1+2+3+4+5, ret);
+    assert_eq(1+2+3+4+5, ret.fst);
+    assert_eq(5, ret.snd);
 
     ret = val_c_call((void*)f6, 6, argv);
-    assert_eq(1+2+3+4+5+6, ret);
+    assert_eq(1+2+3+4+5+6, ret.fst);
+    assert_eq(6, ret.snd);
 
     ret = val_c_call((void*)f7, 7, argv);
-    assert_eq(1+2+3+4+5+6+7, ret);
+    assert_eq(1+2+3+4+5+6+7, ret.fst);
+    assert_eq(7, ret.snd);
 
     ret = val_c_call((void*)f8, 8, argv);
-    assert_eq((1<<1)+(2<<2)+(3<<3)+(4<<4)+(5<<5)+(6<<6)+(7<<7)+(8<<8), ret);
+    assert_eq((1<<1)+(2<<2)+(3<<3)+(4<<4)+(5<<5)+(6<<6)+(7<<7)+(8<<8), ret.fst);
+    assert_eq(8, ret.snd);
   }
 
   ccut_test("val_c_call2") {
     Val argv[] = { 2, 3, 4, 5, 6, 7, 8 };
-    Val ret;
+    ValPair ret;
 
     ret = val_c_call2(1, (void*)f1, 0, argv);
-    assert_eq(1, ret);
+    assert_eq(1, ret.fst);
+    assert_eq(1, ret.snd);
 
     ret = val_c_call2(1, (void*)f2, 1, argv);
-    assert_eq(1+2, ret);
+    assert_eq(1+2, ret.fst);
+    assert_eq(2, ret.snd);
 
     ret = val_c_call2(1, (void*)f3, 2, argv);
-    assert_eq(1+2+3, ret);
+    assert_eq(1+2+3, ret.fst);
+    assert_eq(3, ret.snd);
 
     ret = val_c_call2(1, (void*)f4, 3, argv);
-    assert_eq(1+2+3+4, ret);
+    assert_eq(1+2+3+4, ret.fst);
+    assert_eq(4, ret.snd);
 
     ret = val_c_call2(1, (void*)f5, 4, argv);
-    assert_eq(1+2+3+4+5, ret);
+    assert_eq(1+2+3+4+5, ret.fst);
+    assert_eq(5, ret.snd);
 
     ret = val_c_call2(1, (void*)f6, 5, argv);
-    assert_eq(1+2+3+4+5+6, ret);
+    assert_eq(1+2+3+4+5+6, ret.fst);
+    assert_eq(6, ret.snd);
 
     ret = val_c_call2(1, (void*)f7, 6, argv);
-    assert_eq(1+2+3+4+5+6+7, ret);
+    assert_eq(1+2+3+4+5+6+7, ret.fst);
+    assert_eq(7, ret.snd);
 
     ret = val_c_call2(1, (void*)f8, 7, argv);
-    assert_eq((1<<1)+(2<<2)+(3<<3)+(4<<4)+(5<<5)+(6<<6)+(7<<7)+(8<<8), ret);
+    assert_eq((1<<1)+(2<<2)+(3<<3)+(4<<4)+(5<<5)+(6<<6)+(7<<7)+(8<<8), ret.fst);
+    assert_eq(8, ret.snd);
   }
 }

@@ -37,7 +37,7 @@ static bool METHOD_ARGC_MATCH(Method* m, int argc) {
   }
 }
 
-static Val METHOD_INVOKE(Val obj, Method* m, int argc, Val* argv) {
+static ValPair METHOD_INVOKE(Val obj, Method* m, int argc, Val* argv) {
   if (METHOD_IS_CFUNC(m)) {
     if (!METHOD_ARGC_MATCH(m, argc)) {
       // TODO raise error
@@ -50,7 +50,7 @@ static Val METHOD_INVOKE(Val obj, Method* m, int argc, Val* argv) {
     }
   } else {
     // TODO bytecode method
-    return VAL_UNDEF;
+    return (ValPair){VAL_NIL, VAL_NIL};
   }
 }
 
@@ -81,6 +81,8 @@ typedef struct {
   struct IdFieldIndexes id_field_indexes; // {id => field_index}
   struct Fields fields; // [NbStructField]
 
+  ValHashFunc hash_func;
+  ValEqFunc eq_func;
   ValCallbackFunc destruct_func;
   ValCallbackFunc delete_func;
   ValCallbackFunc debug_func;

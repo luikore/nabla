@@ -198,22 +198,21 @@ typedef struct {
   Val snd;
 } ValPair;
 
-Val val_c_call(void* cfunc, uint64_t argc, Val* argv);
+// returns res, res.fst is result, res.snd is error thrown
+ValPair val_c_call(void* cfunc, uint64_t argc, Val* argv);
 
 // call with obj as the first arg
-Val val_c_call2(Val obj, void* cfunc, uint64_t argc, Val* argv);
+ValPair val_c_call2(Val obj, void* cfunc, uint64_t argc, Val* argv);
 
 uint64_t val_hash_mem(const void* memory, size_t size);
 
-// calls `hash`
 uint64_t val_hash(Val v);
 
-// calls `==`
 bool val_eq(Val l, Val r);
 
 void val_debug(Val v);
 
-Val val_send(Val obj, uint32_t id, int32_t argc, Val* args);
+ValPair val_send(Val obj, uint32_t id, int32_t argc, Val* args);
 
 uint32_t val_strlit_new(size_t size, const char* s);
 
@@ -241,8 +240,11 @@ typedef void (*ValCallbackFunc)(void*);
 #   define ANYARGS
 # endif
 #endif
-typedef Val (*ValMethodFunc)(ANYARGS);
-typedef Val (*ValMethodFunc2)(Val, int32_t, Val*);
+typedef ValPair (*ValMethodFunc)(ANYARGS);
+typedef ValPair (*ValMethodFunc2)(Val, int32_t, Val*);
+
+typedef uint64_t (*ValHashFunc)(Val);
+typedef bool (*ValEqFunc)(Val, Val);
 
 // define klass_id < KLASS_USER
 // todo do not expose this func
@@ -274,6 +276,10 @@ void klass_set_destruct_func(uint32_t klass_id, ValCallbackFunc func);
 void klass_set_delete_func(uint32_t klass_id, ValCallbackFunc func);
 
 void klass_set_debug_func(uint32_t klass_id, ValCallbackFunc func);
+
+void klass_set_hash_func(uint32_t klass_id, ValHashFunc func);
+
+void klass_set_eq_func(uint32_t klass_id, ValEqFunc func);
 
 // for fixed argc
 void klass_def_method(uint32_t klass_id, uint32_t method_id, int32_t argc, ValMethodFunc func, bool is_final);
