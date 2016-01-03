@@ -13,7 +13,7 @@ Val nb_string_new_c(const char* p);
 
 Val nb_string_new_literal_c(const char* p) __attribute__((const));
 
-Val ng_string_new_f(const char* template, ...);
+Val nb_string_new_f(const char* template, ...);
 
 Val nb_string_new_transient(size_t size);
 
