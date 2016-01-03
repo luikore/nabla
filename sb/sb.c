@@ -65,21 +65,21 @@ static void _append_u8(char* signed_s, int64_t* pos, int32_t c) {
 
 #pragma mark ## actions
 
-static Val char_escape_sp(Spellbreak* ctx, Val capture_i) {
+static ValPair char_escape_sp(Spellbreak* ctx, Val capture_i) {
   int i = VAL_TO_INT(capture_i);
   char c = ctx->curr[CAPTURE_BEGIN(ctx, i)];
   switch (c) {
-    case 'a': return VAL_FROM_INT('\a');
-    case 'b': return VAL_FROM_INT('\b');
-    case 'f': return VAL_FROM_INT('\f');
-    case 'n': return VAL_FROM_INT('\n');
-    case 'r':
+    case 'a': return (ValPair){VAL_FROM_INT('\a'), VAL_NIL};
+    case 'b': return (ValPair){VAL_FROM_INT('\b'), VAL_NIL};
+    case 'f': return (ValPair){VAL_FROM_INT('\f'), VAL_NIL};
+    case 'n': return (ValPair){VAL_FROM_INT('\n'), VAL_NIL};
+    case 'r': return (ValPair){VAL_FROM_INT('\r'), VAL_NIL};
     default:
-      return VAL_FROM_INT('\r');
+      return (ValPair){VAL_NIL, nb_string_new_literal_c("bad escape char")};
   }
 }
 
-static Val char_hex(Spellbreak* ctx, Val capture_i) {
+static ValPair char_hex(Spellbreak* ctx, Val capture_i) {
   int to = CAPTURE_END(ctx, capture_i);
 
   int64_t r = 0;
@@ -87,18 +87,18 @@ static Val char_hex(Spellbreak* ctx, Val capture_i) {
     r *= 16;
     r += _hex_to_uint(ctx->curr[i]);
   }
-  return VAL_FROM_INT(r);
+  return (ValPair){VAL_FROM_INT(r), VAL_NIL};
 }
 
-static Val char_no_escape(Spellbreak* ctx, Val capture_i) {
+static ValPair char_no_escape(Spellbreak* ctx, Val capture_i) {
   int i = VAL_TO_INT(capture_i);
   int size = CAPTURE_END(ctx, i) - CAPTURE_BEGIN(ctx, i);
   const char* s = ctx->curr + CAPTURE_BEGIN(ctx, i);
   int32_t c = _scan_u8(size, s);
-  return VAL_FROM_INT(c);
+  return (ValPair){VAL_FROM_INT(c), VAL_NIL};
 }
 
-static Val concat_char(Spellbreak* ctx, Val left_s, Val right_c) {
+static ValPair concat_char(Spellbreak* ctx, Val left_s, Val right_c) {
   int c = VAL_TO_INT(right_c);
   // TODO refcount and transient optimize
   const char* from = nb_string_ptr(left_s);
@@ -107,12 +107,12 @@ static Val concat_char(Spellbreak* ctx, Val left_s, Val right_c) {
   char* to = (char*)nb_string_ptr(res_s);
   memcpy(to, from, size);
   to[size] = c;
-  return res_s;
+  return (ValPair){res_s, VAL_NIL};
 }
 
 // invoke parser defined in peg_dict, set result in context_stack
 // NOTE ending current context is managed in lex vm
-static Val parse(Spellbreak* sb) {
+static ValPair parse(Spellbreak* sb) {
   size_t context_stack_size = ContextStack.size(&sb->context_stack);
   assert(context_stack_size);
   ContextEntry* ce = ContextStack.at(&sb->context_stack, context_stack_size);
@@ -121,38 +121,34 @@ static Val parse(Spellbreak* sb) {
 
   Val parser;
   if (!nb_dict_find(sb->peg_dict, nb_string_ptr(s), nb_string_byte_size(s), &parser)) {
-    val_throw(nb_string_new_literal_c("bad context name str"));
+    return (ValPair){VAL_NIL, nb_string_new_literal_c("bad context name str")};
   }
   int token_size = TokenStream.size(&sb->token_stream) - ce->token_pos;
   Token* token_start = TokenStream.at(&sb->token_stream, ce->token_pos);
   ValPair pair = sb_vm_peg_exec((void*)parser, sb->arena, token_size, token_start);
-  if (pair.snd != VAL_UNDEF) {
-    val_throw(pair.snd);
-  }
-
-  return pair.fst;
+  return pair;
 }
 
 // TODO support bignum
-static Val parse_int(Spellbreak* ctx, Val capture_i) {
+static ValPair parse_int(Spellbreak* ctx, Val capture_i) {
   int group = VAL_TO_INT(capture_i);
   const char* s = ctx->curr + CAPTURE_BEGIN(ctx, group);
   char* end;
   int size = CAPTURE_END(ctx, group) - CAPTURE_BEGIN(ctx, group);
   int64_t i = strtoll(s, &end, 10);
   if ((const char*)end - s != 0) {
-    // TODO just terminate the parser
-    fatal_err("conversion to string failed for '%.*s', parsed size = %ld", size, s, (const char*)end - s);
+    Val err = nb_string_new_f("conversion to string failed for '%.*s', parsed size = %ld", size, s, (const char*)end - s);
+    return (ValPair){VAL_NIL, err};
   }
-  return VAL_FROM_INT(i);
+  return (ValPair){VAL_FROM_INT(i), VAL_NIL};
 }
 
-static Val style(Spellbreak* ctx, int32_t argc, Val* argv) {
+static ValPair style(Spellbreak* ctx, int32_t argc, Val* argv) {
   // todo
-  return VAL_NIL;
+  return (ValPair){VAL_NIL, VAL_NIL};
 }
 
-static Val token(Spellbreak* ctx, int32_t argc, Val* argv) {
+static ValPair token(Spellbreak* ctx, int32_t argc, Val* argv) {
   Val name = argv[0];
   int group = ((argc > 1) ? VAL_FROM_INT(argv[1]) : 0);
   Val val = (argc == 3 ? argv[2] : VAL_UNDEF);
@@ -164,12 +160,12 @@ static Val token(Spellbreak* ctx, int32_t argc, Val* argv) {
   };
   TokenStream.push(&ctx->token_stream, tok);
 
-  return VAL_NIL;
+  return (ValPair){VAL_NIL, VAL_NIL};
 }
 
-static Val yield(Spellbreak* ctx, Val obj) {
-  
-  return VAL_NIL;
+static ValPair yield(Spellbreak* ctx, Val obj) {
+  // todo
+  return (ValPair){VAL_NIL, VAL_NIL};
 }
 
 static Val tail(Spellbreak* ctx, Val list) {

@@ -77,6 +77,7 @@ ValPair sb_vm_lex_exec(Spellbreak* sb) {
   Val iseq;
   bool matched;
   uint16_t* pc;
+  Val err;
 
 # define DISPATCH goto *labels[*pc]
 # define CASE(l) label_##l: case l
@@ -90,7 +91,8 @@ ValPair sb_vm_lex_exec(Spellbreak* sb) {
     .curr = sb->curr\
   };\
   if (!nb_dict_find(sb->lex_dict, val_strlit_ptr(name), val_strlit_byte_size(name), &iseq)) {\
-    val_throw(nb_string_new_literal_c("can't find lex"));\
+    err = nb_string_new_f("can't find lex: %.*s", (int)val_strlit_byte_size(name), val_strlit_ptr(name));
+    goto error;
   }\
   ContextStack.push(&sb->context_stack, ce);\
 })
@@ -125,7 +127,12 @@ begin:
       CASE(CALL): {
         ArgU32U32 data = DECODE(ArgU32U32, pc);
         sb->stack.size -= data.arg1;
-        STACK_PUSH(val_send((Val)sb, data.arg2, data.arg1, STACK_TOP()));
+        ValPair res = val_send((Val)sb, data.arg2, data.arg1, STACK_TOP());
+        if (res.snd) {
+          goto end;
+        } else {
+          STACK_PUSH(res.fst);
+        }
         DISPATCH;
       }
       CASE(NODE): {
@@ -214,13 +221,11 @@ begin:
 
 end:
 
-  {
-    ValPair ret = {VAL_UNDEF, VAL_UNDEF};
-    if (true) { // todo err check
-      ret.fst = Vals.pop(&sb->stack);
-    }
-    return ret;
-  }
+  return (ValPair){Vals.pop(&sb->stack), VAL_NIL};
+
+error:
+
+  return (ValPair){VAL_NIL, err};
 }
 
 bool sb_string_match(Val pattern_str, int64_t size, const char* str, int32_t* capture_size, int32_t* captures) {
