@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include "string.h"
 #include "sym-table.h"
 #include "utils/str.h"
@@ -52,6 +53,16 @@ Val nb_string_new_c(const char* p) {
 
 Val nb_string_new_literal_c(const char* p) {
   return VAL_FROM_STR((uint64_t)val_strlit_new_c(p));
+}
+
+Val nb_string_new_f(const char* template, ...) {
+  va_list ap;
+  va_start(ap, template);
+  int sz = vsnprintf(NULL, 0, template, ap);
+  char buf[sz + 1];
+  vsnprintf(buf, sz + 1, template, ap);
+  va_end(ap);
+  return nb_string_new(sz, buf);
 }
 
 Val nb_string_new_transient(size_t size) {
