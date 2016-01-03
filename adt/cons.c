@@ -8,6 +8,25 @@ typedef struct {
 
 #define QWORDS_CONS ((sizeof(Cons) + 7) / 8)
 
+bool _cons_eq(Val lhs, Val rhs) {
+  if (lhs == VAL_NIL && rhs == VAL_NIL) {
+    return true;
+  }
+  if (VAL_KLASS(lhs) != KLASS_CONS || VAL_KLASS(rhs) != KLASS_CONS) {
+    return false;
+  }
+  return val_eq(nb_cons_head(lhs), nb_cons_head(rhs)) &&
+    _cons_eq(nb_cons_tail(lhs), nb_cons_tail(rhs));
+}
+
+uint64_t _cons_hash(Val obj) {
+  if (obj == VAL_NIL) {
+    return KLASS_CONS_SALT;
+  }
+  uint64_t hash = val_hash(nb_cons_head(obj));
+  return hash ^ _cons_hash(nb_cons_tail(obj));
+}
+
 void _cons_destruct(void* p) {
   Cons* cons = p;
   RELEASE(cons->head);
@@ -17,8 +36,8 @@ void _cons_destruct(void* p) {
 void nb_cons_init_module() {
   klass_def_internal(KLASS_CONS, val_strlit_new_c("Cons"));
   klass_set_destruct_func(KLASS_CONS, _cons_destruct);
-  // klass_def_method(KLASS_CONS, val_strlit_new_c("=="), 1, _cons_eq, true);
-  // klass_def_method(KLASS_CONS, val_strlit_new_c("hash"), 0, _cons_hash, true);
+  klass_set_hash_func(KLASS_CONS, _cons_hash);
+  klass_set_eq_func(KLASS_CONS, _cons_eq);
 }
 
 Val nb_cons_new(Val head, Val tail) {

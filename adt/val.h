@@ -150,6 +150,7 @@ enum {
 // some salts for hashing
 #define KLASS_BOX_SALT 0x01030507090A0CULL
 #define KLASS_TOKEN_SALT 0x9370ULL
+#define KLASS_CONS_SALT 0x29450A0CULL
 
 inline static uint32_t VAL_KLASS(Val v) {
   if (VAL_IS_IMM(v)) {
