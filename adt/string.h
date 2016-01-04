@@ -13,7 +13,7 @@ Val nb_string_new_c(const char* p);
 
 Val nb_string_new_literal_c(const char* p) __attribute__((const));
 
-Val nb_string_new_f(const char* template, ...);
+Val nb_string_new_f(const char* template, ...) __attribute__((format (printf, 1, 2)));
 
 Val nb_string_new_transient(size_t size);
 
