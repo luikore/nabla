@@ -10,10 +10,10 @@
 
 #include "compile.h"
 
-VmPeg* sb_vm_peg_compile(CompileCtx* ctx, Val peg_node, Val* err) {
-  return NULL;
+Val sb_vm_peg_compile(CompileCtx* ctx, Val node) {
+  return VAL_NIL;
 }
 
-Val sb_vm_peg_exec(Spellbreak* sb, VmPeg* peg, int32_t token_pos, Val* err) {
-  return 0;
+ValPair sb_vm_peg_exec(void* peg, void* arena, int32_t token_size, Token* tokens) {
+  return (ValPair){VAL_NIL, VAL_NIL};
 }

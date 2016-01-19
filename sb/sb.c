@@ -168,8 +168,8 @@ static ValPair yield(Spellbreak* ctx, Val obj) {
   return (ValPair){VAL_NIL, VAL_NIL};
 }
 
-static Val tail(Spellbreak* ctx, Val list) {
-  return nb_cons_tail(list);
+static ValPair tail(Spellbreak* ctx, Val list) {
+  return (ValPair){nb_cons_tail(list), VAL_NIL};
 }
 
 #pragma mark ## api

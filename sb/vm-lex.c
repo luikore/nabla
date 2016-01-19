@@ -53,6 +53,7 @@ typedef struct {
 #define DECODE(ty, pc) ({ty res = *((ty*)pc); pc = (uint16_t*)((ty*)pc + 1); res;})
 
 Val sb_vm_lex_compile(CompileCtx* ctx, Val lex_node) {
+  return VAL_NIL;
 }
 
 ValPair sb_vm_lex_exec(Spellbreak* sb) {
@@ -91,8 +92,8 @@ ValPair sb_vm_lex_exec(Spellbreak* sb) {
     .curr = sb->curr\
   };\
   if (!nb_dict_find(sb->lex_dict, val_strlit_ptr(name), val_strlit_byte_size(name), &iseq)) {\
-    err = nb_string_new_f("can't find lex: %.*s", (int)val_strlit_byte_size(name), val_strlit_ptr(name));
-    goto error;
+    err = nb_string_new_f("can't find lex: %.*s", (int)val_strlit_byte_size(name), val_strlit_ptr(name));\
+    goto terminate;\
   }\
   ContextStack.push(&sb->context_stack, ce);\
 })
@@ -129,7 +130,7 @@ begin:
         sb->stack.size -= data.arg1;
         ValPair res = val_send((Val)sb, data.arg2, data.arg1, STACK_TOP());
         if (res.snd) {
-          goto end;
+          goto terminate;
         } else {
           STACK_PUSH(res.fst);
         }
@@ -171,7 +172,7 @@ begin:
       CASE(MATCH_RE): {
         // todo check eof
         Arg3232 offsets = DECODE(Arg3232, pc);
-        matched = sb_vm_regexp_exec(pc, sb->s + sb->size - sb->curr, sb->curr, &sb->capture_size, sb->captures);
+        matched = sb_vm_regexp_exec(pc, sb->s + sb->size - sb->curr, sb->curr, sb->captures);
         if (matched) {
           sb->curr += sb->captures[1];
           pc += offsets.arg1;
@@ -204,7 +205,7 @@ begin:
           goto begin;
         } else {
           if (ContextStack.size(&sb->context_stack) == 1) {
-            goto end;
+            goto terminate;
           } else {
             CTX_POP();
             goto begin;
@@ -219,15 +220,11 @@ begin:
     }
   }
 
-end:
+terminate:
 
-  return (ValPair){Vals.pop(&sb->stack), VAL_NIL};
-
-error:
-
-  return (ValPair){VAL_NIL, err};
+  return (ValPair){err ? VAL_NIL : Vals.pop(&sb->stack), VAL_NIL};
 }
 
 bool sb_string_match(Val pattern_str, int64_t size, const char* str, int32_t* capture_size, int32_t* captures) {
-  
+  return false;
 }
