@@ -23,12 +23,48 @@ static uint16_t simple_reg[] = {
 };
 
 // (a+)(b+)
+static uint16_t complex_reg[] = {
+  SAVE, 2,
+  /*2*/ CHAR, 'a', 0,
+  FORK, 2, 0, 10, 0,
+  /*10*/ SAVE, 3,
+  SAVE, 4,
+  /*14*/ CHAR, 'b', 0,
+  FORK, 14, 0, 22, 0,
+  /*22*/ SAVE, 5,
+  MATCH
+};
+
+#define MATCH_REG(reg_ty)\
+  memset(captures, 0, sizeof(captures));\
+  res = sb_vm_regexp_exec(reg_ty, strlen(src), src, captures)
 
 void vm_regexp_suite() {
-  ccut_test("vm_regexp_exec") {
+  ccut_test("vm_regexp_exec simple regexp") {
     int32_t captures[20];
-    const char* src = "ab";
-    bool res = sb_vm_regexp_exec(simple_reg, strlen(src), src, captures);
+    const char* src;
+    bool res;
+
+    src = "ab";
+    MATCH_REG(simple_reg);
+    assert_eq(true, res);
+
+    src = "";
+    MATCH_REG(simple_reg);
+    assert_eq(false, res);
+  }
+
+  ccut_test("vm_regexp_exec complex regexp") {
+    int32_t captures[20];
+    const char* src;
+    bool res;
+
+    src = "aaab";
+    MATCH_REG(complex_reg);
+    assert_eq(true, res);
+
+    src = "abb";
+    MATCH_REG(complex_reg);
     assert_eq(true, res);
   }
 }

@@ -66,27 +66,29 @@ static void _add_thread(struct Threads* threads, uint16_t* from_pc, int32_t* fro
 }
 
 // NOTE captures[0] stores the size of current capture
-bool sb_vm_regexp_exec(uint16_t* pc, int64_t size, const char* str, int32_t* captures) {
+bool sb_vm_regexp_exec(uint16_t* init_pc, int64_t size, const char* str, int32_t* captures) {
   struct Threads ts[2];
   struct Threads* ct = ts;
   struct Threads* nt = ts + 1;
+  uint16_t* pc;
   Threads.init(ct, 10);
   Threads.init(nt, 10);
 
-  _add_thread(ct, pc, captures);
+  _add_thread(ct, init_pc, captures);
   for (int j = 0; j <= size; j++) {
     for (int i = 0; i < Threads.size(ct); i++) {
       Thread* t = Threads.at(ct, i);
-      switch (*t->pc) {
+      pc = t->pc;
+      switch (*pc) {
         case CHAR: {
           if (j == size) {
             break;
           }
-          int c = DECODE(Arg32, t->pc).arg1;
+          int c = DECODE(Arg32, pc).arg1;
           if (str[j] != c) {
             break;
           }
-          _add_thread(nt, t->pc, t->saved);
+          _add_thread(nt, pc, t->saved);
           break;
         }
 
@@ -99,41 +101,41 @@ bool sb_vm_regexp_exec(uint16_t* pc, int64_t size, const char* str, int32_t* cap
         }
 
         case JMP: {
-          int offset = DECODE(Arg32, t->pc).arg1;
-          _add_thread(ct, t->pc + offset, t->saved);
+          int offset = DECODE(Arg32, pc).arg1;
+          _add_thread(ct, init_pc + offset, t->saved);
           break;
         }
 
         case FORK: {
-          Arg3232 offsets = DECODE(Arg3232, t->pc);
-          _add_thread(ct, t->pc + offsets.arg1, t->saved);
-          _add_thread(ct, t->pc + offsets.arg2, t->saved);
+          Arg3232 offsets = DECODE(Arg3232, pc);
+          _add_thread(ct, init_pc + offsets.arg1, t->saved);
+          _add_thread(ct, init_pc + offsets.arg2, t->saved);
           break;
         }
 
         case SAVE: {
-          int16_t save_pos = DECODE(Arg16, t->pc).arg1;
+          int16_t save_pos = DECODE(Arg16, pc).arg1;
           if (t->saved[0] < save_pos) {
             t->saved[0] = save_pos;
           }
           t->saved[save_pos] = j;
-          _add_thread(ct, t->pc, t->saved);
+          _add_thread(ct, pc, t->saved);
           break;
         }
 
         case AHEAD: {
-          int32_t offset = DECODE(Arg32, t->pc).arg1;
-          bool matched = sb_vm_regexp_exec(t->pc + offset, size - j, str + j, t->saved);
+          int32_t offset = DECODE(Arg32, pc).arg1;
+          bool matched = sb_vm_regexp_exec(init_pc + offset, size - j, str + j, t->saved);
           if (matched) {
-            _add_thread(ct, t->pc, t->saved);
+            _add_thread(ct, pc, t->saved);
           }
         }
 
         case N_AHEAD: {
-          int32_t offset = DECODE(Arg32, t->pc).arg1;
-          bool matched = sb_vm_regexp_exec(t->pc + offset, size - j, str + j, t->saved);
+          int32_t offset = DECODE(Arg32, pc).arg1;
+          bool matched = sb_vm_regexp_exec(init_pc + offset, size - j, str + j, t->saved);
           if (!matched) {
-            _add_thread(ct, t->pc, t->saved);
+            _add_thread(ct, pc, t->saved);
           }
         }
 
@@ -142,9 +144,14 @@ bool sb_vm_regexp_exec(uint16_t* pc, int64_t size, const char* str, int32_t* cap
         }
       }
     }
+    if (nt->size == 0) {
+      goto not_match;
+    }
     SWAP(ct, nt);
     nt->size = 0;
   }
+
+not_match:
 
   Threads.cleanup(ct);
   Threads.cleanup(nt);
