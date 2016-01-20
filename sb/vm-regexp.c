@@ -34,6 +34,14 @@ typedef struct {
 
 #define DECODE(ty, pc) ({ty res = *((ty*)pc); pc = (uint16_t*)((ty*)pc + 1); res;})
 
+#define ENCODE(iseq, ty, data) do {\
+  uint16_t args[sizeof(ty) / sizeof(uint16_t)];\
+  ((ty*)args)[0] = data;\
+  for (int _i = 0; _i < (sizeof(ty) / sizeof(uint16_t)); _i++) {\
+    Iseq.push(iseq, args[_i]);\
+  }\
+} while (0)
+
 typedef struct {
   uint16_t* pc;
   int32_t saved[20];
@@ -158,6 +166,19 @@ not_match:
   return false;
 }
 
-Val sb_vm_regexp_from_string(struct Iseq* iseq, void* arena, Val s) {
+Val sb_vm_regexp_from_string(struct Iseq* iseq, Val s) {
+  if (VAL_KLASS(s) != KLASS_STRING) {
+    return nb_string_new_literal_c("not string");
+  }
+
+  const char* ptr = nb_string_ptr(s);
+  int size = nb_string_byte_size(s);
+
+  for (int i = 0; i < size; i++) {
+    ENCODE(iseq, Arg32, ((Arg32){CHAR, ptr[i]}));
+  }
+  ENCODE(iseq, uint16_t, MATCH);
+  ENCODE(iseq, uint16_t, END);
+
   return VAL_NIL;
 }

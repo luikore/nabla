@@ -125,6 +125,8 @@ ValPair sb_vm_peg_exec(void* peg, void* arena, int32_t token_size, Token* tokens
 // updates iseq, returns err
 Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val node);
 
+Val sb_vm_regexp_from_string(struct Iseq* iseq, Val s);
+
 // match size stored in captures[0]
 bool sb_vm_regexp_exec(uint16_t* pc, int64_t size, const char* str, int32_t* captures);
 

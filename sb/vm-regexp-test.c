@@ -67,4 +67,21 @@ void vm_regexp_suite() {
     MATCH_REG(complex_reg);
     assert_eq(true, res);
   }
+
+  ccut_test("vm_regexp_from_string") {
+    struct Iseq iseq;
+    Iseq.init(&iseq, 0);
+
+    const char* src = "foo-bar-baz";
+
+    Val s = nb_string_new_c(src);
+    Val err = sb_vm_regexp_from_string(&iseq, s);
+    assert_eq(VAL_NIL, err);
+
+    int32_t captures[20];
+    bool res = sb_vm_regexp_exec(Iseq.at(&iseq, 0), strlen(src), src, captures);
+    assert_eq(true, res);
+
+    Iseq.cleanup(&iseq);
+  }
 }
