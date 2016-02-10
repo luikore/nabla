@@ -225,7 +225,7 @@ uint32_t klass_find(Val name, uint32_t parent) {
 }
 
 uint32_t klass_find_c(const char* name, uint32_t parent) {
-  return klass_find(nb_string_new_literal_c(klass), parent);
+  return klass_find(nb_string_new_literal_c(name), parent);
 }
 
 uint32_t klass_ensure(Val name, uint32_t parent) {

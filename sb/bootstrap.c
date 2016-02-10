@@ -7,9 +7,9 @@ static uint32_t _guarded_klass_find_c(const char* name, uint32_t namespace) {
   } else {
     klass_debug();
     static const char* template = "klass %s not found";
-    int size = strlen(template) + strlen(klass);
+    int size = strlen(template) + strlen(name);
     char buf[size];
-    size = sprintf(buf, template, klass);
+    size = sprintf(buf, template, name);
     val_throw(nb_string_new_literal(size, buf));
   }
 }

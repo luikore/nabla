@@ -205,7 +205,7 @@ static void _ensure_tags() {
   }
 }
 
-static int _new_label(Labels* labels) {
+static int _new_label(struct Labels* labels) {
   int i = Labels.size(labels);
   Labels.push(labels, 0);
   return i;
@@ -222,6 +222,11 @@ static void _push_fork(struct Stack* stack, Val label1, Val label2) {
   Stack.push(stack, FORK_NODE);
 }
 
+static void _push_jmp(struct Stack* stack, Val label) {
+  Stack.push(stack, label);
+  Stack.push(stack, JMP_NODE);
+}
+
 static void _push_seq(struct Stack* stack, Val seq) {
   Val content = nb_struct_get(seq, 0);
   for (Val tail = content; tail != VAL_NIL; tail = nb_cons_tail(tail)) {
@@ -229,7 +234,7 @@ static void _push_seq(struct Stack* stack, Val seq) {
   }
 }
 
-static void _push_branches(struct Stack* stack, Val branches) {
+static void _push_branches(struct Stack* stack, struct Labels* labels, Val branches) {
   /* example encoding e1 | e2 | e3
 
     fork L1 L2
@@ -250,27 +255,49 @@ static void _push_branches(struct Stack* stack, Val branches) {
     L0:
 
   */
-  Val label0 = _new_label(&labels);
-  _push_label(&stack, label0);
+  Val label0 = _new_label(labels);
+  _push_label(stack, label0);
   for (Val tail = branches; tail != VAL_NIL; tail = nb_cons_tail(tail)) {
 
-    Val label1 = _new_label(&labels);
-    Val label2 = _new_label(&labels);
+    Val label1 = _new_label(labels);
+    Val label2 = _new_label(labels);
 
-    _push_label(&stack, label2);
-    _push_jmp(&stack, label0);
-    Stack.push(&stack, nb_cons_head(tail));
-    _push_label(&stack, label1);
+    _push_label(stack, label2);
+    _push_jmp(stack, label0);
+    Stack.push(stack, nb_cons_head(tail));
+    _push_label(stack, label1);
 
-    _push_fork(&stack, label1, label2);
+    _push_fork(stack, label1, label2);
   }
 }
 
 static void _encode_range(struct Iseq* iseq, Val range_node) {
 }
 
+static void _compute_labels(struct Iseq* iseq, struct Labels* labels, struct Forks* forks) {
+}
+
 Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val node) {
   _ensure_tags();
+
+  uint32_t kSeq              = klass_find_c("Seq", sb_klass());
+  uint32_t kPredefAnchor     = klass_find_c("PredefAnchor", sb_klass());
+  uint32_t kFlag             = klass_find_c("Flag", sb_klass());
+  uint32_t kQuantified       = klass_find_c("Quantified", sb_klass());
+  uint32_t kQuantifiedRange  = klass_find_c("QuantifiedRange", sb_klass());
+  uint32_t kUnit             = klass_find_c("Unit", sb_klass());
+  uint32_t kGroup            = klass_find_c("Group", sb_klass());
+  uint32_t kCharGroupPredef  = klass_find_c("CharGroupPredef", sb_klass());
+  uint32_t kUnicodeCharClass = klass_find_c("UnicodeCharClass", sb_klass());
+  uint32_t kBracketCharGroup = klass_find_c("BracketCharGroup", sb_klass());
+  uint32_t kCharRange        = klass_find_c("CharRange", sb_klass());
+
+  struct Stack stack;
+  struct Labels labels;
+  struct Forks forks;
+  Stack.init(&stack, 25);
+  Labels.init(&labels, 15);
+  Forks.init(&forks, 5);
 
   /*
   compile stack layout
@@ -290,25 +317,6 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
   3. go through Splits and Jmps, replace all label numbers with label pos.
   */
 
-  uint32_t kSeq              = klass_find_c("Seq", sb_klass());
-  uint32_t kPredefAnchor     = klass_find_c("PredefAnchor", sb_klass());
-  uint32_t kFlag             = klass_find_c("Flag", sb_klass());
-  uint32_t kQuantified       = klass_find_c("Quantified", sb_klass());
-  uint32_t kQuantifiedRange  = klass_find_c("QuantifiedRange", sb_klass());
-  uint32_t kUnit             = klass_find_c("Unit", sb_klass());
-  uint32_t kGroup            = klass_find_c("Group", sb_klass());
-  uint32_t kCharGroupPredef  = klass_find_c("CharGroupPredef", sb_klass());
-  uint32_t kUnicodeCharClass = klass_find_c("UnicodeCharClass", sb_klass());
-  uint32_t kBracketCharGroup = klass_find_c("BracketCharGroup", sb_klass());
-  uint32_t kCharRange        = klass_find_c("CharRange", sb_klass());
-
-  struct Stack stack;
-  struct Labels labels;
-  struct Forks forks;
-  Stack.init(&stack);
-  Labels.init(&labels);
-  Forks.init(&forks);
-
   Stack.push(&stack, MATCH_NODE);
 
   // loop compile
@@ -317,12 +325,21 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
   while (Stack.size(&stack)) {
     Val curr = Stack.pop(&stack);
     if (curr == LABEL_NODE) {
+      Val num = Stack.pop(&stack);
+      int offset = Iseq.size(iseq);
+      Labels.at(&labels, num)[0] = offset;
       continue;
     } else if (curr == FORK_NODE) {
+      int32_t offset1 = (int32_t)Stack.pop(&stack);
+      int32_t offset2 = (int32_t)Stack.pop(&stack);
+      ENCODE(iseq, Arg3232, ((Arg3232){FORK, offset1, offset2}));
       continue;
     } else if (curr == JMP_NODE) {
+      int32_t offset = Stack.pop(&stack);
+      ENCODE(iseq, Arg32, ((Arg32){JMP, offset}));
       continue;
     } else if (curr == MATCH_NODE) {
+      ENCODE(iseq, uint16_t, MATCH);
       continue;
     }
 
@@ -332,11 +349,11 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
       ENCODE(iseq, Arg32, ((Arg32){CHAR, chr}));
 
     } else if (klass == kCharRange) {
-      _encode_range(&stack, curr);
+      _encode_range(iseq, curr);
     } else if (klass == kSeq) {
       _push_seq(&stack, curr);
     } else if (klass == KLASS_CONS) { // branches
-      _push_branches(&stack, curr);
+      _push_branches(&stack, &labels, curr);
     } else if (klass == kPredefAnchor) {
     } else if (klass == kFlag) {
     } else if (klass == kQuantified) {
