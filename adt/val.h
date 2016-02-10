@@ -254,6 +254,8 @@ void klass_def_internal(uint32_t klass_id, uint32_t name_id);
 // return 0 if not exist
 uint32_t klass_find(Val name, uint32_t parent_id);
 
+uint32_t klass_find_c(const char* name, uint32_t parent_id);
+
 // create if not exist
 uint32_t klass_ensure(Val name, uint32_t parent_id);
 
