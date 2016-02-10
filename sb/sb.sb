@@ -114,7 +114,7 @@ peg Peg = [
   Peg : begin.peg Rule* end.peg { $2 }
   Rule : name.rule op.def space.eol? RuleBody space.eol { PegRule[$1, $4] }
        / space.eol { }
-  RuleBody : SeqRule { [$1] } >* space.eol? BranchRight { [*$1, $3] }
+  RuleBody : SeqRule { [$1] } >* space.eol? BranchRight { [$3, *$1] }
   BranchRight : op.branch.quantified SeqRule { BranchRight[$1, $2] }
               / op.branch SeqRule            { BranchRight[$1, $2] }
               / op.branch.op-table           { OpBranchRight[$1] }
@@ -239,9 +239,9 @@ lex Regexp = [
 
   "|" { :token "op.branch" }
 
-  /\[\^?/ { :token "begin.char-group", cg_stack = [*cg_stack, true] }
-  "]"    { :token "end.char-group", cg_stack = :tail cg_stack }
-  "-"    { if cg_stack, :token "op.minus", else :token "char" }
+  /\[\^?/ { :token "begin.char-group", cg_stack = [true, *cg_stack] }
+  "]"     { :token "end.char-group", cg_stack = :tail cg_stack }
+  "-"     { if cg_stack, :token "op.minus", else :token "char"; }
 
   /\{[A-Z]\w*\}/    { :token "interpolate.predef" }
 
@@ -261,7 +261,7 @@ lex Regexp = [
 
 peg Regexp = [
   Regexp : begin.regexp Branches end.regexp { Regexp[$2] }
-  Branches : Seq { [$1] } >* op.branch Seq { [*$1, $3] }
+  Branches : Seq { [$1] } >* op.branch Seq { [$3, *$1] }
   Seq : SeqUnit* { Seq[$1] }
   SeqUnit : anchor { PredefAnchor[$1] }
           / flag.case-insensitive { Flag[$1] }
