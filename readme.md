@@ -24,6 +24,6 @@ For building in windows, you can install [MSYS2](msys2.github.io) and use pacman
 
 # Copying
 
-Nabla & CCUT: BSDL
-SipHash: vendor/siphash/README.md
-TinyCThread: vendor/tinycthread/README.txt
+- Nabla & CCUT: BSDL
+- SipHash: vendor/siphash/README.md
+- TinyCThread: vendor/tinycthread/README.txt
