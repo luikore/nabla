@@ -2,20 +2,9 @@
 
 #include "compile.h"
 #include <adt/utils/mut-array.h>
+#include "vm-regexp-opcodes.c"
 
 // PikeVM as described in https://swtch.com/~rsc/regexp/regexp2.html
-enum OpCodes {
-  // op    // args                 // description
-  CHAR,    // c:int32_t            // match a char
-  MATCH,   //                      // found a match
-  JMP,     // offset:int32_t       // unconditional jump
-  FORK,    // x:int32_t, y:int32_t // fork execution
-  SAVE,    // i:int16_t            // save current position to captures[i]
-  AHEAD,   // offset:int32_t       // invoke lookahead code starting from offset
-  N_AHEAD, // offset:int32_t       // invoke negative lookahead code starting from offset
-  END,     //                      // terminate opcode
-  OP_CODES_SIZE
-};
 
 typedef struct {
   uint16_t op;
@@ -93,6 +82,18 @@ bool sb_vm_regexp_exec(uint16_t* init_pc, int64_t size, const char* str, int32_t
           }
           int c = DECODE(Arg32, pc).arg1;
           if (str[j] != c) {
+            break;
+          }
+          _add_thread(nt, pc, t->saved);
+          break;
+        }
+
+        case RANGE: {
+          if (j == size) {
+            break;
+          }
+          Arg3232 range = DECODE(Arg3232, pc);
+          if (str[j] < range.arg1 || str[j] > range.arg2) {
             break;
           }
           _add_thread(nt, pc, t->saved);
@@ -184,14 +185,7 @@ Val sb_vm_regexp_from_string(struct Iseq* iseq, Val s) {
   return VAL_NIL;
 }
 
-// labels[num] = pos
-MUT_ARRAY_DECL(Labels, int);
-
-// forks = [iseq_pos1, iseq_pos2, ...]
-MUT_ARRAY_DECL(Forks, int);
-
-// jmps = [iseq_pos1, iseq_pos2, ...]
-MUT_ARRAY_DECL(Jmps, int);
+MUT_ARRAY_DECL(Ints, int);
 
 static Val MATCH_NODE=0, LABEL_NODE=0, JMP_NODE=0, FORK_NODE=0;
 
@@ -205,9 +199,9 @@ static void _ensure_tags() {
   }
 }
 
-static int _new_label(struct Labels* labels) {
-  int i = Labels.size(labels);
-  Labels.push(labels, 0);
+static int _new_label(struct Ints* labels) {
+  int i = Ints.size(labels);
+  Ints.push(labels, 0);
   return i;
 }
 
@@ -234,7 +228,7 @@ static void _push_seq(struct Stack* stack, Val seq) {
   }
 }
 
-static void _push_branches(struct Stack* stack, struct Labels* labels, Val branches) {
+static void _push_branches(struct Stack* stack, struct Ints* labels, Val branches) {
   /* example encoding e1 | e2 | e3
 
     fork L1 L2
@@ -272,9 +266,29 @@ static void _push_branches(struct Stack* stack, struct Labels* labels, Val branc
 }
 
 static void _encode_range(struct Iseq* iseq, Val range_node) {
+  Val from = nb_struct_get(range_node, 0);
+  Val to = nb_struct_get(range_node, 1);
+  Arg3232 range = {RANGE, (int32_t)VAL_TO_INT(from), (int32_t)VAL_TO_INT(to)};
+  ENCODE(iseq, Arg3232, range);
 }
 
-static void _compute_labels(struct Iseq* iseq, struct Labels* labels, struct Forks* forks) {
+static void _translate_label_pos(struct Iseq* iseq, struct Ints* labels, struct Ints* jmps, struct Ints* forks) {
+  int jmps_size = Ints.size(jmps);
+  for (int i = 0; i < jmps_size; i++) {
+    int j = *Ints.at(jmps, i);
+    // [JMP:uint16_t, offset:int32_t]
+    int32_t* ptr = (int32_t*)Iseq.at(iseq, j + 1);
+    ptr[0] = *Ints.at(labels, ptr[0]);
+  }
+
+  int forks_size = Ints.size(forks);
+  for (int i = 0; i < forks_size; i++) {
+    int j = *Ints.at(forks, i);
+    // [FORK:uint16_t, left:int32_t, right:int32_t]
+    int32_t* ptr = (int32_t*)Iseq.at(iseq, j + 1);
+    ptr[0] = *Ints.at(labels, ptr[0]);
+    ptr[1] = *Ints.at(labels, ptr[1]);
+  }
 }
 
 Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val node) {
@@ -293,11 +307,11 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
   uint32_t kCharRange        = klass_find_c("CharRange", sb_klass());
 
   struct Stack stack;
-  struct Labels labels;
-  struct Forks forks;
+  struct Ints labels, forks, jmps;
   Stack.init(&stack, 25);
-  Labels.init(&labels, 15);
-  Forks.init(&forks, 5);
+  Ints.init(&labels, 15);
+  Ints.init(&forks, 5);
+  Ints.init(&jmps, 5);
 
   /*
   compile stack layout
@@ -312,7 +326,7 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
 
   encoding of fork, jmp & labels
   1. create label nodes, only number is stored.
-  2. generate label node: fill curr pos in Labels.
+  2. generate label node: fill curr pos in Ints.
      generate fork/jmp node: encode label numbers instead.
   3. go through Splits and Jmps, replace all label numbers with label pos.
   */
@@ -327,15 +341,17 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
     if (curr == LABEL_NODE) {
       Val num = Stack.pop(&stack);
       int offset = Iseq.size(iseq);
-      Labels.at(&labels, num)[0] = offset;
+      *Ints.at(&labels, num) = offset;
       continue;
     } else if (curr == FORK_NODE) {
       int32_t offset1 = (int32_t)Stack.pop(&stack);
       int32_t offset2 = (int32_t)Stack.pop(&stack);
+      Ints.push(&forks, Iseq.size(iseq));
       ENCODE(iseq, Arg3232, ((Arg3232){FORK, offset1, offset2}));
       continue;
     } else if (curr == JMP_NODE) {
       int32_t offset = Stack.pop(&stack);
+      Ints.push(&jmps, Iseq.size(iseq));
       ENCODE(iseq, Arg32, ((Arg32){JMP, offset}));
       continue;
     } else if (curr == MATCH_NODE) {
@@ -379,11 +395,12 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
   // BracketCharGroup[$1, $2]
   // CharRange[$1, $3]
 
-  _compute_labels(iseq, &labels, &forks);
+  _translate_label_pos(iseq, &labels, &jmps, &forks);
 
   Stack.cleanup(&stack);
-  Labels.cleanup(&labels);
-  Forks.cleanup(&forks);
+  Ints.cleanup(&labels);
+  Ints.cleanup(&jmps);
+  Ints.cleanup(&forks);
 
   ENCODE(iseq, uint16_t, END);
   return VAL_NIL;

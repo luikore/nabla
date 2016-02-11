@@ -1,19 +1,7 @@
 #include <ccut.h>
 #include "sb.h"
 
-// TODO opcode parser
-enum OpCodes {
-  // op    // args                 // description
-  CHAR,    // c:int32_t            // match a char
-  MATCH,   //                      // found a match
-  JMP,     // offset:int32_t       // unconditional jump
-  FORK,    // x:int32_t, y:int32_t // fork execution
-  SAVE,    // i:int16_t            // save current position to captures[i]
-  AHEAD,   // offset:int32_t       // invoke lookahead code starting from offset
-  N_AHEAD, // offset:int32_t       // invoke negative lookahead code starting from offset
-  END,     //                      // terminate opcode
-  OP_CODES_SIZE
-};
+#include "vm-regexp-opcodes.c"
 
 // ab
 static uint16_t simple_reg[] = {
