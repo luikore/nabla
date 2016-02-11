@@ -24,6 +24,8 @@ clean:
 	cd sb; $(MAKE) clean
 
 stat:
-	# NOTE bash/zsh glob gives error when no match
+	@# NOTE bash/zsh glob gives error when no match
+	@echo code:
 	@cat `ruby -e 'puts Dir.glob "{adt,sb}/**/*.{c,h,rb}"'` | wc -l
+	@echo doc:
 	@cat `ruby -e 'puts Dir.glob "doc/**/*.md"'` | wc -l
