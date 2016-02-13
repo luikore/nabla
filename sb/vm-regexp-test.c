@@ -32,10 +32,19 @@ void vm_regexp_suite() {
     int32_t captures[20];
     const char* src;
     bool res;
+    int max_capture_index = 1;
 
     src = "ab";
     MATCH_REG(simple_reg);
     assert_eq(true, res);
+    assert_eq(max_capture_index, captures[0]);
+    assert_eq(strlen("ab"), captures[1]);
+
+    src = "ab3";
+    MATCH_REG(simple_reg);
+    assert_eq(true, res);
+    assert_eq(max_capture_index, captures[0]);
+    assert_eq(strlen("ab"), captures[1]);
 
     src = "";
     MATCH_REG(simple_reg);
@@ -46,14 +55,32 @@ void vm_regexp_suite() {
     int32_t captures[20];
     const char* src;
     bool res;
+    int max_capture_index = 5;
 
     src = "aaab";
     MATCH_REG(complex_reg);
     assert_eq(true, res);
+    assert_eq(max_capture_index, captures[0]);
+    assert_eq(strlen("aaab"), captures[1]);
+
+    src = "aaab3";
+    MATCH_REG(complex_reg);
+    assert_eq(true, res);
+    assert_eq(max_capture_index, captures[0]);
+    assert_eq(strlen("aaab"), captures[1]);
+  }
+
+  ccut_test("vm_regexp_exec greedy") {
+    int32_t captures[20];
+    const char* src;
+    bool res;
+    int max_capture_index = 5;
 
     src = "abb";
     MATCH_REG(complex_reg);
     assert_eq(true, res);
+    assert_eq(max_capture_index, captures[0]);
+    assert_eq(strlen("abb"), captures[1]);
   }
 
   ccut_test("vm_regexp_from_string") {
@@ -71,5 +98,20 @@ void vm_regexp_suite() {
     assert_eq(true, res);
 
     Iseq.cleanup(&iseq);
+  }
+
+  ccut_test("vm_regexp_compile char") {
+    Val a = VAL_FROM_INT('a');
+    // nb_struct
+    // Val b = VAL_FROM_INT('b');
+  }
+
+  ccut_test("vm_regexp_compile range") {
+  }
+
+  ccut_test("vm_regexp_compile seq") {
+  }
+
+  ccut_test("vm_regexp_compile branch") {
   }
 }

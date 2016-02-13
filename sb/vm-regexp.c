@@ -4,7 +4,9 @@
 #include <adt/utils/mut-array.h>
 #include "vm-regexp-opcodes.c"
 
-// PikeVM as described in https://swtch.com/~rsc/regexp/regexp2.html
+// Nonrecursive backtracking VM as described in https://swtch.com/~rsc/regexp/regexp2.html
+// NOTE Thompson/PikeVM can't handle possessive matching / backref elegantly.
+//      However we can use some simple trick to reduce pushed threads.
 
 typedef struct {
   uint16_t op;
@@ -35,11 +37,11 @@ typedef struct {
 
 typedef struct {
   uint16_t* pc;
+  const char* s;
   int32_t saved[20];
 } Thread;
 
 MUT_ARRAY_DECL(Threads, Thread);
-MUT_ARRAY_DECL(Stack, Val);
 
 #define CAPTURE_CAP sizeof(int32_t) * 20
 
@@ -49,76 +51,83 @@ MUT_ARRAY_DECL(Stack, Val);
     y = tmp;\
   } while (0)
 
-static void _add_thread(struct Threads* threads, uint16_t* from_pc, int32_t* from_saved) {
+static int _scan_u8(const char* s, int* scanned) {
+  // todo
+  *scanned = 1;
+  return s[0];
+}
+
+static void _add_thread(struct Threads* threads, uint16_t* from_pc, const char* s, int32_t* from_saved) {
   // TODO we may hash mask to reduce memcmp?
-  Thread tmp = {.pc = from_pc};
+  Thread tmp = {.pc = from_pc, .s = s};
   memcpy(tmp.saved, from_saved, CAPTURE_CAP);
-  for (int k = 0; k < Threads.size(threads); k++) {
-    if (memcmp(Threads.at(threads, k), &tmp, sizeof(Thread)) == 0) {
-      return;
-    }
-  }
+  // for (int k = 0; k < Threads.size(threads); k++) {
+  //   if (memcmp(Threads.at(threads, k), &tmp, sizeof(Thread)) == 0) {
+  //     return;
+  //   }
+  // }
   Threads.push(threads, tmp);
 }
 
-// NOTE captures[0] stores the size of current capture
-bool sb_vm_regexp_exec(uint16_t* init_pc, int64_t size, const char* str, int32_t* captures) {
-  struct Threads ts[2];
-  struct Threads* ct = ts;
-  struct Threads* nt = ts + 1;
-  uint16_t* pc;
-  Threads.init(ct, 10);
-  Threads.init(nt, 10);
+// NOTE
+// captures[0] stores max index of captures
+// captures[1] stores $0.size
+static bool _exec(uint16_t* init_pc, int64_t size, const char* str, int32_t* captures) {
+  struct Threads ts;
+  Threads.init(&ts, 10);
+  const char* s_end = str + size;
 
-  _add_thread(ct, init_pc, captures);
-  for (int j = 0; j <= size; j++) {
-    for (int i = 0; i < Threads.size(ct); i++) {
-      Thread* t = Threads.at(ct, i);
-      pc = t->pc;
+  _add_thread(&ts, init_pc, str, captures);
+  while (ts.size) {
+    Thread* t = Threads.at(&ts, ts.size - 1);
+    ts.size--;
+    uint16_t* pc = t->pc;
+    for (;;) {
       switch (*pc) {
         case CHAR: {
-          if (j == size) {
-            break;
+          if (t->s < s_end) {
+            int c = DECODE(Arg32, pc).arg1;
+            int scanned;
+            int u8_char = _scan_u8(t->s, &scanned);
+            if (u8_char == c) {
+              t->s += scanned;
+              continue;
+            }
           }
-          int c = DECODE(Arg32, pc).arg1;
-          if (str[j] != c) {
-            break;
-          }
-          _add_thread(nt, pc, t->saved);
-          break;
+          goto thread_dead;
         }
 
         case RANGE: {
-          if (j == size) {
-            break;
+          if (t->s < s_end) {
+            Arg3232 range = DECODE(Arg3232, pc);
+            int scanned;
+            int u8_char = _scan_u8(t->s, &scanned);
+            if (u8_char >= range.arg1 && u8_char <= range.arg2) {
+              t->s += scanned;
+              continue;
+            }
           }
-          Arg3232 range = DECODE(Arg3232, pc);
-          if (str[j] < range.arg1 || str[j] > range.arg2) {
-            break;
-          }
-          _add_thread(nt, pc, t->saved);
-          break;
+          goto thread_dead;
         }
 
         case MATCH: {
           memcpy(captures, t->saved, CAPTURE_CAP);
-          captures[1] = j;
-          Threads.cleanup(ct);
-          Threads.cleanup(nt);
+          captures[1] = (t->s - str);
+          Threads.cleanup(&ts);
           return true;
         }
 
         case JMP: {
           int offset = DECODE(Arg32, pc).arg1;
-          _add_thread(ct, init_pc + offset, t->saved);
-          break;
+          pc = init_pc + offset;
+          continue;
         }
 
         case FORK: {
           Arg3232 offsets = DECODE(Arg3232, pc);
-          _add_thread(ct, init_pc + offsets.arg1, t->saved);
-          _add_thread(ct, init_pc + offsets.arg2, t->saved);
-          break;
+          pc = init_pc + offsets.arg1;
+          _add_thread(&ts, init_pc + offsets.arg2, t->s, t->saved);
+          continue;
         }
 
         case SAVE: {
@@ -126,24 +135,31 @@ bool sb_vm_regexp_exec(uint16_t* init_pc, int64_t size, const char* str, int32_t
           if (t->saved[0] < save_pos) {
             t->saved[0] = save_pos;
           }
-          t->saved[save_pos] = j;
-          _add_thread(ct, pc, t->saved);
-          break;
+          t->saved[save_pos] = (t->s - str);
+          continue;
+        }
+
+        case ATOMIC: {
+          // todo
         }
 
         case AHEAD: {
           int32_t offset = DECODE(Arg32, pc).arg1;
-          bool matched = sb_vm_regexp_exec(init_pc + offset, size - j, str + j, t->saved);
+          bool matched = _exec(init_pc + offset, s_end - t->s, t->s, t->saved);
           if (matched) {
-            _add_thread(ct, pc, t->saved);
+            continue;
+          } else {
+            goto thread_dead;
           }
         }
 
         case N_AHEAD: {
           int32_t offset = DECODE(Arg32, pc).arg1;
-          bool matched = sb_vm_regexp_exec(init_pc + offset, size - j, str + j, t->saved);
-          if (!matched) {
-            _add_thread(ct, pc, t->saved);
+          bool matched = _exec(init_pc + offset, s_end - t->s, t->s, t->saved);
+          if (matched) {
+            goto thread_dead;
+          } else {
+            continue;
           }
         }
 
@@ -152,18 +168,20 @@ bool sb_vm_regexp_exec(uint16_t* init_pc, int64_t size, const char* str, int32_t
         }
       }
     }
-    if (nt->size == 0) {
-      goto not_match;
-    }
-    SWAP(ct, nt);
-    nt->size = 0;
+    thread_dead:;
   }
 
-not_match:
+no_match:
 
-  Threads.cleanup(ct);
-  Threads.cleanup(nt);
+  Threads.cleanup(&ts);
   return false;
+}
+
+bool sb_vm_regexp_exec(uint16_t* init_pc, int64_t size, const char* str, int32_t* captures) {
+  memset(captures, 0, CAPTURE_CAP);
+  captures[0] = 1; // 0 & 1 are preserved
+
+  return _exec(init_pc, size, str, captures);
 }
 
 #pragma mark ### compile
@@ -185,6 +203,7 @@ Val sb_vm_regexp_from_string(struct Iseq* iseq, Val s) {
   return VAL_NIL;
 }
 
+MUT_ARRAY_DECL(Stack, Val);
 MUT_ARRAY_DECL(Ints, int);
 
 static Val MATCH_NODE=0, LABEL_NODE=0, JMP_NODE=0, FORK_NODE=0;
