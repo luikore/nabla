@@ -206,7 +206,7 @@ MUT_ARRAY_DECL(Ints, int);
 static Val MATCH_NODE=0, LABEL_NODE=0, JMP_NODE=0, FORK_NODE=0;
 
 static void _ensure_tags() {
-    if (!MATCH_NODE) {
+  if (!MATCH_NODE) {
     void* ptr  = malloc(sizeof(Val) * 4);
     MATCH_NODE = (Val)ptr;
     LABEL_NODE = (Val)(ptr + 1);
@@ -281,6 +281,60 @@ static void _push_branches(struct Stack* stack, struct Ints* labels, Val branche
     _push_label(stack, label1);
 
     _push_fork(stack, label1, label2);
+  }
+}
+
+static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node) {
+  Val content = nb_struct_get(node, 0);
+  Val quantifier = nb_struct_get(node, 1);
+
+  const char* ptr = nb_string_ptr(quantifier);
+  int len = nb_string_byte_size(quantifier);
+
+  if (len == 1) { // greedy
+    switch (ptr[0]) {
+      case '?': {
+        // 
+        break;
+      }
+      case '+': {
+        break;
+      }
+      case '*': {
+        break;
+      }
+    }
+  } else {
+    switch (ptr[1]) {
+      case '?': { // reluctant
+        switch (ptr[0]) {
+          case '?': {
+            break;
+          }
+          case '+': {
+            break;
+          }
+          case '*': {
+            break;
+          }
+        }
+        break;
+      }
+      case '+': { // possessive
+        switch (ptr[0]) {
+          case '?': {
+            break;
+          }
+          case '+': {
+            break;
+          }
+          case '*': {
+            break;
+          }
+        }
+        break;
+      }
+    }
   }
 }
 
@@ -385,17 +439,29 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
 
     } else if (klass == kCharRange) {
       _encode_range(iseq, curr);
+
     } else if (klass == kSeq) {
       _push_seq(&stack, curr);
+
     } else if (klass == KLASS_CONS) { // branches
       _push_branches(&stack, &labels, curr);
+
     } else if (klass == kPredefAnchor) {
-    } else if (klass == kFlag) {
+      _encode_anchor(iseq, curr);
+
     } else if (klass == kQuantified) {
+      _push_quantified(&stack, &labels, curr);
+
+    } else if (klass == kFlag) {
+
     } else if (klass == kQuantifiedRange) {
+
     } else if (klass == kUnit) {
+
     } else if (klass == kGroup) {
+
     } else if (klass == kCharGroupPredef) {
+
     } else if (klass == kUnicodeCharClass) {
     } else if (klass == kBracketCharGroup) {
     } else {

@@ -227,7 +227,7 @@ lex String = [
 ]
 
 lex Regexp = [
-  begin "/" { var cg_stack, cg_stack = nil, :token "begin.regexp" }
+  begin "/" { :token "begin.regexp" }
   end "/" { :token "end.regexp", :parse }
 
   /\^|\$|\\[bBaAzZ]/ { :token "anchor" }
@@ -239,9 +239,9 @@ lex Regexp = [
 
   "|" { :token "op.branch" }
 
-  /\[\^?/ { :token "begin.char-group", cg_stack = [true, *cg_stack] }
-  "]"     { :token "end.char-group", cg_stack = :tail cg_stack }
-  "-"     { if cg_stack, :token "op.minus", else :token "char"; }
+  /\[\^?/ { :token "begin.char-group" }
+  "]"     { :token "end.char-group" }
+  "-"     { :token "op.minus" 0 :char_no_escape 0 }
 
   /\{[A-Z]\w*\}/    { :token "interpolate.predef" }
 
@@ -275,6 +275,7 @@ peg Regexp = [
        / Group { $1 }
        / interpolate.predef { $1 }
   SingleChar : RegexpEscape { $1 }
+             / op.minus     { $1 }
              / char         { $1 }
   Group : begin.group group.special Branches end.group { Group[$2, $3] }
 
@@ -296,7 +297,7 @@ lex RegexpEscape = [
 ]
 
 lex *RegexpQuantifier = [
-  /\?\* | \?\? | \? | \+\* | \+\? | \+ | \*\* | \*\? | \*/ {
+  /\?\+ | \?\? | \? | \+\+ | \+\? | \+ | \*\+ | \*\? | \*/ {
     :token "quantifier"
   }
 
