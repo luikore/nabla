@@ -32,4 +32,4 @@ stat:
 	@echo doc:
 	@cat `ruby -e 'puts Dir.glob "doc/**/*.md"'` | wc -l
 	@echo config:
-	@cat `ruby -e 'puts Dir.glob "{adt,sb}/**/makefile"'` | wc -l
+	@cat `ruby -e 'puts Dir.glob "{adt,sb}/**/{makefile,char-groups}"'` | wc -l
