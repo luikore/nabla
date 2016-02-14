@@ -25,7 +25,11 @@ clean:
 
 stat:
 	@# NOTE bash/zsh glob gives error when no match
-	@echo code:
-	@cat `ruby -e 'puts Dir.glob "{adt,sb}/**/*.{c,h,rb}"'` | wc -l
+	@echo code + tests:
+	@cat `ruby -e 'puts Dir.glob "{adt,sb}/**/*.{c,h,rb,S}"'` | wc -l
+	@echo tests:
+	@cat `ruby -e 'puts Dir.glob "{adt,sb}/**/*test.c"'` | wc -l
 	@echo doc:
 	@cat `ruby -e 'puts Dir.glob "doc/**/*.md"'` | wc -l
+	@echo config:
+	@cat `ruby -e 'puts Dir.glob "{adt,sb}/**/makefile"'` | wc -l
