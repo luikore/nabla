@@ -255,19 +255,22 @@ static void _push_branches(struct Stack* stack, struct Ints* labels, Val branche
     fork L3 L4
     L3: e2
     jmp L0
-    L4
+    L4:
 
-    fork L5 L6
-    L5: e3
-    jmp L0
-    L6:
-
+    e3
     L0:
 
   */
+
   Val label0 = _new_label(labels);
   _push_label(stack, label0);
-  for (Val tail = branches; tail != VAL_NIL; tail = nb_cons_tail(tail)) {
+  Val tail = branches;
+  if (tail != VAL_NIL) {
+    Stack.push(stack, nb_cons_head(tail));
+    tail = nb_cons_tail(tail);
+  }
+
+  for (; tail != VAL_NIL; tail = nb_cons_tail(tail)) {
 
     Val label1 = _new_label(labels);
     Val label2 = _new_label(labels);
@@ -420,4 +423,62 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
 
   ENCODE(iseq, uint16_t, END);
   return VAL_NIL;
+}
+
+void sb_vm_regexp_decompile(struct Iseq* iseq, int32_t start, int32_t size) {
+  uint16_t* pc_start = Iseq.at(iseq, start);
+  uint16_t* pc_end = pc_start + size;
+  uint16_t* pc = pc_start;
+  while (pc < pc_end) {
+    printf("%ld: ", pc - pc_start);
+    switch (*pc) {
+      case CHAR: {
+        printf("char %d\n", DECODE(Arg32, pc).arg1);
+        break;
+      }
+      case RANGE: {
+        Arg3232 offsets = DECODE(Arg3232, pc);
+        printf("range %d %d\n", offsets.arg1, offsets.arg2);
+        break;
+      }
+      case MATCH: {
+        pc++;
+        printf("match\n");
+        break;
+      }
+      case JMP: {
+        printf("jmp %d\n", DECODE(Arg32, pc).arg1);
+        break;
+      }
+      case FORK: {
+        Arg3232 offsets = DECODE(Arg3232, pc);
+        printf("fork %d %d\n", offsets.arg1, offsets.arg2);
+        break;
+      }
+      case SAVE: {
+        printf("save %d\n", DECODE(Arg16, pc).arg1);
+        break;
+      }
+      case ATOMIC: {
+        Arg3232 offsets = DECODE(Arg3232, pc);
+        printf("atomic %d %d\n", offsets.arg1, offsets.arg2);
+        break;
+      }
+      case AHEAD: {
+        Arg3232 offsets = DECODE(Arg3232, pc);
+        printf("ahead %d %d\n", offsets.arg1, offsets.arg2);
+        break;
+      }
+      case N_AHEAD: {
+        Arg3232 offsets = DECODE(Arg3232, pc);
+        printf("n_ahead %d %d\n", offsets.arg1, offsets.arg2);
+        break;
+      }
+      case END: {
+        pc++;
+        printf("end\n");
+        break;
+      }      
+    }
+  }
 }

@@ -23,9 +23,20 @@ static uint16_t complex_reg[] = {
   MATCH
 };
 
+static uint32_t _klass(const char* name) {
+  uint32_t namespace = sb_klass();
+  return klass_find_c(name, namespace);
+}
+
 #define MATCH_REG(reg_ty)\
   memset(captures, 0, sizeof(captures));\
   res = sb_vm_regexp_exec(reg_ty, strlen(src), src, captures)
+
+#define ASSERT_ISEQ_MATCH(expeted, iseq) do {\
+  int expected_size = sizeof(expected) / sizeof(uint16_t);\
+  assert_eq(expected_size, Iseq.size(&iseq));\
+  assert_mem_eq(expected, Iseq.at(&iseq, 0), sizeof(expected));\
+} while(0)
 
 void vm_regexp_suite() {
   ccut_test("vm_regexp_exec simple regexp") {
@@ -101,17 +112,71 @@ void vm_regexp_suite() {
   }
 
   ccut_test("vm_regexp_compile char") {
-    Val a = VAL_FROM_INT('a');
-    // nb_struct
-    // Val b = VAL_FROM_INT('b');
+    Val char_node = VAL_FROM_INT('a');
+    Val regexp = nb_struct_new(_klass("Regexp"), 1, &char_node);
+
+    struct Iseq iseq;
+    Iseq.init(&iseq, 0);
+    sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
+    uint16_t expected[] = {CHAR, 'a', 0, MATCH, END};
+    ASSERT_ISEQ_MATCH(expected, iseq);
+
+    Iseq.cleanup(&iseq);
+    RELEASE(regexp);
   }
 
-  ccut_test("vm_regexp_compile range") {
+  ccut_test("vm_regexp_compile char range") {
+    Val bounds[] = {VAL_FROM_INT('a'), VAL_FROM_INT('b')};
+    Val range_node = nb_struct_new(_klass("CharRange"), 2, bounds);
+    Val regexp = nb_struct_new(_klass("Regexp"), 1, &range_node);
+
+    struct Iseq iseq;
+    Iseq.init(&iseq, 0);
+    sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
+    uint16_t expected[] = {RANGE, 'a', 0, 'b', 0, MATCH, END};
+    ASSERT_ISEQ_MATCH(expected, iseq);
+
+    Iseq.cleanup(&iseq);
+    RELEASE(regexp);
   }
 
   ccut_test("vm_regexp_compile seq") {
+    Val list = nb_cons_new(VAL_FROM_INT('a'), VAL_NIL);
+    list = nb_cons_new(VAL_FROM_INT('b'), list);
+    Val seq = nb_struct_new(_klass("Seq"), 1, &list);
+    Val regexp = nb_struct_new(_klass("Regexp"), 1, &seq);
+
+    struct Iseq iseq;
+    Iseq.init(&iseq, 0);
+    sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
+    uint16_t expected[] = {CHAR, 'a', 0, CHAR, 'b', 0, MATCH, END};
+    ASSERT_ISEQ_MATCH(expected, iseq);
+
+    Iseq.cleanup(&iseq);
+    RELEASE(regexp);
   }
 
   ccut_test("vm_regexp_compile branch") {
+    Val list = nb_cons_new(VAL_FROM_INT('a'), VAL_NIL);
+    list = nb_cons_new(VAL_FROM_INT('b'), list);
+    Val regexp = nb_struct_new(_klass("Regexp"), 1, &list);
+
+    struct Iseq iseq;
+    Iseq.init(&iseq, 0);
+    printf("\n");
+    sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
+    uint16_t expected[] = {
+      FORK, 5, 0, 11, 0,
+      /*5*/ CHAR, 'a', 0,
+      JMP, 14, 0,
+      /*11*/ CHAR, 'b', 0,
+      /*14*/ MATCH, END
+    };
+
+    // sb_vm_regexp_decompile(&iseq, 0, Iseq.size(&iseq));
+    ASSERT_ISEQ_MATCH(expected, iseq);
+
+    Iseq.cleanup(&iseq);
+    RELEASE(regexp);
   }
 }
