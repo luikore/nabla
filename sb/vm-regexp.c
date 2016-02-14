@@ -4,6 +4,7 @@
 #include <adt/utils/mut-array.h>
 #include <adt/utils/utf-8.h>
 #include "vm-regexp-opcodes.c"
+#include <ctype.h>
 
 // Nonrecursive backtracking VM as described in https://swtch.com/~rsc/regexp/regexp2.html
 // NOTE Thompson/PikeVM can't handle possessive matching / backref elegantly.
@@ -57,6 +58,11 @@ static void _add_thread(struct Threads* threads, uint16_t* from_pc, const char* 
   memcpy(tmp.captures, from_captures, CAPTURE_CAP);
 
   Threads.push(threads, tmp);
+}
+
+static bool _is_word_char(int c) {
+  // TODO use \p{Word}
+  return isalnum(c) || c == '_';
 }
 
 // NOTE
@@ -131,8 +137,9 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
 
         case ATOMIC: {
           int32_t offset = DECODE(Arg32, pc).arg1;
-          bool matched = _exec(init_pc + offset, s_end - t->s, t->s, t->captures);
+          bool matched = _exec(pc, s_end - t->s, t->s, t->captures);
           if (matched) {
+            pc += offset;
             t->s += t->captures[1];
             continue;
           } else {
@@ -142,8 +149,9 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
 
         case AHEAD: {
           int32_t offset = DECODE(Arg32, pc).arg1;
-          bool matched = _exec(init_pc + offset, s_end - t->s, t->s, t->captures);
+          bool matched = _exec(pc, s_end - t->s, t->s, t->captures);
           if (matched) {
+            pc += offset;
             continue;
           } else {
             goto thread_dead;
@@ -152,8 +160,78 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
 
         case N_AHEAD: {
           int32_t offset = DECODE(Arg32, pc).arg1;
-          bool matched = _exec(init_pc + offset, s_end - t->s, t->s, t->captures);
+          bool matched = _exec(pc, s_end - t->s, t->s, t->captures);
           if (matched) {
+            goto thread_dead;
+          } else {
+            pc += offset;
+            continue;
+          }
+        }
+
+        case ANCHOR_BOL: {
+          if (t->s == init_s || (t->s != s_end && t->s[-1] == '\n' && t->s[0] != '\n')) {
+            continue;
+          } else {
+            goto thread_dead;
+          }
+        }
+
+        case ANCHOR_EOL: {
+          if (t->s == s_end || (t->s != init_s && t->s[-1] != '\n' && t->s[0] == '\n')) {
+            continue;
+          } else {
+            goto thread_dead;
+          }
+        }
+
+        // TODO scan unicode char
+        case ANCHOR_WBOUND: {
+          if (t->s == init_s || t->s == s_end ||
+              (_is_word_char(t->s[-1]) && !_is_word_char(t->s[0])) ||
+              (!_is_word_char(t->s[-1]) && _is_word_char(t->s[0]))) {
+            continue;
+          } else {
+            goto thread_dead;
+          }
+        }
+
+        case ANCHOR_N_WBOUND: {
+          if (t->s == init_s || t->s == s_end ||
+              (_is_word_char(t->s[-1]) && !_is_word_char(t->s[0])) ||
+              (!_is_word_char(t->s[-1]) && _is_word_char(t->s[0]))) {
+            goto thread_dead;
+          } else {
+            continue;
+          }
+        }
+
+        case ANCHOR_BOS: {
+          if (t->s == init_s) {
+            continue;
+          } else {
+            goto thread_dead;
+          }
+        }
+
+        case ANCHOR_N_BOS: {
+          if (t->s == init_s) {
+            goto thread_dead;
+          } else {
+            continue;
+          }
+        }
+
+        case ANCHOR_EOS: {
+          if (t->s == s_end) {
+            continue;
+          } else {
+            goto thread_dead;
+          }
+        }
+
+        case ANCHOR_N_EOS: {
+          if (t->s == s_end) {
             goto thread_dead;
           } else {
             continue;
@@ -203,15 +281,16 @@ Val sb_vm_regexp_from_string(struct Iseq* iseq, Val s) {
 MUT_ARRAY_DECL(Stack, Val);
 MUT_ARRAY_DECL(Ints, int);
 
-static Val MATCH_NODE=0, LABEL_NODE=0, JMP_NODE=0, FORK_NODE=0;
+static Val MATCH_NODE=0, LABEL_NODE=0, JMP_NODE=0, FORK_NODE=0, ATOMIC_NODE=0;
 
 static void _ensure_tags() {
   if (!MATCH_NODE) {
-    void* ptr  = malloc(sizeof(Val) * 4);
+    void* ptr  = malloc(sizeof(Val) * 5);
     MATCH_NODE = (Val)ptr;
     LABEL_NODE = (Val)(ptr + 1);
     JMP_NODE   = (Val)(ptr + 2);
     FORK_NODE  = (Val)(ptr + 3);
+    ATOMIC_NODE = (Val)(ptr + 4);
   }
 }
 
@@ -224,6 +303,11 @@ static int _new_label(struct Ints* labels) {
 static void _push_label(struct Stack* stack, Val label) {
   Stack.push(stack, label);
   Stack.push(stack, LABEL_NODE);
+}
+
+static void _push_atomic(struct Stack* stack, Val label) {
+  Stack.push(stack, label);
+  Stack.push(stack, ATOMIC_NODE);
 }
 
 static void _push_fork(struct Stack* stack, Val label1, Val label2) {
@@ -284,8 +368,8 @@ static void _push_branches(struct Stack* stack, struct Ints* labels, Val branche
   }
 }
 
-static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node) {
-  Val content = nb_struct_get(node, 0);
+static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node, void* arena) {
+  Val e = nb_struct_get(node, 0);
   Val quantifier = nb_struct_get(node, 1);
 
   const char* ptr = nb_string_ptr(quantifier);
@@ -294,13 +378,43 @@ static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node)
   if (len == 1) { // greedy
     switch (ptr[0]) {
       case '?': {
-        // 
+        // fork L1 L2
+        // L1: e
+        // L2:
+        Val l1 = _new_label(labels);
+        Val l2 = _new_label(labels);
+        _push_label(stack, l2);
+        Stack.push(stack, e);
+        _push_label(stack, l1);
+        _push_fork(stack, l1, l2);
         break;
       }
       case '+': {
+        // L1: e
+        // fork L1 L2
+        // L2
+        Val l1 = _new_label(labels);
+        Val l2 = _new_label(labels);
+        _push_label(stack, l2);
+        _push_fork(stack, l1, l2);
+        Stack.push(stack, e);
+        _push_label(stack, l1);
         break;
       }
       case '*': {
+        // L1: fork L2 L3
+        // L2: e
+        // jmp L1
+        // L3:
+        Val l1 = _new_label(labels);
+        Val l2 = _new_label(labels);
+        Val l3 = _new_label(labels);
+        _push_label(stack, l3);
+        _push_jmp(stack, l1);
+        Stack.push(stack, e);
+        _push_label(stack, l2);
+        _push_fork(stack, l2, l3);
+        _push_label(stack, l1);
         break;
       }
     }
@@ -309,29 +423,55 @@ static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node)
       case '?': { // reluctant
         switch (ptr[0]) {
           case '?': {
+            // fork L2 L1
+            // L1: e
+            // L2:
+            Val l1 = _new_label(labels);
+            Val l2 = _new_label(labels);
+            _push_label(stack, l2);
+            Stack.push(stack, e);
+            _push_label(stack, l1);
+            _push_fork(stack, l2, l1);
             break;
           }
           case '+': {
+            // L1: e
+            // fork L2 L1
+            // L2:
+            Val l1 = _new_label(labels);
+            Val l2 = _new_label(labels);
+            _push_label(stack, l2);
+            _push_fork(stack, l2, l1);
+            Stack.push(stack, e);
+            _push_label(stack, l1);
             break;
           }
           case '*': {
+            // L1: fork L3 L2
+            // L2: e
+            // jmp L1
+            // L3:
+            Val l1 = _new_label(labels);
+            Val l2 = _new_label(labels);
+            Val l3 = _new_label(labels);
+            _push_label(stack, l3);
+            _push_jmp(stack, l1);
+            Stack.push(stack, e);
+            _push_label(stack, l2);
+            _push_fork(stack, l3, l2);
+            _push_label(stack, l1);
             break;
           }
         }
         break;
       }
       case '+': { // possessive
-        switch (ptr[0]) {
-          case '?': {
-            break;
-          }
-          case '+': {
-            break;
-          }
-          case '*': {
-            break;
-          }
-        }
+        Val l = _new_label(labels);
+        _push_label(stack, l);
+        Val args[] = {e, nb_string_new_literal(1, ptr)};
+        Val node = nb_struct_anew(arena, VAL_KLASS(node), 2, args);
+        Stack.push(stack, node);
+        _push_atomic(stack, l);
         break;
       }
     }
@@ -343,6 +483,49 @@ static void _encode_range(struct Iseq* iseq, Val range_node) {
   Val to = nb_struct_get(range_node, 1);
   Arg3232 range = {RANGE, (int32_t)VAL_TO_INT(from), (int32_t)VAL_TO_INT(to)};
   ENCODE(iseq, Arg3232, range);
+}
+
+static void _encode_anchor(struct Iseq* iseq, Val anchor) {
+  const char* s = nb_string_ptr(anchor);
+  switch (s[0]) {
+    case '^': {
+      ENCODE(iseq, uint16_t, ANCHOR_BOL);
+      break;
+    }
+    case '$': {
+      ENCODE(iseq, uint16_t, ANCHOR_EOL);
+      break;
+    }
+    case '\\': {
+      switch (s[1]) {
+        case 'b': {
+          ENCODE(iseq, uint16_t, ANCHOR_WBOUND);
+          break;
+        }
+        case 'B': {
+          ENCODE(iseq, uint16_t, ANCHOR_N_WBOUND);
+          break;
+        }
+        case 'a': {
+          ENCODE(iseq, uint16_t, ANCHOR_BOS);
+          break;
+        }
+        case 'A': {
+          ENCODE(iseq, uint16_t, ANCHOR_N_BOS);
+          break;
+        }
+        case 'z': {
+          ENCODE(iseq, uint16_t, ANCHOR_EOS);
+          break;
+        }
+        case 'Z': {
+          ENCODE(iseq, uint16_t, ANCHOR_N_EOS);
+          break;
+        }
+      }
+      break;
+    }
+  }
 }
 
 static void _translate_label_pos(struct Iseq* iseq, struct Ints* labels, struct Ints* jmps, struct Ints* forks) {
@@ -380,11 +563,11 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
   uint32_t kCharRange        = klass_find_c("CharRange", sb_klass());
 
   struct Stack stack;
-  struct Ints labels, forks, jmps;
+  struct Ints labels, arg3232_refs, arg32_refs;
   Stack.init(&stack, 25);
   Ints.init(&labels, 15);
-  Ints.init(&forks, 5);
-  Ints.init(&jmps, 5);
+  Ints.init(&arg3232_refs, 5);
+  Ints.init(&arg32_refs, 5);
 
   /*
   compile stack layout
@@ -396,6 +579,7 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
     - label: [label_num, LABEL_NODE]
     - jmp:   [label_num, JMP_NODE]
     - fork:  [label_num2, label_num1, FORK_NODE]
+    - atomic: [label_num, LABEL_NODE] e [label_num, ATOMIC_NODE]
 
   encoding of fork, jmp & labels
   1. create label nodes, only number is stored.
@@ -419,16 +603,21 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
     } else if (curr == FORK_NODE) {
       int32_t offset1 = (int32_t)Stack.pop(&stack);
       int32_t offset2 = (int32_t)Stack.pop(&stack);
-      Ints.push(&forks, Iseq.size(iseq));
+      Ints.push(&arg3232_refs, Iseq.size(iseq));
       ENCODE(iseq, Arg3232, ((Arg3232){FORK, offset1, offset2}));
       continue;
     } else if (curr == JMP_NODE) {
       int32_t offset = Stack.pop(&stack);
-      Ints.push(&jmps, Iseq.size(iseq));
+      Ints.push(&arg32_refs, Iseq.size(iseq));
       ENCODE(iseq, Arg32, ((Arg32){JMP, offset}));
       continue;
     } else if (curr == MATCH_NODE) {
       ENCODE(iseq, uint16_t, MATCH);
+      continue;
+    } else if (curr == ATOMIC_NODE) {
+      int32_t offset = (int32_t)Stack.pop(&stack);
+      Ints.push(&arg32_refs, Iseq.size(iseq));
+      ENCODE(iseq, Arg32, ((Arg32){ATOMIC, offset}));
       continue;
     }
 
@@ -450,7 +639,7 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
       _encode_anchor(iseq, curr);
 
     } else if (klass == kQuantified) {
-      _push_quantified(&stack, &labels, curr);
+      _push_quantified(&stack, &labels, curr, arena);
 
     } else if (klass == kFlag) {
 
@@ -480,12 +669,12 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
   // BracketCharGroup[$1, $2]
   // CharRange[$1, $3]
 
-  _translate_label_pos(iseq, &labels, &jmps, &forks);
+  _translate_label_pos(iseq, &labels, &arg32_refs, &arg3232_refs);
 
   Stack.cleanup(&stack);
   Ints.cleanup(&labels);
-  Ints.cleanup(&jmps);
-  Ints.cleanup(&forks);
+  Ints.cleanup(&arg32_refs);
+  Ints.cleanup(&arg3232_refs);
 
   ENCODE(iseq, uint16_t, END);
   return VAL_NIL;
@@ -496,55 +685,44 @@ void sb_vm_regexp_decompile(struct Iseq* iseq, int32_t start, int32_t size) {
   uint16_t* pc_end = pc_start + size;
   uint16_t* pc = pc_start;
   while (pc < pc_end) {
-    printf("%ld: ", pc - pc_start);
+    printf("%ld: %s", pc - pc_start, op_code_names[*pc]);
     switch (*pc) {
-      case CHAR: {
-        printf("char %d\n", DECODE(Arg32, pc).arg1);
-        break;
-      }
-      case RANGE: {
-        Arg3232 offsets = DECODE(Arg3232, pc);
-        printf("range %d %d\n", offsets.arg1, offsets.arg2);
-        break;
-      }
-      case MATCH: {
+
+      case ANCHOR_BOL:
+      case ANCHOR_EOL:
+      case ANCHOR_WBOUND:
+      case ANCHOR_N_WBOUND:
+      case ANCHOR_BOS:
+      case ANCHOR_N_BOS:
+      case ANCHOR_EOS:
+      case ANCHOR_N_EOS:
+      case MATCH:
+      case END: {
+        printf("\n");
         pc++;
-        printf("match\n");
         break;
       }
-      case JMP: {
-        printf("jmp %d\n", DECODE(Arg32, pc).arg1);
-        break;
-      }
-      case FORK: {
-        Arg3232 offsets = DECODE(Arg3232, pc);
-        printf("fork %d %d\n", offsets.arg1, offsets.arg2);
-        break;
-      }
+
       case SAVE: {
-        printf("save %d\n", DECODE(Arg16, pc).arg1);
+        printf(" %d\n", DECODE(Arg16, pc).arg1);
         break;
       }
-      case ATOMIC: {
-        Arg3232 offsets = DECODE(Arg3232, pc);
-        printf("atomic %d %d\n", offsets.arg1, offsets.arg2);
+
+      case JMP:
+      case CHAR: {
+        printf(" %d\n", DECODE(Arg32, pc).arg1);
         break;
       }
-      case AHEAD: {
-        Arg3232 offsets = DECODE(Arg3232, pc);
-        printf("ahead %d %d\n", offsets.arg1, offsets.arg2);
-        break;
-      }
+
+      case RANGE:
+      case FORK:
+      case ATOMIC:
+      case AHEAD:
       case N_AHEAD: {
         Arg3232 offsets = DECODE(Arg3232, pc);
-        printf("n_ahead %d %d\n", offsets.arg1, offsets.arg2);
+        printf(" %d %d\n", offsets.arg1, offsets.arg2);
         break;
       }
-      case END: {
-        pc++;
-        printf("end\n");
-        break;
-      }      
     }
   }
 }
