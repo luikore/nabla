@@ -1,6 +1,7 @@
 #include "sb.h"
 #include <stdlib.h>
 #include <adt/utils/dbg.h>
+#include <adt/utils/utf-8.h>
 #include <adt/dict.h>
 
 static uint32_t _hex_to_uint(char c) {
@@ -11,56 +12,6 @@ static uint32_t _hex_to_uint(char c) {
     return c - ('a' + 10);
   }
   return c - ('A' + 10);
-}
-
-static int32_t _scan_u8(int size, const char* signed_s) {
-  static const unsigned char leading_masks[] = {0, 0b0, 0b11000000, 0b11100000, 0b11110000, 0b11111000, 0b11111100};
-  static const unsigned char masks[] = {0,  0b01111111, 0b00111111, 0b00011111, 0b00001111, 0b00000111, 0b00000011};
-
-  const unsigned char* s = (const unsigned char*)signed_s;
-  if ((leading_masks[size] & s[0]) != leading_masks[size]) {
-    fatal_err("invalid u8: '%.*s':%d", size, signed_s, size);
-  }
-
-  int32_t c = (int32_t)(s[0] & masks[size]);
-  for (size_t i = 1; i < size; i++) {
-    c = (c << 6) | (s[i] & 0b00111111);
-  }
-  return c;
-}
-
-static void _append_u8(char* signed_s, int64_t* pos, int32_t c) {
-  unsigned char* s = (unsigned char*)signed_s;
-# define MASK_C(rshift) (((c >> rshift) & 0b00111111) | 0b10000000)
-  if (c < 0x80) {
-    s[*pos++] = c;
-  } else if (c < 0x0800) {
-    s[*pos++] = (0b11000000 | (c >> 6));
-    s[*pos++] = MASK_C(0);
-  } else if (c < 0x10000) {
-    s[*pos++] = (0b11100000 | (c >> 12));
-    s[*pos++] = MASK_C(6);
-    s[*pos++] = MASK_C(0);
-  } else if (c < 0x200000) {
-    s[*pos++] = (0b11110000 | (c >> 18));
-    s[*pos++] = MASK_C(12);
-    s[*pos++] = MASK_C(6);
-    s[*pos++] = MASK_C(0);
-  } else if (c < 0x4000000) {
-    s[*pos++] = (0b11111000 | (c >> 24));
-    s[*pos++] = MASK_C(18);
-    s[*pos++] = MASK_C(12);
-    s[*pos++] = MASK_C(6);
-    s[*pos++] = MASK_C(0);
-  } else {
-    s[*pos++] = (0b11111100 | (c >> 30));
-    s[*pos++] = MASK_C(24);
-    s[*pos++] = MASK_C(18);
-    s[*pos++] = MASK_C(12);
-    s[*pos++] = MASK_C(6);
-    s[*pos++] = MASK_C(0);
-  }
-# undef MASK_C
 }
 
 #pragma mark ## actions
@@ -94,8 +45,13 @@ static ValPair char_no_escape(Spellbreak* ctx, Val capture_i) {
   int i = VAL_TO_INT(capture_i);
   int size = CAPTURE_END(ctx, i) - CAPTURE_BEGIN(ctx, i);
   const char* s = ctx->curr + CAPTURE_BEGIN(ctx, i);
-  int32_t c = _scan_u8(size, s);
-  return (ValPair){VAL_FROM_INT(c), VAL_NIL};
+  int scanned_size = size;
+  int32_t c = utf_8_scan(s, &scanned_size);
+  if (c < 0) {
+    return (ValPair){VAL_NIL, nb_string_new_f("invalid u8: '%.*s':%d", size, s, size)};
+  } else {
+    return (ValPair){VAL_FROM_INT(c), VAL_NIL};
+  }
 }
 
 static ValPair concat_char(Spellbreak* ctx, Val left_s, Val right_c) {

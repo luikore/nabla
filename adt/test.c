@@ -2,6 +2,7 @@
 #include "val.h"
 #include "utils/mut-array.h"
 #include "utils/mut-map.h"
+#include "utils/utf-8.h"
 
 void val_suite();
 void box_suite();
@@ -211,6 +212,36 @@ void pool_suite() {
   }
 }
 
+#pragma mark ### test utils/utf-8.h
+
+void utf_8_suite() {
+  ccut_test("test utf_8_scan") {
+    const char* s = "𝄞";
+    int size = strlen(s);
+    int c = utf_8_scan(s, &size);
+    assert_eq(0x1D11E, c);
+    assert_eq(strlen(s), size);
+
+    size--;
+    c = utf_8_scan(s, &size);
+    assert_eq(-1, c);
+  }
+
+  ccut_test("test utf_8_append") {
+    int b1 = utf_8_calc(31526);
+    int b2 = utf_8_calc(21495);
+    char buf[b1 + b2 + 1];
+    buf[b1 + b2] = '\0';
+
+    int a1 = utf_8_append(buf, 0, 31526);
+    assert_eq(b1, a1);
+    int a2 = utf_8_append(buf, a1, 21495);
+    assert_eq(b2, a2);
+
+    assert_eq(0, strcmp(buf, "符号"));
+  }
+}
+
 #pragma mark ### test utils/arena.h
 
 #include "utils/arena.h"
@@ -260,6 +291,7 @@ int main (int argc, char const *argv[]) {
   ccut_run_suite(mut_array_suite);
   ccut_run_suite(mut_map_suite);
   ccut_run_suite(pool_suite);
+  ccut_run_suite(utf_8_suite);
   ccut_run_suite(arena_suite);
   ccut_run_suite(val_suite);
   ccut_run_suite(array_suite);

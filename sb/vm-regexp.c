@@ -2,6 +2,7 @@
 
 #include "compile.h"
 #include <adt/utils/mut-array.h>
+#include <adt/utils/utf-8.h>
 #include "vm-regexp-opcodes.c"
 
 // Nonrecursive backtracking VM as described in https://swtch.com/~rsc/regexp/regexp2.html
@@ -38,7 +39,7 @@ typedef struct {
 typedef struct {
   uint16_t* pc;
   const char* s;
-  int32_t saved[20];
+  int32_t captures[20];
 } Thread;
 
 MUT_ARRAY_DECL(Threads, Thread);
@@ -51,33 +52,22 @@ MUT_ARRAY_DECL(Threads, Thread);
     y = tmp;\
   } while (0)
 
-static int _scan_u8(const char* s, int* scanned) {
-  // todo
-  *scanned = 1;
-  return s[0];
-}
-
-static void _add_thread(struct Threads* threads, uint16_t* from_pc, const char* s, int32_t* from_saved) {
-  // TODO we may hash mask to reduce memcmp?
+static void _add_thread(struct Threads* threads, uint16_t* from_pc, const char* s, int32_t* from_captures) {
   Thread tmp = {.pc = from_pc, .s = s};
-  memcpy(tmp.saved, from_saved, CAPTURE_CAP);
-  // for (int k = 0; k < Threads.size(threads); k++) {
-  //   if (memcmp(Threads.at(threads, k), &tmp, sizeof(Thread)) == 0) {
-  //     return;
-  //   }
-  // }
+  memcpy(tmp.captures, from_captures, CAPTURE_CAP);
+
   Threads.push(threads, tmp);
 }
 
 // NOTE
 // captures[0] stores max index of captures
 // captures[1] stores $0.size
-static bool _exec(uint16_t* init_pc, int64_t size, const char* str, int32_t* captures) {
+static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* captures) {
   struct Threads ts;
   Threads.init(&ts, 10);
-  const char* s_end = str + size;
+  const char* s_end = init_s + size;
 
-  _add_thread(&ts, init_pc, str, captures);
+  _add_thread(&ts, init_pc, init_s, captures);
   while (ts.size) {
     Thread* t = Threads.at(&ts, ts.size - 1);
     ts.size--;
@@ -87,8 +77,8 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* str, int32_t* cap
         case CHAR: {
           if (t->s < s_end) {
             int c = DECODE(Arg32, pc).arg1;
-            int scanned;
-            int u8_char = _scan_u8(t->s, &scanned);
+            int scanned = s_end - t->s;
+            int u8_char = utf_8_scan(t->s, &scanned);
             if (u8_char == c) {
               t->s += scanned;
               continue;
@@ -100,8 +90,8 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* str, int32_t* cap
         case RANGE: {
           if (t->s < s_end) {
             Arg3232 range = DECODE(Arg3232, pc);
-            int scanned;
-            int u8_char = _scan_u8(t->s, &scanned);
+            int scanned = s_end - t->s;
+            int u8_char = utf_8_scan(t->s, &scanned);
             if (u8_char >= range.arg1 && u8_char <= range.arg2) {
               t->s += scanned;
               continue;
@@ -111,8 +101,8 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* str, int32_t* cap
         }
 
         case MATCH: {
-          memcpy(captures, t->saved, CAPTURE_CAP);
-          captures[1] = (t->s - str);
+          memcpy(captures, t->captures, CAPTURE_CAP);
+          captures[1] = (t->s - init_s);
           Threads.cleanup(&ts);
           return true;
         }
@@ -126,26 +116,33 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* str, int32_t* cap
         case FORK: {
           Arg3232 offsets = DECODE(Arg3232, pc);
           pc = init_pc + offsets.arg1;
-          _add_thread(&ts, init_pc + offsets.arg2, t->s, t->saved);
+          _add_thread(&ts, init_pc + offsets.arg2, t->s, t->captures);
           continue;
         }
 
         case SAVE: {
           int16_t save_pos = DECODE(Arg16, pc).arg1;
-          if (t->saved[0] < save_pos) {
-            t->saved[0] = save_pos;
+          if (t->captures[0] < save_pos) {
+            t->captures[0] = save_pos;
           }
-          t->saved[save_pos] = (t->s - str);
+          t->captures[save_pos] = (t->s - init_s);
           continue;
         }
 
         case ATOMIC: {
-          // todo
+          int32_t offset = DECODE(Arg32, pc).arg1;
+          bool matched = _exec(init_pc + offset, s_end - t->s, t->s, t->captures);
+          if (matched) {
+            t->s += t->captures[1];
+            continue;
+          } else {
+            goto thread_dead;
+          }
         }
 
         case AHEAD: {
           int32_t offset = DECODE(Arg32, pc).arg1;
-          bool matched = _exec(init_pc + offset, s_end - t->s, t->s, t->saved);
+          bool matched = _exec(init_pc + offset, s_end - t->s, t->s, t->captures);
           if (matched) {
             continue;
           } else {
@@ -155,7 +152,7 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* str, int32_t* cap
 
         case N_AHEAD: {
           int32_t offset = DECODE(Arg32, pc).arg1;
-          bool matched = _exec(init_pc + offset, s_end - t->s, t->s, t->saved);
+          bool matched = _exec(init_pc + offset, s_end - t->s, t->s, t->captures);
           if (matched) {
             goto thread_dead;
           } else {
