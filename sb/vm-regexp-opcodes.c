@@ -19,7 +19,7 @@ enum OpCodes {
   ANCHOR_N_BOS,                      //
   ANCHOR_EOS,                        //
   ANCHOR_N_EOS,                      //
-  CG_ANY,                            // char group '.'
+  CG_ANY,                            // char group '.' (NOTE predefined char groups don't need to respect language)
   CG_D,                              // char group '\d'
   CG_N_D,                            // char group '\D'
   CG_W,                              // char group '\w'

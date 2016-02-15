@@ -301,14 +301,14 @@ lex *RegexpQuantifier = [
     :token "quantifier"
   }
 
-  /(\{) \s* (\d+) \s* (\}) ([\*\?]?)/ {
+  /(\{) \s* (\d+) \s* (\}) ([\+\?]?)/ {
     :token "begin.quantifier" 1
     :token "quantifier.range.from" 2
     :token "end.quantifier" 3
     :token "quantifier.kind" 4
   }
 
-  /(\{) \s* (\d+) \s*,\s* (\d*) \s* (\}) ([\*\?]?)/ {
+  /(\{) \s* (\d+) \s*,\s* (\d*) \s* (\}) ([\+\?]?)/ {
     :token "begin.quantifier" 1
     :token "quantifier.range.from" 2
     :token "quantifier.range.to" 3

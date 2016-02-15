@@ -69,6 +69,10 @@ static bool _is_hex_char(int c) {
   return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
 }
 
+static bool _is_space_char(int c) {
+  return c == '\n' || c == '\r' || c == ' ' || c == '\t';
+}
+
 // NOTE
 // captures[0] stores max index of captures
 // captures[1] stores $0.size
@@ -76,6 +80,13 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
   struct Threads ts;
   Threads.init(&ts, 10);
   const char* s_end = init_s + size;
+
+# define CHECK_END if (t->s == s_end) goto thread_dead
+# define ADVANCE_CHAR do {\
+    int scanned = s_end - t->s;\
+    utf_8_scan(t->s, &scanned);\
+    t->s += scanned;\
+  } while (0)
 
   _add_thread(&ts, init_pc, init_s, captures);
   while (ts.size) {
@@ -243,20 +254,16 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
         }
 
         case CG_ANY: {
-          if (t->s < s_end) {
-            int scanned = s_end - t->s;
-            utf_8_scan(t->s, &scanned);
-            t->s += scanned;
-            pc++;
-            continue;
-          } else {
-            goto thread_dead;
-          }
+          CHECK_END;
+          ADVANCE_CHAR;
+          pc++;
+          continue;
         }
 
         case CG_D: {
-          if (t->s < s_end && t->s[0] >= '0' && t->s[0] <= '9') {
-            t->s++;
+          CHECK_END;
+          if (t->s[0] >= '0' && t->s[0] <= '9') {
+            t->s++; // always 1 byte
             pc++;
             continue;
           } else {
@@ -265,19 +272,22 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
         }
 
         case CG_N_D: {
-          if (t->s < s_end && t->s[0] >= '0' && t->s[0] <= '9') {
+          CHECK_END;
+          if (t->s[0] >= '0' && t->s[0] <= '9') {
             goto thread_dead;
           } else {
-            t->s++;
+            ADVANCE_CHAR;
             pc++;
             continue;
           }
         }
 
         case CG_W: {
-          // TODO scan utf-8
-          if (t->s < s_end && _is_word_char(t->s[0])) {
-            t->s++;
+          CHECK_END;
+          int scanned = s_end - t->s;
+          int ch = utf_8_scan(t->s, &scanned);
+          if (_is_word_char(ch)) {
+            t->s += scanned;
             pc++;
             continue;
           } else {
@@ -286,19 +296,22 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
         }
 
         case CG_N_W: {
-          // TODO scan utf-8
-          if (t->s < s_end && _is_word_char(t->s[0])) {
+          CHECK_END;
+          int scanned = s_end - t->s;
+          int ch = utf_8_scan(t->s, &scanned);
+          if (_is_word_char(ch)) {
             goto thread_dead;
           } else {
-            t->s++;
+            t->s += scanned;
             pc++;
             continue;
           }
         }
 
         case CG_H: {
-          if (t->s < s_end && _is_hex_char(t->s[0])) {
-            t->s++;
+          CHECK_END;
+          if (_is_hex_char(t->s[0])) {
+            t->s++; // always 1 byte
             pc++;
             continue;
           } else {
@@ -307,18 +320,20 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
         }
 
         case CG_N_H: {
-          if (t->s < s_end && _is_hex_char(t->s[0])) {
+          CHECK_END;
+          if (_is_hex_char(t->s[0])) {
             goto thread_dead;
           } else {
-            t->s++;
+            ADVANCE_CHAR;
             pc++;
             continue;
           }
         }
 
         case CG_S: {
-          if (t->s < s_end && (t->s[0] == '\n' || t->s[0] == '\r' || t->s[0] == ' ' || t->s[0] == '\t')) {
-            t->s++;
+          CHECK_END;
+          if (_is_space_char(t->s[0])) {
+            t->s++; // always 1 byte
             pc++;
             continue;
           } else {
@@ -327,10 +342,11 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
         }
 
         case CG_N_S: {
-          if (t->s < s_end && (t->s[0] == '\n' || t->s[0] == '\r' || t->s[0] == ' ' || t->s[0] == '\t')) {
+          CHECK_END;
+          if (_is_space_char(t->s[0])) {
             goto thread_dead;
           } else {
-            t->s++;
+            ADVANCE_CHAR;
             pc++;
             continue;
           }
