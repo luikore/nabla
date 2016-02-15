@@ -125,21 +125,6 @@ void vm_regexp_suite() {
     RELEASE(regexp);
   }
 
-  ccut_test("vm_regexp_compile char range") {
-    Val bounds[] = {VAL_FROM_INT('a'), VAL_FROM_INT('b')};
-    Val range_node = nb_struct_new(_klass("CharRange"), 2, bounds);
-    Val regexp = nb_struct_new(_klass("Regexp"), 1, &range_node);
-
-    struct Iseq iseq;
-    Iseq.init(&iseq, 0);
-    sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
-    uint16_t expected[] = {RANGE, 'a', 0, 'b', 0, MATCH, END};
-    ASSERT_ISEQ_MATCH(expected, iseq);
-
-    Iseq.cleanup(&iseq);
-    RELEASE(regexp);
-  }
-
   ccut_test("vm_regexp_compile seq") {
     Val list = nb_cons_new(VAL_FROM_INT('a'), VAL_NIL);
     list = nb_cons_new(VAL_FROM_INT('b'), list);

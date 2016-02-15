@@ -22,6 +22,11 @@ typedef struct {
 
 typedef struct {
   uint16_t op;
+  int32_t arg1, arg2, arg3;
+} __attribute__((packed)) Arg323232;
+
+typedef struct {
+  uint16_t op;
   int16_t arg1;
 } __attribute__((packed)) Arg16;
 
@@ -96,28 +101,20 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
     for (;;) {
       switch (*pc) {
         case CHAR: {
-          if (t->s < s_end) {
-            int c = DECODE(Arg32, pc).arg1;
-            int scanned = s_end - t->s;
-            int u8_char = utf_8_scan(t->s, &scanned);
-            if (u8_char == c) {
-              t->s += scanned;
-              continue;
-            }
+          CHECK_END;
+          int c = DECODE(Arg32, pc).arg1;
+          int scanned = s_end - t->s;
+          int u8_char = utf_8_scan(t->s, &scanned);
+          if (u8_char == c) {
+            t->s += scanned;
+            continue;
+          } else {
+            goto thread_dead;
           }
-          goto thread_dead;
         }
 
-        case RANGE: {
-          if (t->s < s_end) {
-            Arg3232 range = DECODE(Arg3232, pc);
-            int scanned = s_end - t->s;
-            int u8_char = utf_8_scan(t->s, &scanned);
-            if (u8_char >= range.arg1 && u8_char <= range.arg2) {
-              t->s += scanned;
-              continue;
-            }
-          }
+        case CHAR2: {
+          // TODO
           goto thread_dead;
         }
 
@@ -128,9 +125,25 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
           return true;
         }
 
+        case DIE: {
+          goto thread_dead;
+        }
+
         case JMP: {
           int offset = DECODE(Arg32, pc).arg1;
           pc = init_pc + offset;
+          continue;
+        }
+
+        case JIF_RANGE: {
+          CHECK_END;
+          Arg323232 payload = DECODE(Arg323232, pc);
+          int scanned = s_end - t->s;
+          int u8_char = utf_8_scan(t->s, &scanned);
+          if (u8_char >= payload.arg1 && u8_char <= payload.arg2) {
+            t->s += scanned;
+            pc = init_pc + payload.arg3;
+          }
           continue;
         }
 
@@ -364,6 +377,9 @@ no_match:
 
   Threads.cleanup(&ts);
   return false;
+
+# undef CHECK_END
+# undef ADVANCE_CHAR
 }
 
 bool sb_vm_regexp_exec(uint16_t* init_pc, int64_t size, const char* str, int32_t* captures) {
@@ -648,14 +664,6 @@ static void _encode_char(struct Iseq* iseq, Val char_node, bool ignore_case) {
   ENCODE(iseq, Arg32, ((Arg32){CHAR, chr}));
 }
 
-static void _encode_range(struct Iseq* iseq, Val range_node, bool ignore_case) {
-  // TODO ignore case
-  Val from = nb_struct_get(range_node, 0);
-  Val to = nb_struct_get(range_node, 1);
-  Arg3232 range = {RANGE, (int32_t)VAL_TO_INT(from), (int32_t)VAL_TO_INT(to)};
-  ENCODE(iseq, Arg3232, range);
-}
-
 static void _encode_anchor(struct Iseq* iseq, Val anchor) {
   const char* s = nb_string_ptr(anchor);
   switch (s[0]) {
@@ -742,22 +750,44 @@ static void _encode_predef_char_group(struct Iseq* iseq, Val node) {
   }
 }
 
-static void _translate_label_pos(struct Iseq* iseq, struct Ints* labels, struct Ints* jmps, struct Ints* forks) {
-  int jmps_size = Ints.size(jmps);
-  for (int i = 0; i < jmps_size; i++) {
-    int j = *Ints.at(jmps, i);
-    // [JMP:uint16_t, offset:int32_t]
-    int32_t* ptr = (int32_t*)Iseq.at(iseq, j + 1);
-    ptr[0] = *Ints.at(labels, ptr[0]);
+static Val _flatten_char_group(Val node, void* arena, bool ignore_case) {
+  // BracketCharGroup[beginer, (CharRange | BracketCharGroup)+]
+  uint32_t kCharGroup = VAL_KLASS(node);
+  uint32_t kCharRange = klass_find_c("CharRange", sb_klass());
+}
+
+static void _encode_char_group(struct Iseq* iseq, struct Ints* labels, struct Ints* label_refs, Val ranges) {
+  // example encoding of [a-b c-d e-f]:
+  //   jif_range a b L0
+  //   jif_range c d L0
+  //   jif_range e f L0
+  //   die
+  //   L0:
+
+  int32_t l0 = _new_label(labels);
+  for (Val tail = ranges; tail != VAL_NIL; tail = nb_cons_tail(tail)) {
+    Val head = nb_cons_head(tail);
+    int32_t from = (int32_t)VAL_TO_INT(nb_struct_get(head, 0));
+    int32_t to = (int32_t)VAL_TO_INT(nb_struct_get(head, 1));
+    Arg323232 payload = {JIF_RANGE, from, to, l0};
+    Ints.push(label_refs, Iseq.size(iseq) + (1 + 2 + 2)); // index of offset
+    ENCODE(iseq, Arg323232, payload);
   }
 
-  int forks_size = Ints.size(forks);
-  for (int i = 0; i < forks_size; i++) {
-    int j = *Ints.at(forks, i);
-    // [FORK:uint16_t, left:int32_t, right:int32_t]
-    int32_t* ptr = (int32_t*)Iseq.at(iseq, j + 1);
+  // die
+  ENCODE(iseq, uint16_t, DIE);
+
+  // L0:
+  int offset = Iseq.size(iseq);
+  *Ints.at(labels, l0) = offset;
+}
+
+static void _translate_label_pos(struct Iseq* iseq, struct Ints* labels, struct Ints* label_refs) {
+  int refs_size = Ints.size(label_refs);
+  for (int i = 0; i < refs_size; i++) {
+    int j = *Ints.at(label_refs, i);
+    int32_t* ptr = (int32_t*)Iseq.at(iseq, j);
     ptr[0] = *Ints.at(labels, ptr[0]);
-    ptr[1] = *Ints.at(labels, ptr[1]);
   }
 }
 
@@ -769,20 +799,17 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
   uint32_t kFlag             = klass_find_c("Flag", sb_klass());
   uint32_t kQuantified       = klass_find_c("Quantified", sb_klass());
   uint32_t kQuantifiedRange  = klass_find_c("QuantifiedRange", sb_klass());
-  uint32_t kUnit             = klass_find_c("Unit", sb_klass());
   uint32_t kGroup            = klass_find_c("Group", sb_klass());
   uint32_t kCharGroupPredef  = klass_find_c("CharGroupPredef", sb_klass());
   uint32_t kUnicodeCharClass = klass_find_c("UnicodeCharClass", sb_klass());
   uint32_t kBracketCharGroup = klass_find_c("BracketCharGroup", sb_klass());
-  uint32_t kCharRange        = klass_find_c("CharRange", sb_klass());
 
   bool ignore_case = false;
   struct Stack stack;
-  struct Ints labels, arg3232_refs, arg32_refs;
+  struct Ints labels, label_refs;
   Stack.init(&stack, 25);
   Ints.init(&labels, 15);
-  Ints.init(&arg3232_refs, 5);
-  Ints.init(&arg32_refs, 5);
+  Ints.init(&label_refs, 15);
 
   /*
   compile stack layout
@@ -820,13 +847,14 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
     } else if (curr == FORK_NODE) {
       int32_t offset1 = (int32_t)Stack.pop(&stack);
       int32_t offset2 = (int32_t)Stack.pop(&stack);
-      Ints.push(&arg3232_refs, Iseq.size(iseq));
+      Ints.push(&label_refs, Iseq.size(iseq) + 1); // offset1
+      Ints.push(&label_refs, Iseq.size(iseq) + 3); // offset2
       ENCODE(iseq, Arg3232, ((Arg3232){FORK, offset1, offset2}));
       continue;
 
     } else if (curr == JMP_NODE) {
       int32_t offset = Stack.pop(&stack);
-      Ints.push(&arg32_refs, Iseq.size(iseq));
+      Ints.push(&label_refs, Iseq.size(iseq) + 1);
       ENCODE(iseq, Arg32, ((Arg32){JMP, offset}));
       continue;
 
@@ -836,7 +864,7 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
 
     } else if (curr == ATOMIC_NODE) {
       int32_t offset = (int32_t)Stack.pop(&stack);
-      Ints.push(&arg32_refs, Iseq.size(iseq));
+      Ints.push(&label_refs, Iseq.size(iseq) + 1);
       ENCODE(iseq, Arg32, ((Arg32){ATOMIC, offset}));
       continue;
     }
@@ -844,9 +872,6 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
     uint32_t klass = VAL_KLASS(curr);
     if (klass == KLASS_INTEGER) { // char
       _encode_char(iseq, curr, ignore_case);
-
-    } else if (klass == kCharRange) {
-      _encode_range(iseq, curr, ignore_case);
 
     } else if (klass == kSeq) {
       _push_seq(&stack, curr);
@@ -863,6 +888,9 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
     } else if (klass == kQuantifiedRange) {
       int res = _push_quantified_range(&stack, &labels, curr);
       if (res != 0) {
+        Stack.cleanup(&stack);
+        Ints.cleanup(&labels);
+        Ints.cleanup(&label_refs);
         return nb_string_new_literal_c("bad char range");
       }
 
@@ -876,7 +904,8 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
       // TODO
 
     } else if (klass == kBracketCharGroup) {
-      // TODO
+      Val ranges = _flatten_char_group(curr, arena, ignore_case);
+      _encode_char_group(iseq, &labels, &label_refs, ranges);
 
     } else if (klass == kFlag) {
       Val flag = nb_struct_get(curr, 0);
@@ -891,18 +920,16 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
     } else {
       Stack.cleanup(&stack);
       Ints.cleanup(&labels);
-      Ints.cleanup(&arg32_refs);
-      Ints.cleanup(&arg3232_refs);
+      Ints.cleanup(&label_refs);
       return nb_string_new_f("unrecognized AST node klass %u", klass);
     }
   }
 
-  _translate_label_pos(iseq, &labels, &arg32_refs, &arg3232_refs);
+  _translate_label_pos(iseq, &labels, &label_refs);
 
   Stack.cleanup(&stack);
   Ints.cleanup(&labels);
-  Ints.cleanup(&arg32_refs);
-  Ints.cleanup(&arg3232_refs);
+  Ints.cleanup(&label_refs);
 
   ENCODE(iseq, uint16_t, END);
   return VAL_NIL;
@@ -934,6 +961,7 @@ void sb_vm_regexp_decompile(struct Iseq* iseq, int32_t start, int32_t size) {
       case CG_S:
       case CG_N_S:
       case MATCH:
+      case DIE:
       case END: {
         printf("\n");
         pc++;
@@ -951,7 +979,7 @@ void sb_vm_regexp_decompile(struct Iseq* iseq, int32_t start, int32_t size) {
         break;
       }
 
-      case RANGE:
+      case CHAR2:
       case FORK:
       case ATOMIC:
       case AHEAD:
@@ -959,6 +987,16 @@ void sb_vm_regexp_decompile(struct Iseq* iseq, int32_t start, int32_t size) {
         Arg3232 offsets = DECODE(Arg3232, pc);
         printf(" %d %d\n", offsets.arg1, offsets.arg2);
         break;
+      }
+
+      case JIF_RANGE: {
+        Arg323232 payload = DECODE(Arg323232, pc);
+        printf(" %d %d %d\n", payload.arg1, payload.arg2, payload.arg3);
+        break;
+      }
+
+      default: {
+        fatal_err("bad pc: %d", (int)*pc);
       }
     }
   }
