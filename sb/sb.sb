@@ -245,8 +245,8 @@ lex Regexp = [
 
   /\{[A-Z]\w*\}/    { :token "interpolate.predef" }
 
-  "(?i)"               { :token "flag.case-insensitive" }
-  "(?I)"               { :token "flag.case-sensitive" }
+  "(?i)"               { :token "flag.case-insensitive" 0 true }
+  "(?I)"               { :token "flag.case-sensitive" 0 false }
   /\(\?e:\w+(-\w+)?\)/ { :token "flag.encoding" }
 
   /(\()(\?:|\?=|\?!|\?<=|\?<!|\?>)?/ {
@@ -269,7 +269,7 @@ peg Regexp = [
           / flag.encoding { Flag[$1] }
           / Unit quantifier { Quantified[$1, $2] }
           / Unit begin.quantifier quantifier.range.from quantifier.range.to? end.quantifier quantifier.kind { QuantifiedRange[$1, $3, $4, $6] }
-          / Unit { Unit[$1] }
+          / Unit { $1 }
   Unit : SingleChar { $1 }
        / CharGroup  { $1 }
        / Group { $1 }
@@ -301,14 +301,14 @@ lex *RegexpQuantifier = [
     :token "quantifier"
   }
 
-  /(\{) (\d+) (\}) ([\*\?]?)/ {
+  /(\{) \s* (\d+) \s* (\}) ([\*\?]?)/ {
     :token "begin.quantifier" 1
     :token "quantifier.range.from" 2
     :token "end.quantifier" 3
     :token "quantifier.kind" 4
   }
 
-  /(\{) (\d+) , (\d*) (\}) ([\*\?]?)/ {
+  /(\{) \s* (\d+) \s*,\s* (\d*) \s* (\}) ([\*\?]?)/ {
     :token "begin.quantifier" 1
     :token "quantifier.range.from" 2
     :token "quantifier.range.to" 3

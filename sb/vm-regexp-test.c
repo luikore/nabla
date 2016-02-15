@@ -179,4 +179,14 @@ void vm_regexp_suite() {
     Iseq.cleanup(&iseq);
     RELEASE(regexp);
   }
+
+  ccut_test("vm_regexp_compile a?") {
+    
+  }
+
+  ccut_test("vm_regexp_compile a+") {
+  }
+
+  ccut_test("vm_regexp_compile a*") {
+  }
 }

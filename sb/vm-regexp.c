@@ -65,6 +65,10 @@ static bool _is_word_char(int c) {
   return isalnum(c) || c == '_';
 }
 
+static bool _is_hex_char(int c) {
+  return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
+}
+
 // NOTE
 // captures[0] stores max index of captures
 // captures[1] stores $0.size
@@ -234,6 +238,100 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
           if (t->s == s_end) {
             goto thread_dead;
           } else {
+            continue;
+          }
+        }
+
+        case CG_ANY: {
+          if (t->s < s_end) {
+            int scanned = s_end - t->s;
+            utf_8_scan(t->s, &scanned);
+            t->s += scanned;
+            pc++;
+            continue;
+          } else {
+            goto thread_dead;
+          }
+        }
+
+        case CG_D: {
+          if (t->s < s_end && t->s[0] >= '0' && t->s[0] <= '9') {
+            t->s++;
+            pc++;
+            continue;
+          } else {
+            goto thread_dead;
+          }
+        }
+
+        case CG_N_D: {
+          if (t->s < s_end && t->s[0] >= '0' && t->s[0] <= '9') {
+            goto thread_dead;
+          } else {
+            t->s++;
+            pc++;
+            continue;
+          }
+        }
+
+        case CG_W: {
+          // TODO scan utf-8
+          if (t->s < s_end && _is_word_char(t->s[0])) {
+            t->s++;
+            pc++;
+            continue;
+          } else {
+            goto thread_dead;
+          }
+        }
+
+        case CG_N_W: {
+          // TODO scan utf-8
+          if (t->s < s_end && _is_word_char(t->s[0])) {
+            goto thread_dead;
+          } else {
+            t->s++;
+            pc++;
+            continue;
+          }
+        }
+
+        case CG_H: {
+          if (t->s < s_end && _is_hex_char(t->s[0])) {
+            t->s++;
+            pc++;
+            continue;
+          } else {
+            goto thread_dead;
+          }
+        }
+
+        case CG_N_H: {
+          if (t->s < s_end && _is_hex_char(t->s[0])) {
+            goto thread_dead;
+          } else {
+            t->s++;
+            pc++;
+            continue;
+          }
+        }
+
+        case CG_S: {
+          if (t->s < s_end && (t->s[0] == '\n' || t->s[0] == '\r' || t->s[0] == ' ' || t->s[0] == '\t')) {
+            t->s++;
+            pc++;
+            continue;
+          } else {
+            goto thread_dead;
+          }
+        }
+
+        case CG_N_S: {
+          if (t->s < s_end && (t->s[0] == '\n' || t->s[0] == '\r' || t->s[0] == ' ' || t->s[0] == '\t')) {
+            goto thread_dead;
+          } else {
+            t->s++;
+            pc++;
             continue;
           }
         }
@@ -478,7 +576,64 @@ static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node,
   }
 }
 
-static void _encode_range(struct Iseq* iseq, Val range_node) {
+// good: returns 0
+// negative range: returns 1
+// from > to: returns 2
+// range overflow: returns 3
+static int _push_quantified_range(struct Stack* stack, struct Ints* labels, Val node) {
+  // node[e, from, to?, reluctant/possessive mark]
+  Val e = nb_struct_get(node, 0);
+  Val v_from = nb_struct_get(node, 1);
+  Val v_to_maybe = nb_struct_get(node, 2);
+  Val kind = nb_struct_get(node, 3);
+
+  if (kind != VAL_NIL) {
+    fatal_err("reluctant/possessive mark not supported yet");
+  }
+
+  int64_t from, to;
+  from = VAL_TO_INT(v_from);
+  if (from < 0) {
+    return 1;
+  }
+  if (from > (1 << 30)) { // 1G, too large
+    return 3;
+  }
+  if (v_to_maybe == VAL_NIL) {
+    to = from;
+  } else {
+    to = VAL_TO_INT(nb_cons_head(to));
+    if (from > to) {
+      return 2;
+    }
+  }
+
+  // example: e{2,5} -> e e e? e? e?
+  for (int64_t i = 0; i < from; i++) {
+    Stack.push(stack, e);
+  }
+  for (int64_t i = from; i < to; i++) {
+    // fork L1 L2
+    // L1: e
+    // L2:
+    Val l1 = _new_label(labels);
+    Val l2 = _new_label(labels);
+    _push_label(stack, l2);
+    Stack.push(stack, e);
+    _push_label(stack, l1);
+    _push_fork(stack, l1, l2);
+  }
+  return 0;
+}
+
+static void _encode_char(struct Iseq* iseq, Val char_node, bool ignore_case) {
+  int chr = VAL_TO_INT(char_node);
+  // TODO ignore case
+  ENCODE(iseq, Arg32, ((Arg32){CHAR, chr}));
+}
+
+static void _encode_range(struct Iseq* iseq, Val range_node, bool ignore_case) {
+  // TODO ignore case
   Val from = nb_struct_get(range_node, 0);
   Val to = nb_struct_get(range_node, 1);
   Arg3232 range = {RANGE, (int32_t)VAL_TO_INT(from), (int32_t)VAL_TO_INT(to)};
@@ -528,6 +683,49 @@ static void _encode_anchor(struct Iseq* iseq, Val anchor) {
   }
 }
 
+static void _encode_predef_char_group(struct Iseq* iseq, Val node) {
+  const char* ptr = nb_string_ptr(nb_struct_get(node, 0));
+  if (ptr[0] == '.') {
+    ENCODE(iseq, uint16_t, CG_ANY);
+    return;
+  }
+
+  switch (ptr[1]) {
+    case 'd': {
+      ENCODE(iseq, uint16_t, CG_D);
+      return;
+    }
+    case 'D': {
+      ENCODE(iseq, uint16_t, CG_N_D);
+      return;
+    }
+    case 'w': {
+      ENCODE(iseq, uint16_t, CG_W);
+      return;
+    }
+    case 'W': {
+      ENCODE(iseq, uint16_t, CG_N_W);
+      return;
+    }
+    case 'h': {
+      ENCODE(iseq, uint16_t, CG_H);
+      return;
+    }
+    case 'H': {
+      ENCODE(iseq, uint16_t, CG_N_H);
+      return;
+    }
+    case 's': {
+      ENCODE(iseq, uint16_t, CG_S);
+      return;
+    }
+    case 'S': {
+      ENCODE(iseq, uint16_t, CG_N_S);
+      return;
+    }
+  }
+}
+
 static void _translate_label_pos(struct Iseq* iseq, struct Ints* labels, struct Ints* jmps, struct Ints* forks) {
   int jmps_size = Ints.size(jmps);
   for (int i = 0; i < jmps_size; i++) {
@@ -562,6 +760,7 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
   uint32_t kBracketCharGroup = klass_find_c("BracketCharGroup", sb_klass());
   uint32_t kCharRange        = klass_find_c("CharRange", sb_klass());
 
+  bool ignore_case = false;
   struct Stack stack;
   struct Ints labels, arg3232_refs, arg32_refs;
   Stack.init(&stack, 25);
@@ -595,25 +794,30 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
   Stack.push(&stack, content);
   while (Stack.size(&stack)) {
     Val curr = Stack.pop(&stack);
+
     if (curr == LABEL_NODE) {
       Val num = Stack.pop(&stack);
       int offset = Iseq.size(iseq);
       *Ints.at(&labels, num) = offset;
       continue;
+
     } else if (curr == FORK_NODE) {
       int32_t offset1 = (int32_t)Stack.pop(&stack);
       int32_t offset2 = (int32_t)Stack.pop(&stack);
       Ints.push(&arg3232_refs, Iseq.size(iseq));
       ENCODE(iseq, Arg3232, ((Arg3232){FORK, offset1, offset2}));
       continue;
+
     } else if (curr == JMP_NODE) {
       int32_t offset = Stack.pop(&stack);
       Ints.push(&arg32_refs, Iseq.size(iseq));
       ENCODE(iseq, Arg32, ((Arg32){JMP, offset}));
       continue;
+
     } else if (curr == MATCH_NODE) {
       ENCODE(iseq, uint16_t, MATCH);
       continue;
+
     } else if (curr == ATOMIC_NODE) {
       int32_t offset = (int32_t)Stack.pop(&stack);
       Ints.push(&arg32_refs, Iseq.size(iseq));
@@ -623,11 +827,10 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
 
     uint32_t klass = VAL_KLASS(curr);
     if (klass == KLASS_INTEGER) { // char
-      int chr = VAL_TO_INT(curr);
-      ENCODE(iseq, Arg32, ((Arg32){CHAR, chr}));
+      _encode_char(iseq, curr, ignore_case);
 
     } else if (klass == kCharRange) {
-      _encode_range(iseq, curr);
+      _encode_range(iseq, curr, ignore_case);
 
     } else if (klass == kSeq) {
       _push_seq(&stack, curr);
@@ -641,33 +844,42 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
     } else if (klass == kQuantified) {
       _push_quantified(&stack, &labels, curr, arena);
 
-    } else if (klass == kFlag) {
-
     } else if (klass == kQuantifiedRange) {
-
-    } else if (klass == kUnit) {
+      int res = _push_quantified_range(&stack, &labels, curr);
+      if (res != 0) {
+        return nb_string_new_literal_c("bad char range");
+      }
 
     } else if (klass == kGroup) {
+      // TODO
 
     } else if (klass == kCharGroupPredef) {
+      _encode_predef_char_group(iseq, curr);
 
     } else if (klass == kUnicodeCharClass) {
+      // TODO
+
     } else if (klass == kBracketCharGroup) {
+      // TODO
+
+    } else if (klass == kFlag) {
+      Val flag = nb_struct_get(curr, 0);
+      if (flag == VAL_TRUE) {
+        ignore_case = true; // todo language-dependent ignore case
+      } else if (flag == VAL_FALSE) {
+        ignore_case = false;
+      } else {
+        fatal_err("encoding flag not supported yet");
+      }
+
     } else {
-      val_throw(nb_string_new_literal_c("unrecognized klass"));
+      Stack.cleanup(&stack);
+      Ints.cleanup(&labels);
+      Ints.cleanup(&arg32_refs);
+      Ints.cleanup(&arg3232_refs);
+      return nb_string_new_f("unrecognized AST node klass %u", klass);
     }
   }
-  // Seq[$1]
-  // PredefAnchor[$1]
-  // Flag[$1]
-  // Quantified[$1, $2]
-  // QuantifiedRange[$1, $3, $4, $6]
-  // Unit[$1]
-  // Group[$2, $3]
-  // CharGroupPredef[$1]
-  // UnicodeCharClass[$1]
-  // BracketCharGroup[$1, $2]
-  // CharRange[$1, $3]
 
   _translate_label_pos(iseq, &labels, &arg32_refs, &arg3232_refs);
 
@@ -696,6 +908,15 @@ void sb_vm_regexp_decompile(struct Iseq* iseq, int32_t start, int32_t size) {
       case ANCHOR_N_BOS:
       case ANCHOR_EOS:
       case ANCHOR_N_EOS:
+      case CG_ANY:
+      case CG_D:
+      case CG_N_D:
+      case CG_W:
+      case CG_N_W:
+      case CG_H:
+      case CG_N_H:
+      case CG_S:
+      case CG_N_S:
       case MATCH:
       case END: {
         printf("\n");
