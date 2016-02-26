@@ -231,7 +231,7 @@ void vm_regexp_suite() {
 
     Val err = sb_vm_regexp_compile(&iseq, arena, VAL_NIL, regexp);
     assert_eq(VAL_NIL, err);
-    sb_vm_regexp_decompile(&iseq, 0, Iseq.size(&iseq));
+    // sb_vm_regexp_decompile(&iseq, 0, Iseq.size(&iseq));
 
     int32_t captures[20];
     const char* src = "a";

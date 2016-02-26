@@ -756,7 +756,7 @@ static int _compare_range(const void* rg1, const void* rg2) {
   return f1 > f2 ? 1 : f1 < f2 ? -1 : 0;
 }
 
-static Val _invert_ranges(Val list, void* arena, uint32_t range_klass) {
+static Val _invert_ranges(void* arena, Val list, uint32_t range_klass) {
   if (list == VAL_NIL) {
     Val argv[] = {VAL_FROM_INT(0), VAL_FROM_INT(UTF_8_MAX)};
     Val e = nb_struct_anew(arena, range_klass, 2, argv);
@@ -783,8 +783,9 @@ static Val _invert_ranges(Val list, void* arena, uint32_t range_klass) {
 
   for (int i = 1; i < Vals.size(&vals); i++) {
     Val* range = Vals.at(&vals, i);
-    int32_t from = (int32_t)nb_struct_get(*range, 0);
-    int32_t to = (int32_t)nb_struct_get(*range, 1);
+    int32_t from = (int32_t)VAL_TO_INT(nb_struct_get(*range, 0));
+    int32_t to = (int32_t)VAL_TO_INT(nb_struct_get(*range, 1));
+    printf("\n\n%d,%d,%d,%d\n\n", from, to, last_from, last_to);
     if (from > last_to + 1) { // disjoint
       Val e = nb_struct_anew(arena, range_klass, 2, (Val[]){VAL_FROM_INT(last_to + 1), VAL_FROM_INT(from - 1)});
       res = nb_cons_anew(arena, e, res);
@@ -808,7 +809,7 @@ static Val _invert_ranges(Val list, void* arena, uint32_t range_klass) {
 
 // return list of char ranges
 // todo language dependent ignore case
-static Val _flatten_char_group(Val node, void* arena, bool ignore_case, Val result_list) {
+static Val _flatten_char_group(void* arena, Val node, bool ignore_case, Val result_list) {
   // BracketCharGroup[beginer, (CharRange | BracketCharGroup)+]
   uint32_t kCharGroup = VAL_KLASS(node);
   uint32_t kCharRange = klass_find_c("CharRange", sb_klass());
@@ -823,14 +824,17 @@ static Val _flatten_char_group(Val node, void* arena, bool ignore_case, Val resu
     if (VAL_KLASS(e) == kCharRange) {
       result_list = nb_cons_anew(arena, e, result_list);
     } else {
-      result_list = _flatten_char_group(e, arena, ignore_case, result_list);
+      Val invert_list = _flatten_char_group(arena, e, ignore_case, VAL_NIL);
+      for (; invert_list != VAL_NIL; invert_list = nb_cons_tail(invert_list)) {
+        result_list = nb_cons_anew(arena, nb_cons_head(invert_list), result_list);
+      }
     }
   }
 
   if (is_positive) {
     return result_list;
   } else {
-    return _invert_ranges(result_list, arena, kCharRange);
+    return _invert_ranges(arena, result_list, kCharRange);
   }
 }
 
@@ -982,7 +986,7 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
       // TODO
 
     } else if (klass == kBracketCharGroup) {
-      Val ranges = _flatten_char_group(curr, arena, ignore_case, VAL_NIL);
+      Val ranges = _flatten_char_group(arena, curr, ignore_case, VAL_NIL);
       _encode_char_group(iseq, &labels, &label_refs, ranges);
 
     } else if (klass == kFlag) {
