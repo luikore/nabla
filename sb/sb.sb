@@ -239,9 +239,10 @@ lex Regexp = [
 
   "|" { :token "op.branch" }
 
-  /\[\^?/ { :token "begin.char-group" }
-  "]"     { :token "end.char-group" }
-  "-"     { :token "op.minus" 0 :char_no_escape 0 }
+  "[^" { :token "begin.char-group" 0 false }
+  "["  { :token "begin.char-group" 0 true }
+  "]"  { :token "end.char-group" }
+  "-"  { :token "op.minus" 0 :char_no_escape 0 }
 
   /\{[A-Z]\w*\}/    { :token "interpolate.predef" }
 

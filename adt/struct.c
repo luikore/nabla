@@ -8,6 +8,7 @@ typedef struct {
 } Struct;
 
 #define STRUCT_BYTE_SIZE(argc) (sizeof(ValHeader) + sizeof(Val) * (argc))
+#define VAL_HEADER_QWORDS (sizeof(ValHeader) / sizeof(Val))
 
 static void _struct_destruct(void* ptr) {
   Struct* st = ptr;
@@ -53,7 +54,7 @@ Val nb_struct_anew(void* arena, uint32_t klass_id, uint32_t argc, Val* argv) {
     val_throw(nb_string_new_literal_c("field size mismatch"));
   }
 
-  Struct* s = val_arena_alloc(arena, klass_id, field_size);
+  Struct* s = val_arena_alloc(arena, klass_id, field_size + VAL_HEADER_QWORDS);
   memcpy(s->fields, argv, argc * sizeof(Val));
   return (Val)s;
 }

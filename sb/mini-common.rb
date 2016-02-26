@@ -14,7 +14,7 @@ class << Klasses
 end
 
 def build_list arr
-  "LIST(#{arr.join ",\n"})"
+  "LIST(#{arr.reverse.join ",\n"})"
 end
 
 Token = Struct.new :type, :s

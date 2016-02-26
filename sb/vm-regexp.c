@@ -750,10 +750,88 @@ static void _encode_predef_char_group(struct Iseq* iseq, Val node) {
   }
 }
 
-static Val _flatten_char_group(Val node, void* arena, bool ignore_case) {
+static int _compare_range(const void* rg1, const void* rg2) {
+  int64_t f1 = VAL_TO_INT(nb_struct_get(*((Val*)rg1), 0));
+  int64_t f2 = VAL_TO_INT(nb_struct_get(*((Val*)rg2), 0));
+  return f1 > f2 ? 1 : f1 < f2 ? -1 : 0;
+}
+
+static Val _invert_ranges(Val list, void* arena, uint32_t range_klass) {
+  if (list == VAL_NIL) {
+    Val argv[] = {VAL_FROM_INT(0), VAL_FROM_INT(UTF_8_MAX)};
+    Val e = nb_struct_anew(arena, range_klass, 2, argv);
+    return nb_cons_anew(arena, e, VAL_NIL);
+  }
+
+  struct Vals vals;
+  Vals.init(&vals, 5);
+  for (; list != VAL_NIL; list = nb_cons_tail(list)) {
+    Vals.push(&vals, nb_cons_head(list));
+  }
+  qsort(Vals.at(&vals, 0), Vals.size(&vals), sizeof(Val), _compare_range);
+
+  Val res = VAL_NIL;
+  Val first_node = *Vals.at(&vals, 0);
+  int32_t last_from = (int32_t)VAL_TO_INT(nb_struct_get(first_node, 0));
+  int32_t last_to = (int32_t)VAL_TO_INT(nb_struct_get(first_node, 1));
+  Val preserve;
+  if (last_from > 0) {
+    Val e = nb_struct_anew(arena, range_klass, 2, (Val[]){VAL_FROM_INT(0), VAL_FROM_INT(last_from - 1)});
+    preserve = e;
+    res = nb_cons_anew(arena, e, res);
+  }
+
+  for (int i = 1; i < Vals.size(&vals); i++) {
+    Val* range = Vals.at(&vals, i);
+    int32_t from = (int32_t)nb_struct_get(*range, 0);
+    int32_t to = (int32_t)nb_struct_get(*range, 1);
+    if (from > last_to + 1) { // disjoint
+      Val e = nb_struct_anew(arena, range_klass, 2, (Val[]){VAL_FROM_INT(last_to + 1), VAL_FROM_INT(from - 1)});
+      res = nb_cons_anew(arena, e, res);
+      last_from = from;
+      last_to = to;
+    } else if (to > last_to) { // overlapped
+      last_to = to;
+    } else {
+      // included in last chunk
+    }
+  }
+  Vals.cleanup(&vals);
+
+  if (last_to + 1 <= UTF_8_MAX) {
+    Val e = nb_struct_anew(arena, range_klass, 2, (Val[]){VAL_FROM_INT(last_to + 1), VAL_FROM_INT(UTF_8_MAX)});
+    res = nb_cons_anew(arena, e, res);
+  }
+
+  return res;
+}
+
+// return list of char ranges
+// todo language dependent ignore case
+static Val _flatten_char_group(Val node, void* arena, bool ignore_case, Val result_list) {
   // BracketCharGroup[beginer, (CharRange | BracketCharGroup)+]
   uint32_t kCharGroup = VAL_KLASS(node);
   uint32_t kCharRange = klass_find_c("CharRange", sb_klass());
+
+  // begin.char-group attached boolean
+  bool is_positive = (nb_struct_get(node, 0) == VAL_TRUE);
+
+  Val list = nb_struct_get(node, 1);
+  for (; list != VAL_NIL; list = nb_cons_tail(list)) {
+    Val e = nb_cons_head(list);
+    // NOTE if there is overlap, let it be
+    if (VAL_KLASS(e) == kCharRange) {
+      result_list = nb_cons_anew(arena, e, result_list);
+    } else {
+      result_list = _flatten_char_group(e, arena, ignore_case, result_list);
+    }
+  }
+
+  if (is_positive) {
+    return result_list;
+  } else {
+    return _invert_ranges(result_list, arena, kCharRange);
+  }
 }
 
 static void _encode_char_group(struct Iseq* iseq, struct Ints* labels, struct Ints* label_refs, Val ranges) {
@@ -770,8 +848,8 @@ static void _encode_char_group(struct Iseq* iseq, struct Ints* labels, struct In
     int32_t from = (int32_t)VAL_TO_INT(nb_struct_get(head, 0));
     int32_t to = (int32_t)VAL_TO_INT(nb_struct_get(head, 1));
     Arg323232 payload = {JIF_RANGE, from, to, l0};
-    Ints.push(label_refs, Iseq.size(iseq) + (1 + 2 + 2)); // index of offset
     ENCODE(iseq, Arg323232, payload);
+    Ints.push(label_refs, Iseq.size(iseq) - 2); // last 2-bytes
   }
 
   // die
@@ -904,7 +982,7 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
       // TODO
 
     } else if (klass == kBracketCharGroup) {
-      Val ranges = _flatten_char_group(curr, arena, ignore_case);
+      Val ranges = _flatten_char_group(curr, arena, ignore_case, VAL_NIL);
       _encode_char_group(iseq, &labels, &label_refs, ranges);
 
     } else if (klass == kFlag) {
