@@ -41,7 +41,7 @@ void cons_suite() {
   ccut_test("build list") {
     val_begin_check_memory();
 
-    Val list = nb_cons_list(3, (Val[]){ VAL_FROM_INT(0), VAL_FROM_INT(1), VAL_FROM_INT(2) });
+    Val list = nb_cons_list(3, (Val[]){ VAL_FROM_INT(2), VAL_FROM_INT(1), VAL_FROM_INT(0) });
     Val tail = list;
     for (int i = 0; i < 3; i++) {
       Val head = nb_cons_head(tail);

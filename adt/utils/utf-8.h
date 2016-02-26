@@ -1,5 +1,7 @@
 #include <stdint.h>
 
+#define UTF_8_MAX 0x7FFFFFFF
+
 // return -1 if truncated char
 // `size` as input is the limit of bytes
 // `size` as output is the scanned bytes

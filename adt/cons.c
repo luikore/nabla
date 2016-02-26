@@ -103,7 +103,7 @@ Val nb_cons_tail(Val vnode) {
 
 Val nb_cons_list(int32_t argc, Val* argv) {
   Val l = VAL_NIL;
-  for (int i = 0; i < argc; i++) {
+  for (int i = argc - 1; i >= 0; i--) {
     l = nb_cons_new(argv[i], l);
   }
   return l;
@@ -111,7 +111,7 @@ Val nb_cons_list(int32_t argc, Val* argv) {
 
 Val nb_cons_alist(void* arena, int32_t argc, Val* argv) {
   Val l = VAL_NIL;
-  for (int i = 0; i < argc; i++) {
+  for (int i = argc - 1; i >= 0; i--) {
     l = nb_cons_anew(arena, argv[i], l);
   }
   return l;
