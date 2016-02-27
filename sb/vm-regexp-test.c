@@ -3,22 +3,28 @@
 
 #include "vm-regexp-opcodes.c"
 
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#define AS_ARG32(c) c, 0
+#else
+#define AS_ARG32(c) 0, c
+#endif
+
 // ab
 static uint16_t simple_reg[] = {
-  CHAR, 'a', 0, // little endian
-  CHAR, 'b', 0,
+  CHAR, AS_ARG32('a'),
+  CHAR, AS_ARG32('b'),
   MATCH
 };
 
 // (a+)(b+)
 static uint16_t complex_reg[] = {
   SAVE, 2,
-  /*2*/ CHAR, 'a', 0,
-  FORK, 2, 0, 10, 0,
+  /*2*/ CHAR, AS_ARG32('a'),
+  FORK, AS_ARG32(2), AS_ARG32(10),
   /*10*/ SAVE, 3,
   SAVE, 4,
-  /*14*/ CHAR, 'b', 0,
-  FORK, 14, 0, 22, 0,
+  /*14*/ CHAR, AS_ARG32('b'),
+  FORK, AS_ARG32(14), AS_ARG32(22),
   /*22*/ SAVE, 5,
   MATCH
 };
@@ -124,7 +130,7 @@ void vm_regexp_suite() {
     struct Iseq iseq;
     Iseq.init(&iseq, 0);
     sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
-    uint16_t expected[] = {CHAR, 'a', 0, MATCH, END};
+    uint16_t expected[] = {CHAR, AS_ARG32('a'), MATCH, END};
     ASSERT_ISEQ_MATCH(expected, iseq);
 
     Iseq.cleanup(&iseq);
@@ -140,7 +146,7 @@ void vm_regexp_suite() {
     struct Iseq iseq;
     Iseq.init(&iseq, 0);
     sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
-    uint16_t expected[] = {CHAR, 'a', 0, CHAR, 'b', 0, MATCH, END};
+    uint16_t expected[] = {CHAR, AS_ARG32('a'), CHAR, AS_ARG32('b'), MATCH, END};
     ASSERT_ISEQ_MATCH(expected, iseq);
 
     Iseq.cleanup(&iseq);
@@ -157,10 +163,10 @@ void vm_regexp_suite() {
     printf("\n");
     sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
     uint16_t expected[] = {
-      FORK, 5, 0, 11, 0,
-      /*5*/ CHAR, 'a', 0,
-      JMP, 14, 0,
-      /*11*/ CHAR, 'b', 0,
+      FORK, AS_ARG32(5), AS_ARG32(11),
+      /*5*/ CHAR, AS_ARG32('a'),
+      JMP, AS_ARG32(14),
+      /*11*/ CHAR, AS_ARG32('b'),
       /*14*/ MATCH, END
     };
 
