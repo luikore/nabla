@@ -222,9 +222,35 @@ void utf_8_suite() {
     assert_eq(0x1D11E, c);
     assert_eq(strlen(s), size);
 
-    size--;
+    // truncate
+    size = strlen(s) - 1;
     c = utf_8_scan(s, &size);
     assert_eq(-1, c);
+
+    // invalid byte sequence
+    s = (char*)((unsigned char[]){0b11011111, 0b11000000}); // 110.* should be followed by 10.*
+    size = 2;
+    c = utf_8_scan(s, &size);
+    assert_eq(-2, c);
+  }
+
+  ccut_test("test utf_8_scan_back") {
+    const char* s = "𝄞";
+    int size = strlen(s);
+    int c = utf_8_scan_back(s + size, &size);
+    assert_eq(0x1D11E, c);
+    assert_eq(strlen(s), size);
+
+    // truncate
+    size = strlen(s) - 1;
+    c = utf_8_scan_back(s + size, &size);
+    assert_eq(-1, c);
+
+    // invalid byte sequence
+    s = (char*)((unsigned char[]){0b11011111, 0b11000000}); // 110.* should be followed by 10.*
+    size = 2;
+    c = utf_8_scan_back(s + size, &size);
+    assert_eq(-2, c);
   }
 
   ccut_test("test utf_8_append") {
