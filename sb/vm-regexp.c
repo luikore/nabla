@@ -665,7 +665,8 @@ static void _encode_char(struct Iseq* iseq, Val char_node, bool ignore_case) {
 }
 
 static void _encode_anchor(struct Iseq* iseq, Val anchor) {
-  const char* s = nb_string_ptr(anchor);
+  Val str = nb_struct_get(anchor, 0);
+  const char* s = nb_string_ptr(str);
   switch (s[0]) {
     case '^': {
       ENCODE(iseq, uint16_t, ANCHOR_BOL);

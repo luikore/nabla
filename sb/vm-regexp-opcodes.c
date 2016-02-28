@@ -2,7 +2,7 @@
 //       ignore case / language / encoding flags are all set in compile time
 enum OpCodes {
   // op        // args                 // description
-  CHAR,        // c:int32_t            // match a char
+  CHAR=1,      // c:int32_t            // match a char
   CHAR2,       // a:int32_t, b:int32_t // matches either a or b, can optimize ignore case matchs
   MATCH,       //                      // found a match
   DIE,         //                      // no match

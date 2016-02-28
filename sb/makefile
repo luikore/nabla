@@ -21,8 +21,10 @@ LDFLAGS_DEBUG = -ladt-debug $(LDFLAGS) -ladt-debug
 $(target): $(objects)
 	ar rcs libsb.a $(objects)
 
-test:
+sb-test: $(test_srcs)
 	cc $(CFLAGS_DEBUG) $(LDFLAGS_DEBUG) $(test_srcs) -o sb-test
+
+test: sb-test
 	./sb-test
 
 clean:

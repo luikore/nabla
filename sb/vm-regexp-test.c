@@ -9,13 +9,6 @@
 #define AS_ARG32(c) 0, c
 #endif
 
-// ab
-static uint16_t simple_reg[] = {
-  CHAR, AS_ARG32('a'),
-  CHAR, AS_ARG32('b'),
-  MATCH
-};
-
 // (a+)(b+)
 static uint16_t complex_reg[] = {
   SAVE, 2,
@@ -39,6 +32,19 @@ static Val _range(int from, int to) {
   return _struct("CharRange", 2, (Val[]){VAL_FROM_INT(from), VAL_FROM_INT(to)});
 }
 
+static void _compile_quantified_reg(struct Iseq* iseq, int chr, const char* type) {
+  void* arena = val_arena_new();
+  Val quantifier = nb_string_new_literal_c(type);
+  Val a = VAL_FROM_INT(chr);
+  Val quantified = _struct("Quantified", 2, (Val[]){a, quantifier});
+  Val regexp = _struct("Regexp", 1, (Val[]){quantified});
+  Val err = sb_vm_regexp_compile(iseq, arena, VAL_NIL, regexp);
+  if (err != VAL_NIL) {
+    fatal_err("%.*s", (int)nb_string_byte_size(err), nb_string_ptr(err));
+  }
+  val_arena_delete(arena);
+}
+
 #define MATCH_REG(reg_ty) ({\
   memset(captures, 0, sizeof(captures));\
   sb_vm_regexp_exec(reg_ty, strlen(src), src, captures);\
@@ -51,7 +57,13 @@ static Val _range(int from, int to) {
 } while(0)
 
 void vm_regexp_suite() {
-  ccut_test("vm_regexp_exec simple regexp") {
+  ccut_test("sb_vm_regexp_exec /ab/") {
+    uint16_t simple_reg[] = {
+      CHAR, AS_ARG32('a'),
+      CHAR, AS_ARG32('b'),
+      MATCH
+    };
+
     int32_t captures[20];
     const char* src;
     bool res;
@@ -74,7 +86,26 @@ void vm_regexp_suite() {
     assert_eq(false, res);
   }
 
-  ccut_test("vm_regexp_exec complex regexp") {
+  ccut_test("sb_vm_regexp_exec /a*/") {
+    uint16_t reg[] = {
+      /*0*/ FORK, AS_ARG32(5), AS_ARG32(11),
+      /*5*/ CHAR, AS_ARG32('a'),
+      /*8*/ JMP, AS_ARG32(0),
+      /*11*/ MATCH,
+      /*12*/ END
+    };
+
+    int32_t captures[20];
+    const char* src;
+    bool res;
+
+    src = "b";
+    res = MATCH_REG(reg);
+    assert_eq(true, res);
+    assert_eq(0, captures[1]);
+  }
+
+  ccut_test("sb_vm_regexp_exec /(a+)(b+)/") {
     int32_t captures[20];
     const char* src;
     bool res;
@@ -93,7 +124,7 @@ void vm_regexp_suite() {
     assert_eq(strlen("aaab"), captures[1]);
   }
 
-  ccut_test("vm_regexp_exec greedy") {
+  ccut_test("sb_vm_regexp_exec /(a+)(b+)/ greedy") {
     int32_t captures[20];
     const char* src;
     bool res;
@@ -106,7 +137,7 @@ void vm_regexp_suite() {
     assert_eq(strlen("abb"), captures[1]);
   }
 
-  ccut_test("vm_regexp_from_string") {
+  ccut_test("sb_vm_regexp_from_string") {
     struct Iseq iseq;
     Iseq.init(&iseq, 0);
 
@@ -123,7 +154,7 @@ void vm_regexp_suite() {
     Iseq.cleanup(&iseq);
   }
 
-  ccut_test("vm_regexp_compile char") {
+  ccut_test("sb_vm_regexp_compile char") {
     Val char_node = VAL_FROM_INT('a');
     Val regexp = _struct("Regexp", 1, &char_node);
 
@@ -137,7 +168,7 @@ void vm_regexp_suite() {
     RELEASE(regexp);
   }
 
-  ccut_test("vm_regexp_compile seq") {
+  ccut_test("sb_vm_regexp_compile seq") {
     Val list = nb_cons_new(VAL_FROM_INT('a'), VAL_NIL);
     list = nb_cons_new(VAL_FROM_INT('b'), list);
     Val seq = _struct("Seq", 1, &list);
@@ -153,14 +184,13 @@ void vm_regexp_suite() {
     RELEASE(regexp);
   }
 
-  ccut_test("vm_regexp_compile branch") {
+  ccut_test("sb_vm_regexp_compile branch") {
     Val list = nb_cons_new(VAL_FROM_INT('a'), VAL_NIL);
     list = nb_cons_new(VAL_FROM_INT('b'), list);
     Val regexp = _struct("Regexp", 1, &list);
 
     struct Iseq iseq;
     Iseq.init(&iseq, 0);
-    printf("\n");
     sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
     uint16_t expected[] = {
       FORK, AS_ARG32(5), AS_ARG32(11),
@@ -177,25 +207,43 @@ void vm_regexp_suite() {
     RELEASE(regexp);
   }
 
-  ccut_test("vm_regexp_compile ^") {
+  ccut_test("sb_vm_regexp_compile /^/") {
+    Val anchor = _struct("PredefAnchor", 1, (Val[]){nb_string_new_literal_c("^")});
+    Val regexp = _struct("Regexp", 1, (Val[]){anchor});
+
+    struct Iseq iseq;
+    Iseq.init(&iseq, 5);
+
+    Val err = sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
+    assert_eq(VAL_NIL, err);
+    // sb_vm_regexp_decompile(&iseq, 0, Iseq.size(&iseq));
+    uint16_t expected[] = {
+      ANCHOR_BOL, MATCH, END
+    };
+    ASSERT_ISEQ_MATCH(expected, iseq);
+
+    Iseq.cleanup(&iseq);
   }
 
-  ccut_test("vm_regexp_compile \\w") {
+  ccut_test("sb_vm_regexp_compile /\\w/") {
+    Val anchor = _struct("CharGroupPredef", 1, (Val[]){nb_string_new_literal_c("\\w")});
+    Val regexp = _struct("Regexp", 1, (Val[]){anchor});
+
+    struct Iseq iseq;
+    Iseq.init(&iseq, 5);
+
+    Val err = sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
+    assert_eq(VAL_NIL, err);
+    // sb_vm_regexp_decompile(&iseq, 0, Iseq.size(&iseq));
+    uint16_t expected[] = {
+      CG_W, MATCH, END
+    };
+    ASSERT_ISEQ_MATCH(expected, iseq);
+
+    Iseq.cleanup(&iseq);
   }
 
-  ccut_test("vm_regexp_compile a?") {
-  }
-
-  ccut_test("vm_regexp_compile a+") {
-  }
-
-  ccut_test("vm_regexp_compile a*") {
-  }
-
-  ccut_test("vm_regexp_compile [ab]") {
-  }
-
-  ccut_test("vm_regexp_compile [^a]") {
+  ccut_test("sb_vm_regexp_compile /[^a]/") {
     Val range = _range('a', 'a');
     Val ranges = nb_cons_new(range, VAL_NIL);
     // negative char group
@@ -224,7 +272,7 @@ void vm_regexp_suite() {
 
   // the following regexp are too complex, we have to do actual match instead
 
-  ccut_test("vm_regexp_compile [a[^b]]") {
+  ccut_test("sb_vm_regexp_compile /[a[^b]]/") {
     Val inner = nb_cons_new(_range('b', 'b'), VAL_NIL);
     Val inner_cg = _struct("BracketCharGroup", 2, (Val[]){VAL_FALSE, inner});
     Val outer = nb_cons_list(2, (Val[]){_range('a', 'a'), inner_cg});
@@ -254,5 +302,96 @@ void vm_regexp_suite() {
     Iseq.cleanup(&iseq);
     val_arena_delete(arena);
     RELEASE(regexp);
+  }
+
+  ccut_test("sb_vm_regexp_compile /a?/") {
+    struct Iseq iseq;
+    Iseq.init(&iseq, 5);
+    _compile_quantified_reg(&iseq, 'a', "?");
+    uint16_t* byte_code = Iseq.at(&iseq, 0);
+
+    int32_t captures[20];
+    const char* src;
+    bool res;
+
+    src = "a";
+    res = MATCH_REG(byte_code);
+    assert_eq(true, res);
+    assert_eq(1, captures[1]);
+
+    src = "";
+    res = MATCH_REG(byte_code);
+    assert_eq(true, res);
+    assert_eq(0, captures[1]);
+
+    src = "aa";
+    res = MATCH_REG(byte_code);
+    assert_eq(true, res);
+    assert_eq(1, captures[1]);
+
+    src = "b";
+    res = MATCH_REG(byte_code);
+    assert_eq(true, res);
+    assert_eq(0, captures[1]);
+  }
+
+  ccut_test("sb_vm_regexp_compile /a+/") {
+    struct Iseq iseq;
+    Iseq.init(&iseq, 5);
+    _compile_quantified_reg(&iseq, 'a', "+");
+    uint16_t* byte_code = Iseq.at(&iseq, 0);
+
+    int32_t captures[20];
+    const char* src;
+    bool res;
+
+    src = "a";
+    res = MATCH_REG(byte_code);
+    assert_eq(true, res);
+    assert_eq(1, captures[1]);
+
+    src = "";
+    res = MATCH_REG(byte_code);
+    assert_eq(false, res);
+
+    src = "aa";
+    res = MATCH_REG(byte_code);
+    assert_eq(true, res);
+    assert_eq(2, captures[1]);
+
+    src = "b";
+    res = MATCH_REG(byte_code);
+    assert_eq(false, res);
+  }
+
+  ccut_test("sb_vm_regexp_compile /a*/") {
+    struct Iseq iseq;
+    Iseq.init(&iseq, 5);
+    _compile_quantified_reg(&iseq, 'a', "*");
+    uint16_t* byte_code = Iseq.at(&iseq, 0);
+
+    int32_t captures[20];
+    const char* src;
+    bool res;
+
+    src = "a";
+    res = MATCH_REG(byte_code);
+    assert_eq(true, res);
+    assert_eq(1, captures[1]);
+
+    src = "";
+    res = MATCH_REG(byte_code);
+    assert_eq(true, res);
+    assert_eq(0, captures[1]);
+
+    src = "aa";
+    res = MATCH_REG(byte_code);
+    assert_eq(true, res);
+    assert_eq(2, captures[1]);
+
+    src = "b";
+    res = MATCH_REG(byte_code);
+    assert_eq(true, res);
+    assert_eq(0, captures[1]);
   }
 }

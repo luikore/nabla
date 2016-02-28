@@ -129,7 +129,8 @@ void sb_vm_regexp_decompile(struct Iseq* iseq, int32_t start, int32_t size);
 
 Val sb_vm_regexp_from_string(struct Iseq* iseq, Val s);
 
-// match size stored in captures[0]
+// captures.size stored in captures[0]
+// matched string size stored in captures[1]
 bool sb_vm_regexp_exec(uint16_t* pc, int64_t size, const char* str, int32_t* captures);
 
 bool sb_string_match(Val pattern_str, int64_t size, const char* str, int32_t* capture_size, int32_t* captures);
