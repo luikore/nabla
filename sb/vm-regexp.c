@@ -66,8 +66,29 @@ static void _add_thread(struct Threads* threads, uint16_t* from_pc, const char* 
 }
 
 static bool _is_word_char(int c) {
-  // TODO use \p{Word}
   return isalnum(c) || c == '_';
+}
+
+// prereq: s can scan back and forth
+static bool _is_word_bound(const char* s, const char* init_s, const char* end_s) {
+  if (s == init_s || s == end_s) {
+    return true;
+  }
+
+  int size = (int)(end_s - s);
+  int next_char = utf_8_scan(s, &size);
+  if (next_char < 0) {
+    return false;
+  }
+
+  int back_size = (int)(s - init_s);
+  int prev_char = utf_8_scan_back(s, &back_size);
+  if (prev_char < 0) {
+    return false;
+  }
+
+  return (_is_word_char(prev_char) && !_is_word_char(next_char)) ||
+         (!_is_word_char(prev_char) && _is_word_char(next_char));
 }
 
 static bool _is_hex_char(int c) {
@@ -213,11 +234,8 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
           }
         }
 
-        // TODO scan unicode char
         case ANCHOR_WBOUND: {
-          if (t->s == init_s || t->s == s_end ||
-              (_is_word_char(t->s[-1]) && !_is_word_char(t->s[0])) ||
-              (!_is_word_char(t->s[-1]) && _is_word_char(t->s[0]))) {
+          if (_is_word_bound(t->s, init_s, s_end)) {
             continue;
           } else {
             goto thread_dead;
@@ -225,9 +243,7 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
         }
 
         case ANCHOR_N_WBOUND: {
-          if (t->s == init_s || t->s == s_end ||
-              (_is_word_char(t->s[-1]) && !_is_word_char(t->s[0])) ||
-              (!_is_word_char(t->s[-1]) && _is_word_char(t->s[0]))) {
+          if (!_is_word_bound(t->s, init_s, s_end)) {
             goto thread_dead;
           } else {
             continue;

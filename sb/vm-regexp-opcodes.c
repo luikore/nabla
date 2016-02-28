@@ -13,14 +13,14 @@ enum OpCodes {
   ATOMIC,      // offset:int32_t       // match atomic group, can also be used for possesive matching
   AHEAD,       // offset:int32_t       // invoke following lookahead code, if matched, goto offset
   N_AHEAD,     // offset:int32_t       // invoke following negative lookahead code, if not matched, goto offset
-  ANCHOR_BOL,                          //
-  ANCHOR_EOL,                          //
-  ANCHOR_WBOUND,                       //
-  ANCHOR_N_WBOUND,                     //
-  ANCHOR_BOS,                          //
-  ANCHOR_N_BOS,                        //
-  ANCHOR_EOS,                          //
-  ANCHOR_N_EOS,                        //
+  ANCHOR_BOL,                          // anchor '^'
+  ANCHOR_EOL,                          // anchor '$'
+  ANCHOR_WBOUND,                       // anchor '\b'
+  ANCHOR_N_WBOUND,                     // anchor '\B'
+  ANCHOR_BOS,                          // anchor '\a'
+  ANCHOR_N_BOS,                        // anchor '\A'
+  ANCHOR_EOS,                          // anchor '\z'
+  ANCHOR_N_EOS,                        // anchor '\Z'
   CG_ANY,                              // char group '.' (NOTE predefined char groups don't need to respect language)
   CG_D,                                // char group '\d'
   CG_N_D,                              // char group '\D'
