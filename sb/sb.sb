@@ -274,7 +274,7 @@ peg Regexp = [
   Unit : SingleChar { $1 }
        / CharGroup  { $1 }
        / Group { $1 }
-       / interpolate.predef { $1 }
+       / interpolate.predef { PredefInterpolate[$1] }
   SingleChar : RegexpEscape { $1 }
              / op.minus     { $1 }
              / char         { $1 }

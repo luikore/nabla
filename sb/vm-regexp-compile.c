@@ -278,14 +278,14 @@ static void _push_group(struct Stack* stack, int* max_capture, Val group_node) {
   int special_size = nb_string_byte_size(special);
   const char* special_ptr = nb_string_ptr(special);
 
-# define IF_MATCH(str) if (str_compare(special_size, special_ptr, strlen(str), str))
+# define IF_MATCH(str) if (str_compare(special_size, special_ptr, strlen(str), str) == 0)
 
   if (special_size == 0) {
     *max_capture += 2;
-    Stack.push(stack, *max_capture + 2);
+    Stack.push(stack, *max_capture + 1);
     Stack.push(stack, SAVE_NODE);
     Stack.push(stack, content);
-    Stack.push(stack, *max_capture + 1);
+    Stack.push(stack, *max_capture);
     Stack.push(stack, SAVE_NODE);
 
   } else IF_MATCH("?:") {
@@ -526,15 +526,16 @@ static void _translate_label_pos(struct Iseq* iseq, struct Ints* labels, struct 
 Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val node) {
   _ensure_tags();
 
-  uint32_t kSeq              = klass_find_c("Seq", sb_klass());
-  uint32_t kPredefAnchor     = klass_find_c("PredefAnchor", sb_klass());
-  uint32_t kFlag             = klass_find_c("Flag", sb_klass());
-  uint32_t kQuantified       = klass_find_c("Quantified", sb_klass());
-  uint32_t kQuantifiedRange  = klass_find_c("QuantifiedRange", sb_klass());
-  uint32_t kGroup            = klass_find_c("Group", sb_klass());
-  uint32_t kCharGroupPredef  = klass_find_c("CharGroupPredef", sb_klass());
-  uint32_t kUnicodeCharClass = klass_find_c("UnicodeCharClass", sb_klass());
-  uint32_t kBracketCharGroup = klass_find_c("BracketCharGroup", sb_klass());
+  uint32_t kSeq               = klass_find_c("Seq", sb_klass());
+  uint32_t kPredefAnchor      = klass_find_c("PredefAnchor", sb_klass());
+  uint32_t kFlag              = klass_find_c("Flag", sb_klass());
+  uint32_t kQuantified        = klass_find_c("Quantified", sb_klass());
+  uint32_t kQuantifiedRange   = klass_find_c("QuantifiedRange", sb_klass());
+  uint32_t kGroup             = klass_find_c("Group", sb_klass());
+  uint32_t kCharGroupPredef   = klass_find_c("CharGroupPredef", sb_klass());
+  uint32_t kUnicodeCharClass  = klass_find_c("UnicodeCharClass", sb_klass());
+  uint32_t kPredefInterpolate = klass_find_c("PredefInterpolate", sb_klass());
+  uint32_t kBracketCharGroup  = klass_find_c("BracketCharGroup", sb_klass());
 
   bool ignore_case = false;
   int max_capture = 0;
@@ -640,6 +641,9 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
       _encode_predef_char_group(iseq, curr);
 
     } else if (klass == kUnicodeCharClass) {
+      // TODO
+
+    } else if (klass == kPredefInterpolate) {
       // TODO
 
     } else if (klass == kBracketCharGroup) {

@@ -43,6 +43,7 @@ static void _compile_quantified_reg(struct Iseq* iseq, int chr, const char* type
     fatal_err("%.*s", (int)nb_string_byte_size(err), nb_string_ptr(err));
   }
   val_arena_delete(arena);
+  RELEASE(regexp);
 }
 
 #define MATCH_REG(reg_ty) ({\
@@ -333,6 +334,8 @@ void vm_regexp_suite() {
     res = MATCH_REG(byte_code);
     assert_eq(true, res);
     assert_eq(0, captures[1]);
+
+    Iseq.cleanup(&iseq);
   }
 
   ccut_test("sb_vm_regexp_compile /a+/") {
@@ -362,6 +365,8 @@ void vm_regexp_suite() {
     src = "b";
     res = MATCH_REG(byte_code);
     assert_eq(false, res);
+
+    Iseq.cleanup(&iseq);
   }
 
   ccut_test("sb_vm_regexp_compile /a*/") {
@@ -393,8 +398,36 @@ void vm_regexp_suite() {
     res = MATCH_REG(byte_code);
     assert_eq(true, res);
     assert_eq(0, captures[1]);
+
+    Iseq.cleanup(&iseq);
   }
 
-  ccut_test("sb_vm_regexp_compile /(b)(c)/") {
+  ccut_test("sb_vm_regexp_compile /(?:b)(c)/") {
+    struct Iseq iseq;
+    Iseq.init(&iseq, 5);
+
+    Val special = nb_string_new_literal_c("?:");
+    Val non_capture_group = _struct("Group", 2, (Val[]){special, VAL_FROM_INT('b')});
+    special = nb_string_new_literal_c("");
+    Val capture_group = _struct("Group", 2, (Val[]){special, VAL_FROM_INT('c')});
+    Val seq_content = nb_cons_list(2, (Val[]){capture_group, non_capture_group});
+    Val seq = _struct("Seq", 1, (Val[]){seq_content});
+    Val regexp = _struct("Regexp", 1, (Val[]){seq});
+
+    void* arena = val_arena_new();
+    Val err = sb_vm_regexp_compile(&iseq, arena, VAL_NIL, regexp);
+    assert_eq(VAL_NIL, err);
+    RELEASE(regexp);
+    val_arena_delete(arena);
+    // sb_vm_regexp_decompile(&iseq, 0, Iseq.size(&iseq));
+
+    int32_t captures[20];
+    const char* src = "bc";
+    bool res = MATCH_REG(Iseq.at(&iseq, 0));
+    assert_eq(true, res);
+    assert_eq(1, captures[2]);
+    assert_eq(2, captures[3]);
+
+    Iseq.cleanup(&iseq);
   }
 }
