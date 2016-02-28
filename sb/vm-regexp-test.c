@@ -1,7 +1,7 @@
 #include <ccut.h>
 #include "sb.h"
 
-#include "vm-regexp-opcodes.c"
+#include "vm-regexp-opcodes.h"
 
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #define AS_ARG32(c) c, 0
@@ -393,5 +393,8 @@ void vm_regexp_suite() {
     res = MATCH_REG(byte_code);
     assert_eq(true, res);
     assert_eq(0, captures[1]);
+  }
+
+  ccut_test("sb_vm_regexp_compile /(b)(c)/") {
   }
 }
