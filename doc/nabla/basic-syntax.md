@@ -1,74 +1,114 @@
+This article introduces Nabla's basic syntax.
+
 # Literals
 
-## integer numbers
+We first start with literals -- values that are known before compile time. You know the type when you see the literal.
 
-underlines in between digits will be dropped.
+## Integer numbers
+
+Examples:
+
+    0
+    105
+    -2
+
+There's no limit of how large an integer you can write:
+
+    999888777666555444333222111
+
+Underlines in between digits will be dropped:
 
     1_234_567
 
-oct numbers have a `0o` prefix, so that number parsing won't make mistakes on numbers that start with `0`
+Binary integers are prefixed with `0b`:
+
+    0b1011000
+
+Hex integers are prefixed with `0x`:
+
+    0x3f2A
+
+Oct numbers have a `0o` prefix, so that number parsing won't make mistakes on numbers that start with `0`:
 
     0o123
 
-## float numbers
+## Floating numbers
 
-hex numbers with scientific notions
+Examples:
 
-    0xFFp3 == (0xFF * 2 ** 3).to_f
+    1.1
+    5.0
+    1e10
+    0.2E-3
 
-## (literal) suffix flags
+Hex numbers with scientific notions (use `p` instead of `e`)
 
-rational suffix
+    0xFFp3 # == (0xFF * 2 ** 3).to_f
+
+## Rational and complex numbers
+
+The rational suffix is `r`
 
     3/4r
 
-imaginary suffix
+The imaginary suffix is `i`
 
     2i
 
 [design NOTE]: since we don't have `/.../` regexp, there is no regexp suffix flags (o x u i g m etc), just use `(?i)` and `(?m)`
 
-## strings
+## Strings
 
-single quoted, the only escapes are `'` and `\`
+Strings can be single quoted, the only escapes are `'` and `\`:
 
     'a\'string\\'
 
-double quoted, can contain escapes, hex, unicode
+Or double quoted, can contain escapes, hex, unicode:
 
     "a\n\x33\u{2345}"
 
-and strings can take multiple lines
+And strings can take multiple lines
 
     '
     oh
     yes
     '
 
-the spaces are significant
+The spaces are significant. See custom-syntax.md for more ways to define string literals.
 
-## ranges
+## Ranges
 
     a .. b  # b inclusive
     a ... b # b exclusive
 
-since `..` and `...` possess very high precedence (only lower than `.`), adding paren around it is very common pattern (see below for operator precedence)
+NOTE: since `..` and `...` possess very high precedence (only lower than `.`), adding paren around it is very common pattern (see below for operator precedence)
 
     a.b (...) c + 1
 
-## other direct literals
+## Other direct literals
 
-    true false nil
+Boolean values:
 
-## constants and variables
+    true
+    false
 
-names starting with upper case is constant, they can not be re-assigned
+`nil` value:
+
+    nil
+
+`nil` also denotes the empty list.
+
+# Other basic syntax elements
+
+## Constants and variables
+
+Names starting with upper case is constant, they can not be re-assigned:
 
     A = 3
     A = 4  # error
     A = 3  # OK, no conflict and no effect (this design makes `load` a bit easier)
 
-names starting with lower case is variable, they can be re-assigned
+Names starting with lower case is variable, they can be re-assigned:
 
     a = 3
     a = 4 # not shadow naming
@@ -80,7 +120,7 @@ Variables better be named in snake case. Examples:
     foo_bar
     fooBar # still OK, but not recommended as code style
 
-The local environment is mutable, local vars can be changed inside a block (sub), but such kind of sub can not be turned into a lambda
+The local environment is mutable, local vars can be changed inside a subroutine, but such kind of sub can not be turned into a lambda
 
     a = 0
     sub1 = do
@@ -94,20 +134,24 @@ The local environment is mutable, local vars can be changed inside a block (sub)
 
 If you need to store blocks for futher use, it is better for the method to require lambda instead. When a local scope ends, the reference count to the associated blocks are checked -- if more than 1, it raises an error.
 
+Variables are declared the first time you assign it. 
 Can use `var` to force declare variable instead of search up captures
 
     a = 0
     do
       var a = 3
       a # 3
-    end
+    end # this subroutine is pure and can be turned into a lambda
     a # 0
 
-[design NOTE] Just check the type is better, error message is easier to understand than "block can not be converted to lambda because it contains mut-assignment in line ...".
+## Difference in `return` between subroutines and lambda
 
-## anonymous value `_`
+- `return` in lambda terminates the lambda itself
+- `return` in subroutine terminates the enclosing `def` block
 
-if it is "left value" which lies on the left of assignment or matching-assignment, then it has no effect. (see also pattern matching)
+## Anonymous value `_`
+
+If it is "left value" which lies on the left of assignment or matching-assignment, then it has no effect. (see also pattern matching)
 
     [_, x] = [3, 4]
     x as _ ~ 4
@@ -120,19 +164,7 @@ if it is a "right value", then it represents value of expression in the context.
     3 + 4
     _ * 5
 
-# Misc
-
-## variables
-
-A name start with lower letter denotes a variable.
-
-Declared the first time it is assigned (even in unreachable control structure)
-
-If need to force a declaration that override previous use of the variable:
-
-    var foo
-
-## comments
+## Comments
 
 line comments
 
@@ -167,20 +199,22 @@ NOTE: block comments are not allowed after a non-empty line, the comment below i
 
     foo #<<md
 
-## comma, new line, semicolon and `end`
+## Comma, new line, semicolon and `end`
+
+There are two important syntax sugars to make it easy to compose single-line or multi-line programs for fit your need of most readable program.
 
 `,` means new line
 
     [a,
       b, c]
 
-      if foo, bar;
+`;` means `end`
 
-  `;` means `end`
+    if foo, bar;
 
 # Operators
 
-## operator precedence
+## Operator precedence
 
 method dot is tightest
 
@@ -474,21 +508,28 @@ It can also be declared in map-style:
     foo.x # 3
     foo.y # 4
 
-in a `struct` type, you can inherit other struct types, and fields with the same names will overlap the previous one.
+in a `struct` type, you can add data members from other struct types, and fields with the same names will overlap the previous one.
 
-    # `Foo` inherits `Bar`
-    struct Foo < Bar[
+    # `Foo` inclucdes members from `Bar`
+    struct Foo[
+      *Bar
       x
       y
     ]
 
-NOTE inheritance is limited only in struct fields, no behavior will be inherited, and only single-inheritance allowed.
+NOTE in above code: `struct Bar` must be defined before including into `Foo`.
 
-`struct` can not be opened after definition. but `class` can.
+Although we suggest using snake cased name as member, but you are allowed to to define a capital cased one, just use something like `Bar as _`.
 
-`struct` defines default getter and setters, and they are `final`.
+No behavior will be included, only data members.
 
-ways to new an object
+Some notes on `struct` vs `class`.
+
+- `struct` can not be opened after definition. but `class` can.
+- Under `struct` we can not define methods.
+- `struct` generates default getter and setters, and they are `final`.
+
+When a struct is defined, there are ways to create an object
 
     Foo[1, 2, 3]   # ordered, new with operator []
     Foo{a: 1, b: 2, c: 3, d: 4} # looks like a hash, but much light weight
@@ -497,8 +538,15 @@ ways to new an object
     Foo{*some_map}
     Foo[-> a, ...;]
 
-    # the prototype way:
+There is also the prototype-update way:
+
+    foo = Foo{a: 2, b:4}
     bar = foo{"a": 3, "b.c": 4} # overwrites members
+
+But remember, structs are objects, the prototype-update way only works for non-struct objects:
+
+    foo = Foo
+    bar = foo{"a": 3, "b.c": 4} # calls Foo's constructor
 
 When a field ends with `?`, it is converted and stored in boolean
 
@@ -513,8 +561,6 @@ When a field ends with `?`, it is converted and stored in boolean
     foo.b = 1 # Foo{true, true}
 
 [design NOTE]: ADT's sum type doesn't fit in dynamic languages because values are summed type of all types. And in OO language, sum type is polymorphism.
-
-under `struct` we can not define methods
 
 [design NOTE]: if we allow methods defined under `struct`, then the difference from `class` is unclear (let `struct` mutate members? but how about more members?)
 
@@ -1040,27 +1086,38 @@ NOTE: there is no modifiers like `private` and `protected` -- we can always use 
 
 ## lambda
 
-can capture local vars but can not change it
+Can capture local vars but can not change it:
 
     -> x
       x + 2
     end
     -> x y, x + y;
 
-recall note: comma (`,`) means "new line"
+Recall note: comma (`,`) means "new line"
 
-quick lambdas (`->` followed by bracket), inside the bracket is an incomplete infix form or calling form
+## `\` syntax for quick lambdas
 
-    ->(4 /)         # -> x, 4 / x;
-    ->(+ 3)         # -> x, x + 3;
-    ->(*)           # -> x y, x * y;
-    ->(.present? 3) # -> x, x.present? 3;
-    ->(:foo)        # :method('foo') # arity depends of method foo
-    ->(:foo 3)      # (:method('foo').curry 1).call 3
+`\` followed by an operator is a lambda. These 2 lambdas are equivalent:
+
+    -> x y, x + y;
+    \+
+
+To compute factorial for example:
+
+    (1..4).reduce \* # 24
+
+`\` followed by `()` can generate quick lambdas for more general forms:
+
+    \(4 /)         # -> x, 4 / x;
+    \(+ 3)         # -> x, x + 3;
+    \(*)           # -> x y, x * y;
+    \(.present? 3) # -> x, x.present? 3;
+    \(:foo)        # :method('foo') # arity depends of method foo
+    \(:foo 3)      # (:method('foo').curry 1).call 3
 
 [design NOTE] if we use placeholder lambdas as in scala, then too many meanings are put onto `_`, while saving very few typings.
 
-curry
+Curry
 
     -> x y
       x + y
@@ -1068,17 +1125,17 @@ curry
     l = _.curry
     (l.call 1).call 2
 
-## subroutines
+## Subroutines
 
-a subroutine can modify captured variables, and can use `next` and `break`. but the life of a block ends with a local scope.
+A subroutine can modify captured variables, and can use `next` and `break`. but the life of a block ends with a local scope.
 
-similar to lambda, but start with `do`, for example
+Similar to lambda, but start with `do`, for example
 
     arr.each do e
       :print e
     end
 
-in lambdas, `return` ends the control flow, and captures are snapshot and immutable
+In lambdas, `return` ends the control flow, and captures are snapshot and immutable
 
 in subroutines, `return` ends the control flow of wrapping lambda or method, and can change local vars outside subroutine
 in subroutines, `break`/`next` can control iterations, but in lambdas, they are forbidden if not wrapped in subroutine.

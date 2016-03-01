@@ -48,17 +48,9 @@ syntax sugars (1)
 
     redo
 
-special literals (3)
+special literals (5)
 
-    true false nil
-
-self/this (1)
-
-    self
-
-dumb variable (1)
-
-    _
+    true false nil self _
 
 last same name method invocation (1)
 

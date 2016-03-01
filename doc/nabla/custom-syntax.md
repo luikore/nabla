@@ -205,6 +205,51 @@ Depending on what we want
       12345-7
       asdfc-e
 
+### Bit packer machine
+
+A more readable and powerful way for `pack` / `unpack`
+
+NOTE this is similar to bitstring in Erlang, but more powerful
+
+    pattern = $<<packer
+      a : u5
+      b : u2
+      c : u32-le
+      d : i16[4]
+        : "some intermediate text"
+      f : f32
+      g : f64
+      h : f80
+        : align[8]
+      i : f128
+        : back[32]
+      j : ber
+      k : utf8
+      l : utf16-le
+      m : gb18030
+      n : base64 # bits of base64
+      o : bcd
+      p : _ # rest
+
+    pattern.match? src
+    Foo{(**) pattern.unpack src}
+    pattern.pack {a:, b:, c:, d:, e:}
+
+NOTE: to generate the result directly, use `$pack` instead of `$packer`:
+
+    str = $<<pack
+      ...
+
+Now the syntax of right-hand-side becomes a bit complex... It should be implemented with sub virtual machine.
+
+NOTE: string parsing should be feature of String, and date parsing should be feature of Time, or the syntax can be too complex.
+
+### Protocol definition languages
+
+ASN.1
+Protobuf
+...
+
 ### Shell
 
     $<<sh
@@ -421,8 +466,8 @@ treats `a.b` as `a["b"]`
 
     @GET '/index.:format'
     def index key1 key2 # gets arg by name
-      String ~ key1
-      {a: {b: x}} ~ key2
+      String = key1
+      {a: {b: x}} = key2
       ...
     end
 

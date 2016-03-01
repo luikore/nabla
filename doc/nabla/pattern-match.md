@@ -1,3 +1,5 @@
+Pattern match is an intuitive way to reduce many boilerplate code.
+
 # `case` ... `when` syntax
 
 [design NOTE] not `switch ... case` since it is more like functional `case of`.
@@ -52,54 +54,38 @@ disambig examples:
 
 ## matching and mass-assign
 
-    <match-expr> ~ <expr>
+    <match-expr> =~ <expr>
 
-raises error when not match. finally the `match?` methods of the objects on the rhs of `as` are called.
+Returns true when matched. finally the `match?` methods of the objects on the rhs of `as` are called.
 
-    [a, b as Int] ~ arr
-
-the above code is equivalent to
-
-    # match first, then assign
-    if !(Int.match? arr[1])
-      throw <match error>
-    a = arr[0]
-    b = arr[1]
-
-or
-
-    case arr
-    when [a, b as Int]
-    else
-      throw <match error>
-    end
+    [a, b as Int] =~ arr
 
 case of const:
 
     Foo = 3          # assign
     Foo.match? 3     # matching returning matchdata, there's no match-expr, so no assignments (what about regexp?)
-    Foo ~ 3
-    _ as Foo ~ 3     # matching (can raise)
-    Foo as Int ~ 3   # matching and assign (can raise)
+    Foo =~ 3
+    _ as Foo =~ 3     # matching (can raise)
+    Foo as Int =~ 3   # matching and assign (can raise)
 
 ## matching error
 
-both `~` and `=` works as assignment operator, but:
+both `=~` and `=` works as assignment operator, but:
 
-- `~` throws error when not match
-- `=` doesn't throw
+- `=` throws error when not match
+- `=~` as it looks, doesn't care so much and only returns `false` when not match
 
 ## matching Map
 
 example (use `*: rest_var` to match the rest)
 
-    {"a": a as Hash, "*": b as 3, *: rest as (-> x, x.size < 3)} ~ {'a': {}, '*': 3, 'c': 12}
+    {"a": a as Hash, "*": b as 3, *: rest as (-> x, x.size < 3)} =~ {'a': {}, '*': 3, 'c': 12}
 
 function params are NOT match exprs, they allow default assignments
 
     def f x y z=3 opts={a: 3, b: 4}
-      a ~ Integer
-      b ~ Object
+      Integer = a
+      Object = b
     end
 
 [impl NOTE] compiler and doc-generator should be able to extract the first several lines of matchers for further use
@@ -108,7 +94,7 @@ function params are NOT match exprs, they allow default assignments
 
 We can match a set to another set
 
-    Set[a, b, 3] ~ Set[1, 2, 3]
+    Set[a, b, 3] =~ Set[1, 2, 3]
 
 But the order for `a`, `b` are not garanteed
 
@@ -175,7 +161,7 @@ We can them use like this:
     foo = do x, x > 4;
     bar = do x, x < 10;
     baz = ->(.even?)
-    x ~ (foo | bar) & baz.neg
+    x =~ (foo | bar) & baz.neg
 
 ## On recursive matching
 
@@ -187,13 +173,13 @@ With subroutine referencing self. example matching integer array:
       when [Integer, *_ as foo], true
       end
     end
-    _ as foo ~ [1, 2, 3]
+    _ as foo =~ [1, 2, 3]
 
 Another way:
 
     present = do [[Integer, *_ as foo]], true; # but be careful since matching arguments requires additional brackets
     foo = present | []
-    _ as foo ~ [1, 2, 3]
+    _ as foo =~ [1, 2, 3]
 
 With struct referencing self
 

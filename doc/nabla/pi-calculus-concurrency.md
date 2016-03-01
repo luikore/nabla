@@ -14,7 +14,7 @@ Proc starts running right after the spawning
 
     Proc{sleep: true, call: ->
       ...
-    ;]
+    ;}
 
 We don't need `new_seq` ? We can manual code the invoking.
 
