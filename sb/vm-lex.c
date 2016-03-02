@@ -2,7 +2,7 @@
 
 // vm for lex and callback
 
-// ins: 16bits, data aligned by 32bits
+// ins: aligned by 16bits
 // some note for alignment: http://lemire.me/blog/2012/05/31/data-alignment-for-speed-myth-or-reality/
 enum OpCodes {
   PUSH,           // val:(Val)                              # push literal
@@ -26,29 +26,29 @@ enum OpCodes {
 typedef struct {
   uint16_t op;
   int32_t arg1;
-} Arg32;
+} __attribute__((packed)) Arg32;
 
 typedef struct {
   uint16_t op;
   uint32_t arg1;
-} ArgU32;
+} __attribute__((packed)) ArgU32;
 
 typedef struct {
   uint16_t op;
   Val val;
-} ArgVal;
+} __attribute__((packed)) ArgVal;
 
 typedef struct {
   uint16_t op;
   int32_t arg1;
   int32_t arg2;
-} Arg3232;
+} __attribute__((packed)) Arg3232;
 
 typedef struct {
   uint16_t op;
   uint32_t arg1;
   uint32_t arg2;
-} ArgU32U32;
+} __attribute__((packed)) ArgU32U32;
 
 #define DECODE(ty, pc) ({ty res = *((ty*)pc); pc = (uint16_t*)((ty*)pc + 1); res;})
 
@@ -110,21 +110,25 @@ begin:
         STACK_PUSH(DECODE(ArgVal, pc).val);
         DISPATCH;
       }
+
       CASE(POP): {
         pc++;
         STACK_POP();
         DISPATCH;
       }
+
       CASE(LOAD): {
         uint32_t i = DECODE(ArgU32, pc).arg1;
         STACK_PUSH(*Vals.at(&sb->vars, i));
         DISPATCH;
       }
+
       CASE(STORE): {
         uint32_t i = DECODE(ArgU32, pc).arg1;
         *Vals.at(&sb->vars, i) = STACK_POP();
         DISPATCH;
       }
+
       CASE(CALL): {
         ArgU32U32 data = DECODE(ArgU32U32, pc);
         sb->stack.size -= data.arg1;
@@ -136,12 +140,14 @@ begin:
         }
         DISPATCH;
       }
+
       CASE(NODE): {
         ArgU32U32 data = DECODE(ArgU32U32, pc);
         sb->stack.size -= data.arg1;
         STACK_PUSH(nb_struct_anew(sb->arena, data.arg2, data.arg1, STACK_TOP()));
         DISPATCH;
       }
+
       CASE(LIST): {
         pc++;
         Val tail = STACK_POP();
@@ -149,6 +155,7 @@ begin:
         STACK_PUSH(nb_cons_anew(sb->arena, head, tail));
         DISPATCH;
       }
+
       CASE(RLIST): {
         pc++;
         Val last = STACK_POP();
@@ -156,6 +163,7 @@ begin:
         STACK_PUSH(nb_cons_anew_rev(sb->arena, init, last));
         DISPATCH;
       }
+
       CASE(JIF): {
         Val cond = STACK_POP();
         int32_t offset = DECODE(Arg32, pc).arg1;
@@ -164,11 +172,13 @@ begin:
         }
         DISPATCH;
       }
+
       CASE(JMP): {
         int32_t offset = DECODE(Arg32, pc).arg1;
         pc += offset;
         DISPATCH;
       }
+
       CASE(MATCH_RE): {
         // todo check eof
         Arg3232 offsets = DECODE(Arg3232, pc);
@@ -181,6 +191,7 @@ begin:
         }
         DISPATCH;
       }
+
       CASE(MATCH_STR): {
         // todo check eof
         Arg3232 offsets = DECODE(Arg3232, pc);
@@ -194,11 +205,13 @@ begin:
         }
         DISPATCH;
       }
+
       CASE(CTX_CALL): {
         uint32_t ctx_name_str = DECODE(ArgU32, pc).arg1;
         CTX_PUSH(ctx_name_str);
         DISPATCH;
       }
+
       CASE(END): {
         if (matched) {
           // todo check curr advancement
@@ -213,6 +226,7 @@ begin:
         }
         DISPATCH;
       }
+
       CASE(NOP): {
         pc++;
         DISPATCH;
