@@ -10,43 +10,78 @@
 // e?
 //   push_br L0
 //   e
+//   lift # [e]
 //   pop_br
 //   L0:
 //
 // e*
+//   push nil
 //   push_br L0
 //   L1: e
-//   update
-//   jmp L1
+//   list # [e, *res]
+//   loop_update L1 # L0
+//   L0:
+//
+// e+ # NOTE encode e twice for simplicity,
+//           this will not cause much code duplication, since there is no nesting
+//   e
+//   lift # [e]
+//   push_br L0
+//   L1: e
+//   list # [e, *res]
+//   loop_update L1 # L0
 //   L0:
 //
 // a / b
 //   push_br L0
 //   a
+//   pop_br
 //   jmp L1
 //   L0: b
 //   L1:
-
-enum OpCodes {
-  // op     // args           // description
-  TERM=1,   // str:uint32     // matching a terminal
-  PUSH_BR,  // offset:int32   // push (branch, curr)
-  POP_BR,   //                // pop (branch, curr)
-  UPDATE,   //                // replace top curr
-  JMP,      // offset:int32   // jump to an offset
-  CALL,     // offset:int32   // call another code
-  RET,      //                // return from call, and set memoize table
-  MATCH,    // id:uint32      // match id
-  FAIL,
-  OP_CODES_SIZE
-};
+//
+// &e # NOTE epsilon match will also push a result,
+//           or `&(&e)` will result in a double pop
+//   push_br L0
+//   e
+//   pop
+//   pop_br
+//   jmp L1
+//   L0: term 0 # always fail
+//   L1:
+//
+// ^e
+//   push_br L0
+//   e
+//   pop
+//   term 0 # always fail
+//   L0:
 
 #include "compile.h"
+#include "vm-peg-opcodes.h"
 
-Val sb_vm_peg_compile(CompileCtx* ctx, Val node) {
-  return VAL_NIL;
-}
+ValPair sb_vm_peg_exec(uint16_t* peg, void* arena, int32_t token_size, Token* tokens) {
+  // branch_stack: (offset, pos)
 
-ValPair sb_vm_peg_exec(void* peg, void* arena, int32_t token_size, Token* tokens) {
+  // stack layout:
+  //   bp: index of current call frame
+  //   bp[-2]: return addr
+  //   bp[-1]: last bp
+  //   bp[0]: magic
+  //   bp[1..10]: captures
+
+  // calling convention -- rule_call:
+  //   push return addr
+  //   push bp
+  //   bp = sp
+  //   push magic # so captures start at 1, and magic can act as stack checking number
+
+  // calling convention -- rule_ret:
+  //   res = stack.top
+  //   sp = bp - 2
+  //   pc = sp[0]
+  //   bp = sp[1]
+  //   stack.push res
+
   return (ValPair){VAL_NIL, VAL_NIL};
 }

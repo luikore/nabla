@@ -120,7 +120,7 @@ ValPair sb_vm_lex_exec(Spellbreak* sb);
 // updates ctx->peg_dict, returns err
 Val sb_vm_peg_compile(CompileCtx* ctx, Val node);
 // returns {res, err}
-ValPair sb_vm_peg_exec(void* peg, void* arena, int32_t token_size, Token* tokens);
+ValPair sb_vm_peg_exec(uint16_t* pc, void* arena, int32_t token_size, Token* tokens);
 
 // updates iseq, returns err
 Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val node);
