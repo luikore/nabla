@@ -80,7 +80,7 @@ All lexing rules are defined under a context beginning with keyword `lex`. First
 We may also like to re-use some rules from an existing partial context, partial context names begin with a `*` for example:
 
     lex *Bar = [
-      # rules here, :return action is forbidden
+      # rules here
     ]
     lex Foo = [
       # rules before
@@ -138,11 +138,11 @@ interpolate predefined char class (unicode char classes)
 to achieve the back-reference effect, we can also store a state variable and reference it.
 
     lex Normal = [
-      /<<-(\w+)/ { heredoc = :capture 1, :call 'heredoc' }
+      /<<-(\w+)/ { $heredoc = :capture 1 } Heredoc
     ]
 
     lex Heredoc = [
-      { :match heredoc, :return }
+      end $heredoc
       /./ { ..... }
     ]
 
@@ -249,7 +249,7 @@ For example, the code below invokes an action named `:token`, which may produce 
       /\\\h\h/ { :token "escape" 0 }
     ]
 
-[design NOTE] Similar to QUEX a `=>` to simplify the case for `:token "escape" 0` ? but it makes the syntax more complex and not very consistent, plus not flexible for ordering `:return`s, so no need to add it.
+[design NOTE] Similar to QUEX a `=>` to simplify the case for `:token "escape" 0` ? but it makes the syntax more complex and not very consistent, plus not flexible for ordering parsing and token stream, so no need to add it.
 
 In actions, you can:
 
@@ -305,11 +305,11 @@ Tokens is best to be named in top-down categorized form -- for classification co
 
 Assume we have a token `"grandparent-parent-child"`, the styles defined on `"granparent"` will be available on `"granparent-parent"` and styles on `"granparent-parent"` is available on `"granparent-parent-child"`.
 
-## Dynamic match action
+## Dynamic match stored value
 
 It can match a stored or computed value to the input flow, if failed, pass the block on to next regexp or block
 
-    :match :close_paren :top paren_stack
+    $some_stored_string
 
 ## The `:style` Action
 
@@ -326,19 +326,20 @@ NOTE: under only very few conditions the `:style` action should be used. Many me
 
 See more in syntax-highlighter-considerations.md
 
-## Context Switch Actions: `:call`, `:return` and `:call_block`
+## Context Switch and Inclusion
 
 It is easier to disambiguating tokens if divide your lexer into several major contexts. Especially for lexing strings which has several escape rules in them. To call another context
 
-    :call "MyStringContext"
+    MyContext
 
-In that context you can return to caller by
+To include another partial context
 
-    :return
+    *MyPartialContext
 
-A special action to invoke lexer for block, anchors like `^`, `$` will apply to the unindented text.
+A special invocation to another lexer, anchors like `^`, `$` can apply to the unindented text.
 
-    :call_block <indent-string-for-the-block> <context-name>
+    block /\t+/ SomeContext # invoke SomeContext with some indentation
+    block $col SomeContext  # invoke SomeContext with current column
 
 NOTE: we should not use indentations instead of a special action, it will create many limits for the definition of the embeded language.
 
@@ -359,20 +360,6 @@ List building also accepts splats
 
     [*foo, bar]
     [foo, *bar]
-
-## Which context does the token belongs to?
-
-If a token is generated before `:call`, it belongs to the caller context, else it belongs to the callee context
-
-    :token "foo" 1 # belongs to the caller
-    :call Bar
-    :token "bar" 2 # belongs to the callee
-
-Same in `:return`
-
-    :token "bar" 1 # belongs to the child
-    :return
-    :token "foo" 2 # belongs to the parent
 
 ## Helper Statements for Simple Tasks
 
@@ -451,9 +438,6 @@ Built-in prefix operator
 Actions
 
     :token
-    :call_block
-    :call
-    :return
     :error
     :closing
     :contrast_color
@@ -500,9 +484,9 @@ Set the var when we have indent
         $indent = :capture 0
     }
 
-#### Way 2: `:call_block`
+#### Way 2: call block
 
-The builtin `:call_block` trims the leading indentation and provide easier indentation-aware parsing.
+The builtin `block` trims the leading indentation and provide easier indentation-aware parsing.
 
 #### Way 3: parser guided
 

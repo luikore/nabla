@@ -8,9 +8,6 @@
 # - spaces before a action/eql-sign should be kept
 # - spaces in regexp gets special treatment
 
-# partial context: must not :return
-# other contexts: must :return
-
 # for bootstrap, this file uses only the minimal subset of spellbreak
 # - calls with optional params are filled with concrete params
 # - no use of `\u`, `\x` and `{n}` in regexp
