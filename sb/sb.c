@@ -112,7 +112,8 @@ static ValPair token(Spellbreak* ctx, int32_t argc, Val* argv) {
   Token tok = {
     .pos = ctx->curr - ctx->s,
     .size = CAPTURE_END(ctx, group) - CAPTURE_BEGIN(ctx, group),
-    .v = val
+    .v = val,
+    .ty = VAL_TO_STR(name)
   };
   TokenStream.push(&ctx->token_stream, tok);
 

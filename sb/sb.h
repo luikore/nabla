@@ -20,8 +20,9 @@ typedef struct {
 } SpellbreakMData;
 
 typedef struct {
-  int32_t pos, size, line, col;
-  Val v; // VAL_UNDEF when no associated
+  int32_t pos, size, line; // col can be computed with pos and lines index
+  uint32_t ty;
+  Val v; // associated value, VAL_UNDEF when no associated
 } Token;
 
 typedef struct {

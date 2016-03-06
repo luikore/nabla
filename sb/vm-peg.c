@@ -54,27 +54,43 @@
 //   push_br L0
 //   e
 //   pop
+//   pop_br
 //   term 0 # always fail
 //   L0:
 
 #include "compile.h"
 #include "vm-peg-opcodes.h"
 
+typedef struct {
+  int32_t offset;
+  uint32_t pos;
+} Branch;
+
+MUT_ARRAY_DECL(BranchStack, Branch);
+
+MUT_ARRAY_DECL(Stack, Val);
+
 ValPair sb_vm_peg_exec(uint16_t* peg, void* arena, int32_t token_size, Token* tokens) {
-  // branch_stack: (offset, pos)
+  struct BranchStack br_stack;
+  struct Stack stack;
+  uint32_t bp;
+  uint16_t* pc = peg;
+  int32_t pos = 0;
+  Val* memoize_table;
+# define MTABLE(pos, rule)
 
   // stack layout:
-  //   bp: index of current call frame
+  //   bp: stack[bp] is current call frame
   //   bp[-2]: return addr
   //   bp[-1]: last bp
-  //   bp[0]: magic
+  //   bp[0]: rule_id
   //   bp[1..10]: captures
 
   // calling convention -- rule_call:
   //   push return addr
   //   push bp
   //   bp = sp
-  //   push magic # so captures start at 1, and magic can act as stack checking number
+  //   push rule_id # so captures start at 1, and magic can act as stack checking number
 
   // calling convention -- rule_ret:
   //   res = stack.top
@@ -82,6 +98,100 @@ ValPair sb_vm_peg_exec(uint16_t* peg, void* arena, int32_t token_size, Token* to
   //   pc = sp[0]
   //   bp = sp[1]
   //   stack.push res
+
+  BranchStack.init(&br_stack, 5);
+  Stack.init(&stack, 10);
+
+# define CASE(op) case op:
+# define DISPATCH continue
+
+  // code size;
+  uint32_t rule_size = DECODE(ArgU32, pc).arg1;
+  memoize_table = malloc(rule_size * token_size * sizeof(Val));
+
+  for (;;) {
+    switch (*pc) {
+      CASE(TERM) {
+        uint32_t tok = DECODE(ArgU32, pc).arg1;
+        if (tok == tokens[pos].ty) {
+          DISPATCH;
+        } else {
+          // todo
+        }
+        break;
+      }
+
+      CASE(RULE_CALL) {
+        break;
+      }
+
+      CASE(PUSH_BR) {
+        break;
+      }
+
+      CASE(POP_BR) {
+        break;
+      }
+
+      CASE(LOOP_UPDATE) {
+        break;
+      }
+
+      CASE(JMP) {
+        break;
+      }
+
+      CASE(RULE_RET) {
+        break;
+      }
+
+      CASE(CAPTURE) {
+        break;
+      }
+
+      CASE(PUSH) {
+        break;
+      }
+
+      CASE(POP) {
+        break;
+      }
+
+      CASE(NODE) {
+        break;
+      }
+
+      CASE(LIFT) {
+        break;
+      }
+
+      CASE(LIST) {
+        break;
+      }
+
+      CASE(R_LIST) {
+        break;
+      }
+
+      CASE(JIF) {
+        break;
+      }
+
+      CASE(MATCH) {
+        break;
+      }
+
+      CASE(FAIL) {
+        break;
+      }
+    }
+  }
+
+end:
+
+  BranchStack.cleanup(&br_stack);
+  Stack.cleanup(&stack);
+  free(memoize_table);
 
   return (ValPair){VAL_NIL, VAL_NIL};
 }

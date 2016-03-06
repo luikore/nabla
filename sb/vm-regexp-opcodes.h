@@ -85,13 +85,3 @@ typedef struct {
   uint16_t op;
   int16_t arg1;
 } __attribute__((packed)) Arg16;
-
-#define DECODE(ty, pc) ({ty res = *((ty*)pc); pc = (uint16_t*)((ty*)pc + 1); res;})
-
-#define ENCODE(iseq, ty, data) do {\
-  uint16_t args[sizeof(ty) / sizeof(uint16_t)];\
-  ((ty*)args)[0] = data;\
-  for (int _i = 0; _i < (sizeof(ty) / sizeof(uint16_t)); _i++) {\
-    Iseq.push(iseq, args[_i]);\
-  }\
-} while (0)

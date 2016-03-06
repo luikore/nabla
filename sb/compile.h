@@ -11,8 +11,6 @@ void sb_build_vars_dict(CompileCtx* ctx);
 
 #pragma mark ## some helper macros for compiling
 
-#define LOC(tok) nb_token_loc(tok)
-
 #define S nb_string_new_literal_c
 
 #define AT(node, i) nb_struct_get(node, i)
@@ -24,3 +22,13 @@ void sb_build_vars_dict(CompileCtx* ctx);
 #define HEAD(node) nb_cons_head(node)
 
 #define COMPILE_ERROR(M, ...) printf(M, ##__VA_ARGS__); _Exit(-1)
+
+#define DECODE(ty, pc) ({ty res = *((ty*)pc); pc = (uint16_t*)((ty*)pc + 1); res;})
+
+#define ENCODE(iseq, ty, data) do {\
+  uint16_t args[sizeof(ty) / sizeof(uint16_t)];\
+  ((ty*)args)[0] = data;\
+  for (int _i = 0; _i < (sizeof(ty) / sizeof(uint16_t)); _i++) {\
+    Iseq.push(iseq, args[_i]);\
+  }\
+} while (0)

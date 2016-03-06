@@ -1,5 +1,8 @@
 enum OpCodes {
-  // op      // args                        # description
+  // op        // args                        # description
+
+  // metadata
+  RULE_SIZE,   // sz:uint32                   # size of total rules, for initialize memoize table size
 
   // rule & aux ops, operates on stack / br stack
   TERM=1,      // str:uint32                  # match a terminal, push stack, else handle error[*]
@@ -12,8 +15,6 @@ enum OpCodes {
 
   // callback ops, similar to the ones in vm-lex, operates on stack
   CAPTURE,     // n:int16                     # load capture at bp[n]
-  LOAD,        // name:uint32                 # load var and push to stack
-  STORE,       // name:uint32                 # store top of stack to var
   PUSH,        // val:Val                     # push literal
   POP,         //                             # pop top of stack
   NODE,        // argc:uint32, klass:uint32   # pop args, push node

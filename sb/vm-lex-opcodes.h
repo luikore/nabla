@@ -45,5 +45,3 @@ typedef struct {
   uint32_t arg1;
   uint32_t arg2;
 } __attribute__((packed)) ArgU32U32;
-
-#define DECODE(ty, pc) ({ty res = *((ty*)pc); pc = (uint16_t*)((ty*)pc + 1); res;})
