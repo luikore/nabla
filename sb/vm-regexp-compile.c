@@ -722,7 +722,6 @@ void sb_vm_regexp_decompile(struct Iseq* iseq, int32_t start, int32_t size) {
         break;
       }
 
-      case CHAR2:
       case FORK:
       case ATOMIC:
       case AHEAD:
@@ -736,6 +735,18 @@ void sb_vm_regexp_decompile(struct Iseq* iseq, int32_t start, int32_t size) {
         Arg323232 payload = DECODE(Arg323232, pc);
         printf(" %d %d %d\n", payload.arg1, payload.arg2, payload.arg3);
         break;
+      }
+
+      case SET: {
+        int32_t size = DECODE(Arg32, pc).arg1;
+        printf(" %d [", size);
+        for (int32_t i = 0; i < size - 1; i++) {
+          printf("%d ", DECODE(int32_t, pc));
+        }
+        if (size > 0) {
+          printf("%d", DECODE(int32_t, pc));
+        }
+        printf("]\n");
       }
 
       default: {

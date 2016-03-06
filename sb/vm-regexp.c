@@ -69,6 +69,10 @@ static bool _is_space_char(int c) {
   return c == '\n' || c == '\r' || c == ' ' || c == '\t';
 }
 
+static bool _is_digit_char(int c) {
+  return (c >= '0' && c <= '9');
+}
+
 // NOTE
 // captures[0] stores max index of captures
 // captures[1] stores $0.size
@@ -104,9 +108,24 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
           }
         }
 
-        case CHAR2: {
-          // TODO
-          goto thread_dead;
+        // assume set size >= 1
+        case SET: {
+          CHECK_END;
+          int32_t size = DECODE(Arg32, pc).arg1;
+          int scanned = s_end - t->s;
+          int u8_char = utf_8_scan(t->s, &scanned);
+          bool matched = false;
+          for (int i = 0; i < size; i++) {
+            if (u8_char == DECODE(int32_t, pc)) {
+              matched = true;
+              break;
+            }
+          }
+          if (matched) {
+            continue;
+          } else {
+            goto thread_dead;
+          }
         }
 
         case MATCH: {
@@ -261,7 +280,7 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
 
         case CG_D: {
           CHECK_END;
-          if (t->s[0] >= '0' && t->s[0] <= '9') {
+          if (_is_digit_char(t->s[0])) {
             t->s++; // always 1 byte
             pc++;
             continue;
@@ -272,7 +291,7 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
 
         case CG_N_D: {
           CHECK_END;
-          if (t->s[0] >= '0' && t->s[0] <= '9') {
+          if (_is_digit_char(t->s[0])) {
             goto thread_dead;
           } else {
             ADVANCE_CHAR;

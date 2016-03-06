@@ -1,42 +1,42 @@
 // NOTE: to reduce runtime state size,
 //       ignore case / language / encoding flags are all set in compile time
 enum OpCodes {
-  // op        // args                 // description
-  CHAR=1,      // c:int32_t            // match a char
-  CHAR2,       // a:int32_t, b:int32_t // matches either a or b, can optimize ignore case matchs
-  MATCH,       //                      // found a match
-  DIE,         //                      // no match
-  JMP,         // offset:int32_t       // unconditional jump
-  JIF_RANGE,   // f:int32_t, t:int32_t, offset:int32 // jump to offset if matches f..t, continue if not match
-  FORK,        // x:int32_t, y:int32_t // fork execution
-  SAVE,        // i:int16_t            // save current position to captures[i]
-  ATOMIC,      // offset:int32_t       // match atomic group, can also be used for possesive matching
-  AHEAD,       // offset:int32_t       // invoke following lookahead code, if matched, goto offset
-  N_AHEAD,     // offset:int32_t       // invoke following negative lookahead code, if not matched, goto offset
-  ANCHOR_BOL,                          // anchor '^'
-  ANCHOR_EOL,                          // anchor '$'
-  ANCHOR_WBOUND,                       // anchor '\b'
-  ANCHOR_N_WBOUND,                     // anchor '\B'
-  ANCHOR_BOS,                          // anchor '\a'
-  ANCHOR_N_BOS,                        // anchor '\A'
-  ANCHOR_EOS,                          // anchor '\z'
-  ANCHOR_N_EOS,                        // anchor '\Z'
-  CG_ANY,                              // char group '.' (NOTE predefined char groups don't need to respect language)
-  CG_D,                                // char group '\d'
-  CG_N_D,                              // char group '\D'
-  CG_W,                                // char group '\w'
-  CG_N_W,                              // char group '\W'
-  CG_H,                                // char group '\h', hex digit, always ignore case
-  CG_N_H,                              // char group '\H', non hex digit
-  CG_S,                                // char group '\s'
-  CG_N_S,                              // char group '\S'
-  END,         //                      // terminate opcode
+  // op            // args                   # description
+  CHAR=1,          // c:int32_t              # match a char
+  SET,             // size:int32_t           # follows with int32_t[size] chars
+  MATCH,           //                        # found a match
+  DIE,             //                        # no match
+  JMP,             // offset:int32_t         # unconditional jump
+  JIF_RANGE,       // f:int32_t, t:int32_t, offset:int32 # jump to offset if matches f..t, continue if not match
+  FORK,            // x:int32_t, y:int32_t   # fork execution
+  SAVE,            // i:int16_t              # save current position to captures[i]
+  ATOMIC,          // offset:int32_t         # match atomic group, can also be used for possesive matching
+  AHEAD,           // offset:int32_t         # invoke following lookahead code, if matched, goto offset
+  N_AHEAD,         // offset:int32_t         # invoke following negative lookahead code, if not matched, goto offset
+  ANCHOR_BOL,      //                        # anchor '^'
+  ANCHOR_EOL,      //                        # anchor '$'
+  ANCHOR_WBOUND,   //                        # anchor '\b'
+  ANCHOR_N_WBOUND, //                        # anchor '\B'
+  ANCHOR_BOS,      //                        # anchor '\a'
+  ANCHOR_N_BOS,    //                        # anchor '\A'
+  ANCHOR_EOS,      //                        # anchor '\z'
+  ANCHOR_N_EOS,    //                        # anchor '\Z'
+  CG_ANY,          //                        # char group '.' (NOTE predefined char groups don't need to respect language)
+  CG_D,            //                        # char group '\d'
+  CG_N_D,          //                        # char group '\D'
+  CG_W,            //                        # char group '\w'
+  CG_N_W,          //                        # char group '\W'
+  CG_H,            //                        # char group '\h', hex digit, always ignore case
+  CG_N_H,          //                        # char group '\H', non hex digit
+  CG_S,            //                        # char group '\s'
+  CG_N_S,          //                        # char group '\S'
+  END,             //                        # terminate opcode
   OP_CODES_SIZE
 };
 
 static const char* op_code_names[] = {
   [CHAR] = "char",
-  [CHAR2] = "char2",
+  [SET] = "set",
   [MATCH] = "match",
   [DIE] = "die",
   [JMP] = "jmp",
