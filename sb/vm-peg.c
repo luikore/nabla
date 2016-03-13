@@ -70,37 +70,32 @@ MUT_ARRAY_DECL(BranchStack, Branch);
 
 MUT_ARRAY_DECL(Stack, Val);
 
+static _report_stack(struct Stack* stack, struct ) {
+  
+}
+
 ValPair sb_vm_peg_exec(uint16_t* peg, void* arena, int32_t token_size, Token* tokens) {
   struct BranchStack br_stack;
   struct Stack stack;
+  uint32_t br_bp;
   uint32_t bp;
   uint16_t* pc = peg;
   int32_t pos = 0;
   Val* memoize_table;
-# define MTABLE(pos, rule)
+
+# define MTABLE(pos, rule) memoize_table[pos * rule_size + rule]
 
   // stack layout:
   //   bp: stack[bp] is current call frame
-  //   bp[-2]: return addr
-  //   bp[-1]: last bp
-  //   bp[0]: rule_id
-  //   bp[1..10]: captures
-
-  // calling convention -- rule_call:
-  //   push return addr
-  //   push bp
-  //   bp = sp
-  //   push rule_id # so captures start at 1, and magic can act as stack checking number
-
-  // calling convention -- rule_ret:
-  //   res = stack.top
-  //   sp = bp - 2
-  //   pc = sp[0]
-  //   bp = sp[1]
-  //   stack.push res
+  //   bp[-3]: return addr
+  //   bp[-2]: last bp
+  //   bp[-1]: last br_bp
+  //   bp[0]: rule_id  # for error reporting
+  //   bp[1..]: captures
 
   BranchStack.init(&br_stack, 5);
   Stack.init(&stack, 10);
+  Stack.push(&stack, 0); // main rule_id: 0
 
 # define CASE(op) case op:
 # define DISPATCH continue
@@ -108,6 +103,7 @@ ValPair sb_vm_peg_exec(uint16_t* peg, void* arena, int32_t token_size, Token* to
   // code size;
   uint32_t rule_size = DECODE(ArgU32, pc).arg1;
   memoize_table = malloc(rule_size * token_size * sizeof(Val));
+  memset(memoize_table, 0, rule_size * token_size * sizeof(Val));
 
   for (;;) {
     switch (*pc) {
@@ -115,13 +111,42 @@ ValPair sb_vm_peg_exec(uint16_t* peg, void* arena, int32_t token_size, Token* to
         uint32_t tok = DECODE(ArgU32, pc).arg1;
         if (tok == tokens[pos].ty) {
           DISPATCH;
+        }
+
+        // todo update furthest expect
+pop_cond:
+        if (BranchStack.size(&br_stack) > br_bp) {
+          Branch br = BranchStack.pop(&br_stack);
+          pc = peg + br.offset;
+          pos = br.pos;
+        } else if (Stack.size(&stack) == 0) {
+          // todo failure
         } else {
-          // todo
+          // todo pop both stack frames
+          goto pop_cond;
         }
         break;
       }
 
       CASE(RULE_CALL) {
+        // push return addr
+        // push bp
+        // push br_bp
+        // bp = sp
+        // br_bp = br_sp
+        // push rule_id # so captures start at 1
+        
+        break;
+      }
+
+      CASE(RULE_RET) {
+        // res = stack.top
+        // sp = bp - 3
+        // pc = sp[0]
+        // bp = sp[1]
+        // br_bp = sp[2]
+        // stack.push res
+
         break;
       }
 
@@ -138,10 +163,6 @@ ValPair sb_vm_peg_exec(uint16_t* peg, void* arena, int32_t token_size, Token* to
       }
 
       CASE(JMP) {
-        break;
-      }
-
-      CASE(RULE_RET) {
         break;
       }
 
@@ -187,11 +208,17 @@ ValPair sb_vm_peg_exec(uint16_t* peg, void* arena, int32_t token_size, Token* to
     }
   }
 
-end:
+not_matched:
 
   BranchStack.cleanup(&br_stack);
   Stack.cleanup(&stack);
   free(memoize_table);
+  return (ValPair){VAL_NIL, VAL_NIL};
 
+matched:
+
+  BranchStack.cleanup(&br_stack);
+  Stack.cleanup(&stack);
+  free(memoize_table);
   return (ValPair){VAL_NIL, VAL_NIL};
 }

@@ -7,11 +7,11 @@ enum OpCodes {
   // rule & aux ops, operates on stack / br stack
   TERM=1,      // str:uint32                  # match a terminal, push stack, else handle error[*]
   RULE_CALL,   // offset:int32                # call another rule, pushes call frame
+  RULE_RET,    //                             # res = top, pop call frame, push res, memoize
   PUSH_BR,     // offset:int32                # push br stack (offset, curr)
   POP_BR,      //                             # pop br stack
   LOOP_UPDATE, // offset:int32                # try goto offset for looping [**]
   JMP,         // offset:int32                # jump to an offset in bytecode
-  RULE_RET,    //                             # res = top, pop call frame, push res, memoize
 
   // callback ops, similar to the ones in vm-lex, operates on stack
   CAPTURE,     // n:int16                     # load capture at bp[n]
@@ -34,7 +34,7 @@ enum OpCodes {
 //     first it tries to update the furthest-expect
 //     (a level-2 furthest-expect can be reported like "expect token foo.bar in Baz in Xip"),
 //     and try to pop (offset, curr) to update pc and curr pos,
-//     if reaches call frame, pop it, and do fail check again,
+//     if reaches call frame (=br_bp), pop it, and do fail check again,
 //     if no call frame to pop, tell error of max expect.
 //
 // [**] if curr == old_curr, goto pop_br.old_offset,
