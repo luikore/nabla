@@ -6,7 +6,7 @@ enum OpCodes {
 
   // rule & aux ops, operates on stack / br stack
   TERM=1,      // str:uint32                  # match a terminal, push stack, else handle error[*]
-  RULE_CALL,   // offset:int32                # call another rule, pushes call frame
+  RULE_CALL,   // offset:uint32, id:uint32    # call another rule, pushes call frame
   RULE_RET,    //                             # res = top, pop call frame, push res, memoize
   PUSH_BR,     // offset:int32                # push br stack (offset, curr)
   POP_BR,      //                             # pop br stack
@@ -27,6 +27,8 @@ enum OpCodes {
   MATCH,       // id:uint32                   # end parsing, check if token stream is terminated, and replace it
   FAIL,        // info:uint32                 # quickly fail parsing and report
 
+  END,         //                             # end of iseq, won't reach
+
   OP_CODES_SIZE
 };
 
@@ -39,6 +41,28 @@ enum OpCodes {
 //
 // [**] if curr == old_curr, goto pop_br.old_offset,
 //      else update top of br stack with (old_offset, curr), then goto offset.
+
+static const char* op_code_names[] = {
+  [RULE_SIZE] = "rule_size",
+  [TERM] = "term",
+  [RULE_CALL] = "rule_call",
+  [RULE_RET] = "rule_ret",
+  [PUSH_BR] = "push_br",
+  [POP_BR] = "pop_br",
+  [LOOP_UPDATE] = "loop_update",
+  [JMP] = "jmp",
+  [CAPTURE] = "capture",
+  [PUSH] = "push",
+  [POP] = "pop",
+  [NODE] = "node",
+  [LIFT] = "lift",
+  [LIST] = "list",
+  [R_LIST] = "r_list",
+  [JIF] = "jif",
+  [MATCH] = "match",
+  [FAIL] = "fail",
+  [END] = "end"
+};
 
 typedef struct {
   uint16_t op;
