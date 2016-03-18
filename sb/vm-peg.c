@@ -45,14 +45,15 @@ ValPair sb_vm_peg_exec(uint16_t* peg, void* arena, int32_t token_size, Token* to
   //   bp[-3]: return addr
   //   bp[-2]: last bp
   //   bp[-1]: last br_bp
-  //   bp[0]: rule_id  # for error reporting
+  //   bp[0]: rule_id  # for memoizing & error reporting
   //   bp[1..]: captures
   //
   // The root frame starts from main rule id
 
 # define _SP(i) *Stack.at(&stack, i)
 # define _PUSH(e) Stack.push(&stack, e)
-# define _TOP *Stack.at(&stack, Stack.size(&stack) - 1)
+# define _POP() Stack.pop(&stack)
+# define _TOP() Stack.at(&stack, Stack.size(&stack) - 1)
 
   BranchStack.init(&br_stack, 5);
   Stack.init(&stack, 10);
@@ -69,8 +70,12 @@ ValPair sb_vm_peg_exec(uint16_t* peg, void* arena, int32_t token_size, Token* to
   for (;;) {
     switch (*pc) {
       CASE(TERM) {
+        if (pos == token_size) {
+          goto not_matched;
+        }
         uint32_t tok = DECODE(ArgU32, pc).arg1;
         if (tok == tokens[pos].ty) {
+          pos++;
           DISPATCH;
         }
 
@@ -109,74 +114,111 @@ pop_cond:
 
       CASE(RULE_RET) {
         if (bp == 0) {
-          result = _TOP;
+          result = *_TOP();
           goto matched;
         } else {
-          Val res = _TOP;
+          Val res = *_TOP();
           int new_sp = bp - 2;
           pc = peg + _SP(new_sp - 1);
           bp = _SP(new_sp);
           br_bp = _SP(new_sp + 1);
+          Val rule_id = _SP(new_sp + 2);
           _SP(new_sp - 1) = res;
           stack.size = new_sp;
+          MTABLE(pos, rule_id) = res;
           DISPATCH;
         }
       }
 
       CASE(PUSH_BR) {
-        break;
+        int32_t offset = DECODE(Arg32, pc).arg1;
+        Branch br = {pc - peg, pos};
+        BranchStack.push(&br_stack, br);
+        DISPATCH;
       }
 
       CASE(POP_BR) {
-        break;
+        BranchStack.pop(&br_stack);
+        DISPATCH;
       }
 
       CASE(LOOP_UPDATE) {
-        break;
+        int32_t offset = DECODE(Arg32, pc).arg1;
+        // todo
+        DISPATCH;
       }
 
       CASE(JMP) {
-        break;
+        int32_t offset = DECODE(Arg32, pc).arg1;
+        pc += offset;
+        DISPATCH;
       }
 
       CASE(CAPTURE) {
-        break;
+        pc++;
+        uint16_t index = *pc;
+        pc++;
+        _PUSH(_SP(bp + index));
+        DISPATCH;
       }
 
       CASE(PUSH) {
-        break;
+        Val val = DECODE(ArgVal, pc).arg1;
+        _PUSH(val);
+        DISPATCH;
       }
 
       CASE(POP) {
-        break;
+        _POP();
+        DISPATCH;
       }
 
       CASE(NODE) {
-        break;
+        ArgU32U32 data = DECODE(ArgU32U32, pc);
+        stack.size -= data.arg1;
+        _PUSH(nb_struct_anew(arena, data.arg2, data.arg1, _TOP()));
+        DISPATCH;
       }
 
       CASE(LIFT) {
-        break;
+        pc++;
+        _PUSH(nb_cons_anew(arena, _POP(), VAL_NIL));
+        DISPATCH;
       }
 
       CASE(LIST) {
-        break;
+        pc++;
+        Val tail = _POP();
+        Val head = _POP();
+        _PUSH(nb_cons_anew(arena, head, tail));
+        DISPATCH;
       }
 
       CASE(R_LIST) {
-        break;
+        pc++;
+        Val head = _POP();
+        Val tail = _POP();
+        _PUSH(nb_cons_anew(arena, head, tail));
+        DISPATCH;
       }
 
       CASE(JIF) {
-        break;
+        Val cond = _POP();
+        int32_t offset = DECODE(Arg32, pc).arg1;
+        if (!VAL_IS_TRUE(cond)) {
+          pc += offset;
+        }
+        DISPATCH;
       }
 
       CASE(MATCH) {
-        break;
+        goto matched;
+        DISPATCH;
       }
 
       CASE(FAIL) {
-        break;
+        goto not_matched;
+        DISPATCH;
       }
     }
   }
@@ -194,7 +236,4 @@ matched:
   Stack.cleanup(&stack);
   free(memoize_table);
   return (ValPair){result, VAL_NIL};
-}
-
-sb_vm_peg_exec() {
 }

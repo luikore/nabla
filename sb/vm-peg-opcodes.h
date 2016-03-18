@@ -14,7 +14,7 @@ enum OpCodes {
   JMP,         // offset:int32                # jump to an offset in bytecode
 
   // callback ops, similar to the ones in vm-lex, operates on stack
-  CAPTURE,     // n:int16                     # load capture at bp[n]
+  CAPTURE,     // n:uint16                    # load capture at bp[n]
   PUSH,        // val:Val                     # push literal
   POP,         //                             # pop top of stack
   NODE,        // argc:uint32, klass:uint32   # pop args, push node

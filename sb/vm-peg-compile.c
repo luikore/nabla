@@ -61,3 +61,6 @@
 Val sb_vm_peg_compile(CompileCtx* ctx, Val node) {
   return VAL_NIL;
 }
+
+void sb_vm_peg_decompile(struct Iseq* iseq, int32_t start, int32_t size) {
+}
