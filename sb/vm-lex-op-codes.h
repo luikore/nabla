@@ -1,3 +1,7 @@
+#pragma once
+
+#include "op-code-helper.h"
+
 // ins: aligned by 16bits
 // some note for alignment: http://lemire.me/blog/2012/05/31/data-alignment-for-speed-myth-or-reality/
 enum OpCodes {
@@ -18,30 +22,3 @@ enum OpCodes {
   NOP,            //                                        # do nothing
   OP_CODES_SIZE   //
 };
-
-typedef struct {
-  uint16_t op;
-  int32_t arg1;
-} __attribute__((packed)) Arg32;
-
-typedef struct {
-  uint16_t op;
-  uint32_t arg1;
-} __attribute__((packed)) ArgU32;
-
-typedef struct {
-  uint16_t op;
-  Val val;
-} __attribute__((packed)) ArgVal;
-
-typedef struct {
-  uint16_t op;
-  int32_t arg1;
-  int32_t arg2;
-} __attribute__((packed)) Arg3232;
-
-typedef struct {
-  uint16_t op;
-  uint32_t arg1;
-  uint32_t arg2;
-} __attribute__((packed)) ArgU32U32;

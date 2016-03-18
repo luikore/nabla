@@ -1,7 +1,7 @@
 #include "compile.h"
 #include <adt/utils/utf-8.h>
 #include <adt/utils/str.h>
-#include "vm-regexp-opcodes.h"
+#include "vm-regexp-op-codes.h"
 
 Val sb_vm_regexp_from_string(struct Iseq* iseq, Val s) {
   if (VAL_KLASS(s) != KLASS_STRING) {

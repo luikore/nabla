@@ -2,7 +2,7 @@
 // but much simpler since we don't have to handle matches
 
 #include "compile.h"
-#include "vm-peg-opcodes.h"
+#include "vm-peg-op-codes.h"
 
 typedef struct {
   int32_t offset;
@@ -65,7 +65,9 @@ ValPair sb_vm_peg_exec(uint16_t* peg, void* arena, int32_t token_size, Token* to
   // code size;
   uint32_t rule_size = DECODE(ArgU32, pc).arg1;
   memoize_table = malloc(rule_size * token_size * sizeof(Val));
-  memset(memoize_table, 0, rule_size * token_size * sizeof(Val));
+  for (int i = 0; i < rule_size * token_size; i++) {
+    memoize_table[i] = VAL_UNDEF;
+  }
 
   for (;;) {
     switch (*pc) {
@@ -100,15 +102,19 @@ pop_cond:
 
       CASE(RULE_CALL) {
         ArgU32U32 payload = DECODE(ArgU32U32, pc); // offset, rule_id
-        Val return_addr = (Val)pc;
-        pc = peg + payload.arg1;
+        if (MTABLE(pos, payload.arg2) != VAL_UNDEF) {
+          _PUSH(MTABLE(pos, payload.arg2));
+        } else {
+          Val return_addr = (Val)pc;
+          pc = peg + payload.arg1;
 
-        _PUSH(return_addr);
-        _PUSH(bp);
-        _PUSH(br_bp);
-        bp = Stack.size(&stack);
-        br_bp = BranchStack.size(&br_stack);
-        _PUSH((Val)payload.arg2);
+          _PUSH(return_addr);
+          _PUSH(bp);
+          _PUSH(br_bp);
+          bp = Stack.size(&stack);
+          br_bp = BranchStack.size(&br_stack);
+          _PUSH((Val)payload.arg2);
+        }
         DISPATCH;
       }
 
@@ -144,7 +150,14 @@ pop_cond:
 
       CASE(LOOP_UPDATE) {
         int32_t offset = DECODE(Arg32, pc).arg1;
-        // todo
+        Branch* top_br = BranchStack.at(&br_stack, BranchStack.size(&br_stack) - 1);
+        if (pos == top_br->pos) { // no advance, stop loop
+          pc = peg + top_br->offset;
+          BranchStack.pop(&br_stack);
+        } else { // loop
+          top_br->pos = pos;
+          pc = peg + offset;
+        }
         DISPATCH;
       }
 
@@ -228,7 +241,7 @@ not_matched:
   BranchStack.cleanup(&br_stack);
   Stack.cleanup(&stack);
   free(memoize_table);
-  return (ValPair){VAL_NIL, VAL_NIL};
+  return (ValPair){VAL_NIL, nb_string_new_literal_c("error")};
 
 matched:
 

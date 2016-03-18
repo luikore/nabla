@@ -1,5 +1,5 @@
 #include "compile.h"
-#include "vm-lex-opcodes.h"
+#include "vm-lex-op-codes.h"
 
 // vm for lex and callback (not for peg's callback)
 
@@ -54,7 +54,7 @@ begin:
     DISPATCH;
     switch(*pc) {
       CASE(PUSH): {
-        STACK_PUSH(DECODE(ArgVal, pc).val);
+        STACK_PUSH(DECODE(ArgVal, pc).arg1);
         DISPATCH;
       }
 

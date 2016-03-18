@@ -3,7 +3,7 @@
 #include "compile.h"
 #include <adt/utils/mut-array.h>
 #include <adt/utils/utf-8.h>
-#include "vm-regexp-opcodes.h"
+#include "vm-regexp-op-codes.h"
 #include <ctype.h>
 
 // Nonrecursive backtracking VM as described in https://swtch.com/~rsc/regexp/regexp2.html

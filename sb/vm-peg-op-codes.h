@@ -1,3 +1,7 @@
+#pragma once
+
+#include "op-code-helper.h"
+
 enum OpCodes {
   // op        // args                        # description
 
@@ -63,24 +67,3 @@ static const char* op_code_names[] = {
   [FAIL] = "fail",
   [END] = "end"
 };
-
-typedef struct {
-  uint16_t op;
-  int32_t arg1;
-} __attribute__((packed)) Arg32;
-
-typedef struct {
-  uint16_t op;
-  uint32_t arg1;
-} __attribute__((packed)) ArgU32;
-
-typedef struct {
-  uint16_t op;
-  uint32_t arg1;
-  uint32_t arg2;
-} __attribute__((packed)) ArgU32U32;
-
-typedef struct {
-  uint16_t op;
-  Val arg1;
-} __attribute__((packed)) ArgVal;

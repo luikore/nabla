@@ -1,3 +1,7 @@
+#pragma once
+
+#include "op-code-helper.h"
+
 // NOTE: to reduce runtime state size,
 //       ignore case / language / encoding flags are all set in compile time
 enum OpCodes {
@@ -65,23 +69,3 @@ static const char* op_code_names[] = {
   [CG_N_S] = "cg_n_s",
   [END] = "end"
 };
-
-typedef struct {
-  uint16_t op;
-  int32_t arg1;
-} __attribute__((packed)) Arg32;
-
-typedef struct {
-  uint16_t op;
-  int32_t arg1, arg2;
-} __attribute__((packed)) Arg3232;
-
-typedef struct {
-  uint16_t op;
-  int32_t arg1, arg2, arg3;
-} __attribute__((packed)) Arg323232;
-
-typedef struct {
-  uint16_t op;
-  int16_t arg1;
-} __attribute__((packed)) Arg16;

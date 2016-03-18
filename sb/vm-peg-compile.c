@@ -1,5 +1,5 @@
 #include "compile.h"
-#include "vm-peg-opcodes.h"
+#include "vm-peg-op-codes.h"
 
 // Rules are encoded one by one.
 // Each rule is similar to a method and we have call/ret

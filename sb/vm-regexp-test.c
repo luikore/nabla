@@ -1,13 +1,7 @@
 #include <ccut.h>
 #include "sb.h"
 
-#include "vm-regexp-opcodes.h"
-
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-#define AS_ARG32(c) c, 0
-#else
-#define AS_ARG32(c) 0, c
-#endif
+#include "vm-regexp-op-codes.h"
 
 // (a+)(b+)
 static uint16_t complex_reg[] = {
