@@ -543,7 +543,7 @@ There is also the prototype-update way:
     foo = Foo{a: 2, b:4}
     bar = foo{"a": 3, "b.c": 4} # overwrites members
 
-But remember, structs are objects, the prototype-update way only works for non-struct objects:
+Structs are where the prototype chain end.
 
     foo = Foo
     bar = foo{"a": 3, "b.c": 4} # calls Foo's constructor
@@ -560,7 +560,7 @@ When a field ends with `?`, it is converted and stored in boolean
     foo.b?    # false
     foo.b = 1 # Foo{true, true}
 
-[design NOTE]: ADT's sum type doesn't fit in dynamic languages because values are summed type of all types. And in OO language, sum type is polymorphism.
+[design NOTE]: only boolean converter is available, but we can use lambda's as converter.
 
 [design NOTE]: if we allow methods defined under `struct`, then the difference from `class` is unclear (let `struct` mutate members? but how about more members?)
 

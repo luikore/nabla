@@ -18,9 +18,9 @@ Pattern match is an intuitive way to reduce many boilerplate code.
     when _
       ...
 
-They call `obj.match? concrete` on individuals, which doesn't raise
+They call `obj.match concrete` on individuals, which doesn't raise
 
-the default `Object.match?` uses `==`
+the default `Object.match` uses `==`
 
 NOTE
 
@@ -39,7 +39,7 @@ examples:
     Const   -- type
     1.2     -- type
     'asd'   -- type
-    ->(.zero?) -- type
+    -> x where x.zero?, x * 2; -- type and convert
     [] {}   -- type (recursive splat open)
 
 by default, locals and ivars are vars, other expressions are patterns. if need to change default positions, add `as`. the lhs of `as` is used as vars, and the rhs of `as` is used as types/patterns.
@@ -52,21 +52,54 @@ disambig examples:
     Const as _     -- const as left value
     a.b as _       -- calls a.b =
 
+## `where` can be added after arglist for more constraints
+
+    matcher = -> foo where foo > 4;
+
+## The `.match` interface
+
+Calling `.match` returns match data
+
+For lambdas `mdata @ 0` is the return value
+
+    mdata = (-> v where v > 4, v * 2;).match 5
+    mdata @ 0 # 10
+
+For struct `mdata @ 0` is the source
+
+    Foo.match foo
+    mdata @ 0 # foo
+
+For `[]` and `{}` patterns the expression is expanded and no mdata.
+
+For regexp `mdata` contains captures.
+
+[TODO consideration] make head-match API for parser?
+
+    mdata, rest = lambda.head_match stream
+
+Then bootstrap parser should be written in nabla
+
+    Foo = -> [Bar[v]], ...; /
+          -> [Bar[v]], ...;
+
+This form can be used for tree transform too.
+
 ## matching and mass-assign
 
     <match-expr> =~ <expr>
 
-Returns true when matched. finally the `match?` methods of the objects on the rhs of `as` are called.
+Returns true when matched. finally the `match` methods of the objects on the rhs of `as` are called.
 
     [a, b as Int] =~ arr
 
 case of const:
 
     Foo = 3          # assign
-    Foo.match? 3     # matching returning matchdata, there's no match-expr, so no assignments (what about regexp?)
+    Foo.match 3      # matching returning matchdata, there's no match-expr, so no assignments (what about regexp?)
     Foo =~ 3
-    _ as Foo =~ 3     # matching (can raise)
-    Foo as Int =~ 3   # matching and assign (can raise)
+    _ as Foo =~ 3    # matching (can raise)
+    Foo as Int =~ 3  # matching and assign (can raise)
 
 ## matching error
 

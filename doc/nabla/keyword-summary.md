@@ -20,7 +20,7 @@ declarative (9)
 
     struct class using
     include scope
-    def undef final
+    def undef final where
     var
 
 type checker (1)
