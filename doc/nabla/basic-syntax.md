@@ -975,7 +975,7 @@ see pattern-match
 
 ## method calling
 
-method is the boundary of lexical scoping for local vars
+method definition is the boundary of lexical scoping for local vars
 
 `:` lookup passes object, then goes to `Kernel` (it's meta class includes `self`), so methods on `Object` is much fewer.
 

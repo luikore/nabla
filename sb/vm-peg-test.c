@@ -21,4 +21,7 @@ void vm_peg_suite() {
 
     val_arena_delete(arena);
   }
+
+  ccut_test("peg match term*") {
+  }
 }

@@ -1,5 +1,5 @@
 // a VM similar to LPEG (https://github.com/LuaDist/lpeg/blob/master/lpvm.c)
-// but much simpler since we don't have to handle matches
+// but much simpler since we don't have to handle char matches
 
 #include "compile.h"
 #include "vm-peg-op-codes.h"
