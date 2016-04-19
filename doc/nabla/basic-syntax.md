@@ -512,12 +512,13 @@ in a `struct` type, you can add data members from other struct types, and fields
 
     # `Foo` inclucdes members from `Bar`
     struct Foo[
-      *Bar
+      include Bar
       x
       y
     ]
 
 NOTE in above code: `struct Bar` must be defined before including into `Foo`.
+NOTE we use `include`, not `*` because `*` is used to match variable sized members.
 
 Although we suggest using snake cased name as member, but you are allowed to to define a capital cased one, just use something like `Bar as _`.
 
@@ -540,7 +541,7 @@ When a struct is defined, there are ways to create an object
 
 There is also the prototype-update way:
 
-    foo = Foo{a: 2, b:4}
+    foo = Foo{a: 2, b: 4}
     bar = foo{"a": 3, "b.c": 4} # overwrites members
 
 Structs are where the prototype chain end.

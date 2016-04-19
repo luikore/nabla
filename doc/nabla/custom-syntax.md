@@ -36,16 +36,16 @@ The delimiters can be
 
 Dangling with block code
 
-    $<<bar
+    $|bar|
       ...
-    Foo::$<<bar
+    Foo::$|bar|
       ...
 
 [design NOTE] to support dynamic src? `{src: ...}$Foo::bar` is bad practice, if one macro syntax can not be checked at compile time, just use normal library calls instead.
 
 [design NOTE] compile options before `$foo` should not be dynamic evaluated value, it should be part of the language:
 
-    $<<c
+    $|c|
       #pragma -L... -I... -fPIC
       foo() {
         ...
@@ -53,7 +53,7 @@ Dangling with block code
 
 if need some run-time values
 
-    $<<c_inline.exec {env: ..., args: ...}
+    $|c_inline|.exec {env: ..., args: ...}
       int main() {
         ...
       }
@@ -83,7 +83,7 @@ We should use
 
 ## multiple dangling blocks
 
-    :puts $<<foo $<<bar
+    :puts $|foo| $|bar|
       ... # foo
     ---
       ... # bar
@@ -147,11 +147,19 @@ the language should be able to expose several component parsers as library, so t
 
 string example
 
-    $<<str
+    $|str|
       hello #{you}
 
-    $<<quote
+    $|quote|
       hello #{a} world
+
+## summary of def syntax
+
+    def method
+    def $syntax
+    def $?
+    def @annotation
+    def #comment
 
 ## custom syntax usage ideas and examples
 
@@ -159,12 +167,12 @@ string example
 
     $r/a/
 
-    $<<r
+    $|r|
       ['"`/]
 
 ### Workflow engine
 
-    $<<workflow
+    $|workflow|
       ...
       yield 'state1' # this state can be saved
       ...
@@ -174,34 +182,34 @@ string example
 
 Using the `#` interpolate syntax by default
 
-    $<<json
+    $|json|
       {"foo": x, "bar": #{y}}
 
-    $<<yaml
+    $|yaml|
       x: 3
       y: 4
 
-    $<<csv
+    $|csv|
       a,b,c
       1,2,3
 
 Depending on what we want
 
-    String::$<<json
+    String::$|json|
       ...
 
-    Map::$<<json
+    Map::$|json|
       ...
 
-    AssocArray::$<<json
+    AssocArray::$|json|
       ...
 
 ### String processing
 
-    $<<awk << "some file"
+    $|awk| << "some file"
       ...src
 
-    $<<tr << "something"
+    $|tr| << "something"
       12345-7
       asdfc-e
 
@@ -211,7 +219,7 @@ A more readable and powerful way for `pack` / `unpack`
 
 NOTE this is similar to bitstring in Erlang, but more powerful
 
-    pattern = $<<packer
+    pattern = $|packer|
       a : u5
       b : u2
       c : u32-le
@@ -237,7 +245,7 @@ NOTE this is similar to bitstring in Erlang, but more powerful
 
 NOTE: to generate the result directly, use `$pack` instead of `$packer`:
 
-    str = $<<pack
+    str = $|pack|
       ...
 
 Now the syntax of right-hand-side becomes a bit complex... It should be implemented with sub virtual machine.
@@ -252,14 +260,14 @@ Protobuf
 
 ### Shell
 
-    $<<sh
+    $|sh|
       ...
 
 ### Makefile syntax for build tool
 
 ### Constraint programming
 
-    c = $<<constraint
+    c = $|constraint|
       def sibling x y
         :parent_child z x and :parent_child z y
       end
@@ -271,14 +279,14 @@ Protobuf
       :father_child "tom" "erica"
       :father_child "mike" "tom"
 
-    c.query $<<predicate
+    c.query $|predicate|
       :sibling "sally" "erica" #=> true
 
 pure methods can be captured as predicates
 
     def zero_sum x y
       x + y = 0
-    c = $<<constraint
+    c = $|constraint|
       :zero_sum x y
       y == 3
     c.query(x)
@@ -289,7 +297,7 @@ pure methods can be captured as predicates
 
 C inline
 
-    $<<c_inline.exec {include_paths: ..., lib_paths: ..., libs: ..., target: 'exe'}
+    $|c_inline|.exec {include_paths: ..., lib_paths: ..., libs: ..., target: 'exe'}
       #include <stdio.h>
       main() {
           printf("hello world\n");
@@ -297,7 +305,7 @@ C inline
 
 C ext ffi (with default header and linking)
 
-    $<<c.call "printf" "hello world"
+    $|c|.call "printf" "hello world"
       #include <stdio.h>
 
 ### Comprehension
@@ -324,7 +332,7 @@ fibonacci seq
 
 ### Assertion
 
-    $<<assert
+    $|assert|
       ...
 
 ### SQL
@@ -351,7 +359,7 @@ sql args (TODO modify to use PG `with` syntax):
 
 ### HTTP header
 
-    Net::HTTP::$<<header
+    Net::HTTP::$|header|
       foo: #{x}
       bar: #{y}
       baz: #{z}
@@ -364,7 +372,7 @@ Add `3x` syntax
 
 Add syntax: `int[] <exp>`, `dif[] <exp>`, `sum[]`, `lim[]`, `product[]` and matrix
 
-    $<<sym
+    $|sym|
       :factor 3x**2 + 2x + 1
 
     ${sym int[x] x (+) :cos x }
@@ -453,16 +461,16 @@ treats everything as string, treat `0` and `""` as `false` in conditions, consid
 
 ### Attribute Unification
 
-treats `a.b` as `a["b"]`
+treats `a.b` as `a @ "b"`
 
     @attr_unify
     def foo
       h = {"a": 3, "b": 4}
-      h.a # use h["a"] if method `a` is not defined
+      h.a # use h @ "a" if method `a` is not defined
       h.b = 5
     end
 
-### Web server Actions
+### Web Server Actions
 
     @GET '/index.:format'
     def index key1 key2 # gets arg by name
@@ -482,7 +490,7 @@ treats `a.b` as `a["b"]`
 
 to add new infix operators
 
-    Kernel::Syntax.add_operator "^_^" {precedence: 5}
+    Kernel::Syntax.infix "^_^" {precedence: 5}
 
 then it can be used in `def`, `.` or `:` calling
 
@@ -490,7 +498,7 @@ then it can be used in `def`, `.` or `:` calling
       def ^_^ other
         ...
 
-operator naming rule: `{Symbol}({Word}|{Symbol})*{Symbol}`
+operator naming rule: `{Symbol}({Word}|{Symbol})*{Symbol}` and can not generate ambiguity with other operators and `#`, `@`, `$`
 
 # custom comment processors
 
@@ -498,8 +506,7 @@ Default comment processor only do some minimal processing.
 
 To define some other document based comment processor for more powerful document:
 
-    # markdown comment processor
-    Kernel::Syntax.def_comment_processor "md" -> src obj
+    def #md src obj
       ... return a comment obj or nil for non-doc identities
     end
 
@@ -519,11 +526,13 @@ you can use `assoc` method to document macro methods
 
 NOTE for cross reference, a doc page contains simplified links which can be re-written by js, so no need to consider too much on it now.
 
+NOTE if previous token is `def`, `#` is not interpreted as comment.
+
 # nesting
 
 If the macro preprocessor is an update to the main syntax, we may use some additional tricks
 
-    $<<foo
+    $|foo|
       $1 # we may make all macro search under Foo first, then the top level
-      $<<bar
+      $|bar|
         ...
