@@ -119,7 +119,7 @@ Sometimes a rule contains too many items, and it is hard to find the number. Cou
 
 config will be like
 
-    $t.op $r/+/ {assoc: 'left', prec: 20, atleast: 0} \acc op e, ...
+    $t.op $/r +/ {assoc: 'left', prec: 20, atleast: 0} \acc op e, ...
 
 ### Precedence
 

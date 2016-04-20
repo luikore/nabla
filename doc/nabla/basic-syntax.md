@@ -492,7 +492,7 @@ NOTE it can also be used in patterns
 `struct` declares struct type, fields list can be type checked
 
     struct Foo[
-      a as $r/\d+/
+      a as $/r \d+/
       b as Integer
       c as String
       d, e, f # 3 fields without type checker, note that `,` has the same meaning with new line

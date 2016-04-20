@@ -1,4 +1,6 @@
-# macros
+# Sigils
+
+(Or quasi quotes)
 
 First simple usage is syntax sugar for visiting environment variables or match results.
 
@@ -34,7 +36,7 @@ The delimiters can be
     ||
     //
 
-Dangling with block code
+Dangling (or barred) with block code
 
     $|bar|
       ...
@@ -165,7 +167,7 @@ string example
 
 ### Regexp
 
-    $r/a/
+    $/r a/
 
     $|r|
       ['"`/]
