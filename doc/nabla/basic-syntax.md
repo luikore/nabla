@@ -173,31 +173,34 @@ line comments
 
 block comment
 
-    #<<
+    #||
       foo
       bar
       baz
 
 block comment with preprocessor (should use no space between `#` and `<<` and `html`)
 
-    #<<html
+    #|html|
       foo
       bar
       baz
 
-    #<<markdown
+    #|markdown|
       foo
       bar
       baz
 
-    #<<asciidoc
+    #|asciidoc|
       foo
       bar
       baz
+
+    #|call_seq|
+      runnable code
 
 NOTE: block comments are not allowed after a non-empty line, the comment below is line comment and generate a warning:
 
-    foo #<<md
+    foo #|md|
 
 ## Comma, new line, semicolon and `end`
 

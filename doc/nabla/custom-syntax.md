@@ -33,7 +33,6 @@ The delimiters can be
     ''
     ""
     ``
-    ||
     //
 
 Dangling (or barred) with block code
@@ -457,8 +456,10 @@ treats everything as string, treat `0` and `""` as `false` in conditions, consid
     def foo s
       if s == 23
         ...
+      end
       if something.size
         ...
+      end
     end
 
 ### Attribute Unification
@@ -512,7 +513,7 @@ To define some other document based comment processor for more powerful document
       ... return a comment obj or nil for non-doc identities
     end
 
-    #<<md
+    #|md|
       **foo**
 
       - bar

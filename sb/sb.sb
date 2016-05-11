@@ -158,7 +158,7 @@ lex Callback = [
   ")" { :token "end.paren" }
   "=" { :token "op.eq" }
   "!" { :token "op.prefix" }
-  /(,)\s*(\*)/ { :token "space.eol" 1, token "op.prefix.splat" 2 }
+  /(,)\s*(\*)/ { :token "space.eol" 1, :token "op.prefix.splat" 2 }
   /[,\n]/ { :token "space.eol" }
 
   /\#[^\n]*/   { :style "comment" }
