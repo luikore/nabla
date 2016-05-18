@@ -159,10 +159,16 @@ string example
     def method
     def $syntax
     def $?
-    def @annotation
     def #comment
 
 ## custom syntax usage ideas and examples
+
+### Shaders
+
+    $|glsl|
+      void main() {
+        ...
+      }
 
 ### Regexp
 
@@ -397,41 +403,19 @@ We recommend `#{}` for interpolating, if not possible, `@{}`, `${}`, `{{}}` ... 
 
 For the parsing interface, user only need to specify interpolation start and end symbol.
 
-# annotations
+# Bytecode Transformation
 
-Annotation macros are effective for compile-time AST transformation, an annotation starts with `@` and takes a whole line
+We support run-time bytecode transformation tool instead of compile-time AST transformations (or annotations) since we will always need run-time tools.
 
-    @attr_foo bar
-    def baz
-      ...
-    end
+The higher entrance barrier for bytecode transformation is on purpose: if you can do it without altering semantics, then don't change semantics.
 
-Annotation can also be scoped within constant namespace
-
-    Foo::@attr_foo bar
-    def baz
-      ...
-    end
-
-[design NOTE] args in annotation must be constants, if you need run-time AST transformation, just use normal methods.
-
-## custom annotation
-
-    def @foo
-      ...
-
-NOTE: difference between the definition of infix `@` method:
-
-    def @ that
-      ...
-
-## ast transform examples
+## bytecode transform examples
 
 ### optimize
 
 The options are the same as command line compile options only without the leading `--`
 
-    @attr_optimize $[w mutable-array static-dispatch static-type inline lazy]
+    Kernel.optimize $[w mutable-array static-dispatch static-type inline lazy] $
     def f
       a = []
       3.times do i
@@ -443,7 +427,7 @@ NOTE `lazy` means the optimization is invoked the first time the method is invok
 
 ### maybe
 
-    @maybe 'a'
+    Kernel.maybe 'a' $
     def foo a
       x = a.b.c.d
     end
@@ -452,7 +436,7 @@ NOTE `lazy` means the optimization is invoked the first time the method is invok
 
 treats everything as string, treat `0` and `""` as `false` in conditions, consider `nil` as `""`
 
-    @weak 's'
+    Kernel.weak 's' $
     def foo s
       if s == 23
         ...
@@ -466,7 +450,7 @@ treats everything as string, treat `0` and `""` as `false` in conditions, consid
 
 treats `a.b` as `a @ "b"`
 
-    @attr_unify
+    Kernel.attr_unify $
     def foo
       h = {"a": 3, "b": 4}
       h.a # use h @ "a" if method `a` is not defined
@@ -475,14 +459,14 @@ treats `a.b` as `a @ "b"`
 
 ### Web Server Actions
 
-    @GET '/index.:format'
+    HTTP.get '/index.:format' $
     def index key1 key2 # gets arg by name
       String = key1
       {a: {b: x}} = key2
       ...
     end
 
-    @PUT '/update.json'
+    HTTP.put '/update.json' $
     def update
       ...
     end

@@ -202,7 +202,7 @@ NOTE: block comments are not allowed after a non-empty line, the comment below i
 
     foo #|md|
 
-## Comma, new line, semicolon and `end`
+## Comma, new line, join lines, semicolon and `end`
 
 There are two important syntax sugars to make it easy to compose single-line or multi-line programs for fit your need of most readable program.
 
@@ -214,6 +214,15 @@ There are two important syntax sugars to make it easy to compose single-line or 
 `;` means `end`
 
     if foo, bar;
+
+A single `$` at the end of the line means joining 2 lines together
+
+    :foo bar $
+    baz
+
+    # is equivalent to
+
+    :foo bar baz
 
 # Operators
 
