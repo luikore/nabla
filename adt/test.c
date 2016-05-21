@@ -4,6 +4,7 @@
 #include "utils/mut-map.h"
 #include "utils/utf-8.h"
 
+void gens_suite();
 void val_suite();
 void box_suite();
 void map_cola_suite();
@@ -287,25 +288,6 @@ void arena_suite() {
     assert_eq(2 * sizeof(void*), (uintptr_t)p2 - (uintptr_t)p1);
     arena_delete(a);
   }
-
-  ccut_test("push and pop state") {
-    Arena* a = arena_new();
-    for (int i = 0; i < 100; i++) {
-      arena_slot_alloc(a, 1);
-    }
-    arena_push(a);
-    ArenaChunk* chunk = a->head;
-    int i = chunk->i;
-
-    for (int i = 0; i < 10; i++) {
-      arena_slot_alloc(a, 1);
-    }
-    arena_pop(a);
-    assert_eq((void*)chunk, a->head);
-    assert_eq(i, a->head->i);
-
-    arena_delete(a);
-  }
 }
 
 #pragma mark ### run them all
@@ -313,6 +295,7 @@ void arena_suite() {
 int main (int argc, char const *argv[]) {
   // ccut_trap_asserts();
   ccut_run_suite(base_suite);
+  ccut_run_suite(gens_suite);
   ccut_run_suite(box_suite);
   ccut_run_suite(mut_array_suite);
   ccut_run_suite(mut_map_suite);

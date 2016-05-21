@@ -5,6 +5,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <assert.h>
 
 #define ARENA_CHUNK_SIZE 253
 
@@ -21,23 +22,21 @@ typedef struct {
   uint64_t i;
 } ArenaStack;
 
-struct ArenaStruct {
+typedef struct {
   ArenaChunk* head;
-  ArenaStack* stack;
-  uint32_t stack_size;
-  uint32_t stack_cap;
-};
+  ArenaChunk init_chunk; // inline first chunk
+} Arena;
 
-typedef struct ArenaStruct Arena;
-
-static Arena* arena_new() {
-  Arena* arena = malloc(sizeof(Arena) + sizeof(ArenaChunk));
-  ArenaChunk* chunk = (void*)(arena + 1);
+static void arena_init(Arena* arena) {
+  ArenaChunk* chunk = &arena->init_chunk;
   arena->head = chunk;
   chunk->i = 0;
   chunk->next = NULL;
-  arena->stack = NULL;
-  arena->stack_size = arena->stack_cap = 0;
+}
+
+static Arena* arena_new() {
+  Arena* arena = malloc(sizeof(Arena));
+  arena_init(arena);
   return arena;
 }
 
@@ -57,36 +56,7 @@ static void* arena_slot_alloc(Arena* arena, uint8_t qword_count) {
   return res;
 }
 
-// push state
-// save a state, create temporally nodes, then pop, can save a lot of spaces
-static void arena_push(Arena* arena) {
-  if (!arena->stack) {
-    arena->stack_cap = 4;
-    arena->stack = malloc(sizeof(ArenaStack) * arena->stack_cap);
-  } else {
-    if (arena->stack_size + 1 >= arena->stack_cap) {
-      arena->stack_cap *= 2;
-      arena->stack = realloc(arena->stack, sizeof(ArenaStack) * arena->stack_cap);
-    }
-  }
-  arena->stack[arena->stack_size++] = (ArenaStack){.chunk = arena->head, .i = arena->head->i};
-}
-
-// pop state
-static void arena_pop(Arena* arena) {
-  assert(arena->stack && arena->stack_size);
-
-  arena->stack_size--;
-  ArenaStack* top = arena->stack + arena->stack_size;
-  if (top->chunk == arena->head) {
-    arena->head->i = top->i;
-  } else {
-    // pop-cross a chunk is too complex... so only pop i
-    arena->head->i = 0;
-  }
-}
-
-static void arena_delete(Arena* arena) {
+static void arena_cleanup(Arena* arena) {
   ArenaChunk* chunk = arena->head;
   // NOTE do not free the last chunk since it is together allocated with arena
   while (chunk->next) {
@@ -94,5 +64,9 @@ static void arena_delete(Arena* arena) {
     free(chunk);
     chunk = next;
   }
+}
+
+static void arena_delete(Arena* arena) {
+  arena_cleanup(arena);
   free(arena);
 }

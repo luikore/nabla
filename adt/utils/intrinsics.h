@@ -28,3 +28,13 @@ static inline uint64_t NB_ROTR(uint64_t v, unsigned n) {
 
 // for non-gcc/clang compilers, should try C11 _Noreturn
 #define NB_UNREACHABLE __builtin_unreachable
+
+#pragma mark # bytecode optimization
+
+#define NB_LIKELY(x) ({__builtin_expect(!(x), 0); x;})
+
+#define NB_UNLIKELY(x) ({__builtin_expect((x), 0); x;})
+
+// to prefetch code in the address
+// https://gcc.gnu.org/onlinedocs/gcc-3.3/gcc/Other-Builtins.html
+#define NB_PREFETCH __builtin_prefetch

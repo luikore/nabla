@@ -75,7 +75,7 @@ static inline int64_t VAL_UINT_AS_INT(uint64_t u) {
   return c.i;
 }
 #define VAL_INT_MAX ((1LL << 62) - 1)
-#define VAL_INT_MIN (-1LL << 62)
+#define VAL_INT_MIN (-(1LL << 62))
 #define VAL_INT_CAN_IMM(_i_) ((_i_) < VAL_INT_MAX && (_i_) > VAL_INT_MIN)
 #define VAL_IS_INT(_v_) ((_v_) & 1)
 #define VAL_FROM_INT(_int_) ((VAL_INT_AS_UINT(_int_) << 1) | 1)
@@ -303,58 +303,15 @@ void klass_debug();
 
 #pragma mark ### memory functions
 
-// global tracing flag, for debug use
-// usage: if (val_is_tracing()) { ... print some verbose info }
-void val_begin_trace();
-bool val_is_tracing();
-void val_end_trace();
-
-// NOTE for memory check to work when linking other libs to libadt, we need to static dispatch the functions in header
-#ifdef CHECK_MEMORY
-
-void val_begin_check_memory_cm();
-void val_end_check_memory_cm();
-void* val_alloc_cm(uint32_t klass_id, size_t size);
-void* val_dup_cm(void* p, size_t osize, size_t nsize);
-void* val_realloc_cm(void* p, size_t osize, size_t nsize);
-void val_free_cm(void* p);
-void val_perm_cm(void* p);
-void val_retain_cm(Val p);
-void val_release_cm(Val p);
-
-#define val_begin_check_memory val_begin_check_memory_cm
-#define val_end_check_memory val_end_check_memory_cm
-#define val_alloc val_alloc_cm
-#define val_dup val_dup_cm
-#define val_realloc val_realloc_cm
-#define val_free val_free_cm
-#define val_perm val_perm_cm
-#define val_retain val_retain_cm
-#define val_release val_release_cm
-
-#else
-
-void* val_alloc_f(uint32_t klass_id, size_t size);
-void* val_dup_f(void* p, size_t osize, size_t nsize);
-void* val_realloc_f(void* p, size_t osize, size_t nsize);
-void val_free_f(void* p);
-void val_perm_f(void* p);
-void val_retain_f(Val p);
-void val_release_f(Val p);
-
-#define val_begin_check_memory()
-#define val_end_check_memory()
-#define val_alloc val_alloc_f
-#define val_dup val_dup_f
-// mainly used for transient in-place updates
-#define val_realloc val_realloc_f
-#define val_free val_free_f
-#define val_perm val_perm_f
-#define val_retain val_retain_f
-// if ref_count on pointer val == 1, free it, else decrease it. no effect on immediate vals
-#define val_release val_release_f
-
-#endif // CHECK_MEMORY
+void val_begin_check_memory();
+void val_end_check_memory();
+void* val_alloc(uint32_t klass_id, size_t size);
+void* val_dup(void* p, size_t osize, size_t nsize);
+void* val_realloc(void* p, size_t osize, size_t nsize);
+void val_free(void* p);
+void val_perm(void* p);
+void val_retain(Val p);
+void val_release(Val p);
 
 // for convenient in-place-update
 #define AS_VAL(_obj_) *((Val*)(&(_obj_)))
@@ -367,10 +324,26 @@ void val_release_f(Val p);
 #define RETAIN(_obj_) val_retain((Val)(_obj_))
 #define RELEASE(_obj_) val_release((Val)(_obj_))
 
-#pragma mark ### arena
+#pragma mark ### allocator control
 
-void* val_arena_new();
-void* val_arena_alloc(void* arena, uint32_t klass_id, uint8_t qword_count);
-void val_arena_push(void* arena);
-void val_arena_pop(void* arena);
-void val_arena_delete(void* arena);
+// - each thread has its own allocator list and current allocator
+// - allocators are indexed by int:
+//   * 0 for malloc
+//   * -1 for memory checker
+//   * >0 for arenas
+
+void val_allocator_set(int i);
+int val_allocator_get();
+int val_allocator_new();
+void val_allocator_delete(int i);
+
+void val_allocator_check(); // see if memory allocated by checker are freed
+// allocators are re-numbered after delete
+
+#pragma mark ### trace function
+
+// global tracing flag, for debug use
+// usage: if (val_is_tracing()) { ... print some verbose info }
+void val_begin_trace();
+bool val_is_tracing();
+void val_end_trace();

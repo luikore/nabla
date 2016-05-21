@@ -17,6 +17,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <string.h>
 
 #define MUT_ARRAY_DECL(MutArrayType, ElemType)\
   /* note typedef will cause symbol conflict */\

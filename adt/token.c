@@ -54,17 +54,6 @@ Val nb_token_new_c(Val name, const char* content, Val v) {
   return nb_token_new(name, loc);
 }
 
-Val nb_token_anew(void* arena, Val name, NbTokenLoc loc) {
-  Token* t = val_arena_alloc(arena, KLASS_TOKEN, QWORDS_TOKEN);
-  t->loc = loc;
-  return (Val)t;
-}
-
-Val nb_token_anew_c(void* arena, Val name, const char* content, Val v) {
-  NbTokenLoc loc = {.s = content, .size = strlen(content), .v = v};
-  return nb_token_anew(arena, name, loc);
-}
-
 NbTokenLoc* nb_token_loc(Val tok) {
   assert(VAL_KLASS(tok) == KLASS_TOKEN);
   return &((Token*)tok)->loc;

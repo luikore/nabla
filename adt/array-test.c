@@ -158,7 +158,6 @@ void array_suite() {
     }
     assert_eq(sz, nb_array_size(a));
 
-    val_begin_trace();
     RELEASE(a);
     val_end_check_memory();
   }

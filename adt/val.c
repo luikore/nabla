@@ -4,6 +4,7 @@
 #include "klass.h"
 #include "string.h"
 #include "sym-table.h"
+#include "gens.h"
 #include <siphash.h>
 
 // TODO move static global fields into vm initialization?
@@ -30,6 +31,7 @@ MUT_ARRAY_DECL(Klasses, Klass*);
 MUT_MAP_DECL(GlobalRefCounts, Val, int64_t, val_hash, val_eq);
 MUT_MAP_DECL(KlassSearchMap, ConstSearchKey, uint32_t, _const_search_key_hash, _const_search_key_eq);
 MUT_MAP_DECL(ConstSearchMap, ConstSearchKey, Val, _const_search_key_hash, _const_search_key_eq);
+MUT_ARRAY_DECL(Allocators, void*);
 
 typedef struct {
   struct Klasses klasses; // array index by klass_id
@@ -44,6 +46,13 @@ static uint8_t nb_hash_key[16];
 static Runtime runtime = {
   .global_tracing = false
 };
+
+// thread local runtime
+typedef struct {
+  Gens* gens;
+} TLRuntime;
+
+static __thread TLRuntime tl_runtime;
 
 #pragma mark ### helpers
 
@@ -61,6 +70,8 @@ static void _init() {
   for (long i = 0; i < 16; i++) {
     nb_hash_key[i] = i*i;
   }
+
+  tl_runtime.gens = nb_gens_new_gens();
 
   Klasses.init(&runtime.klasses, KLASS_USER + 10);
   KlassSearchMap.init(&runtime.klass_search_map);
@@ -305,7 +316,7 @@ void klass_def_method(uint32_t klass_id, uint32_t method_id, int32_t argc, ValMe
   meth->as.func = func;
 
   IdMethods.insert(&klass->id_methods, method_id, meth);
-  
+
 }
 
 void klass_def_method2(uint32_t klass_id, uint32_t method_id, int32_t min_argc, int32_t max_argc, ValMethodFunc2 func, bool is_final) {
@@ -489,62 +500,14 @@ void val_def_const(uint32_t namespace, uint32_t name_str, Val v) {
 
 #pragma mark ### memory function interface
 
-static uint64_t mm_hash(uint64_t k) {
-  return siphash(nb_hash_key, (const uint8_t*)&k, 8);
-}
-static bool mm_eq(uint64_t k1, uint64_t k2) {
-  return k1 == k2;
+void val_begin_check_memory() {
+  nb_gens_set_current(tl_runtime.gens, -1);
 }
 
-MUT_MAP_DECL(MM, uint64_t, uint64_t, mm_hash, mm_eq);
-
-static struct MM heap_mem;
-static bool heap_mem_checking = false;
-
-void val_begin_check_memory_cm() {
-  assert(!heap_mem_checking);
-  MM.init(&heap_mem);
-  heap_mem_checking = true;
-}
-
-void val_end_check_memory_cm() {
-  assert(heap_mem_checking);
-  if (MM.size(&heap_mem)) {
-    log_err("Memory check failed, unfreed memory (%lu):", MM.size(&heap_mem));
-    MMIter it;
-    for (MM.iter_init(&it, &heap_mem); !MM.iter_is_end(&it); MM.iter_next(&it)) {
-      log_err("  %p: klass=%u, extra_rc=%hu", (void*)it.slot->k, VAL_KLASS(it.slot->k), ((ValHeader*)it.slot->k)->extra_rc);
-    }
-    assert(false);
-  }
-  MM.cleanup(&heap_mem);
-  heap_mem_checking = false;
-}
-
-static void _heap_mem_store(void* p) {
-  if (heap_mem_checking) {
-    assert(!VAL_IS_PERM(p));
-    if (val_is_tracing()) {
-      printf("heap store: %p\n", p);
-      MMIter it;
-      for (MM.iter_init(&it, &heap_mem); !MM.iter_is_end(&it); MM.iter_next(&it)) {
-        printf("  %p\n", (void*)it.slot->k);
-      }
-    }
-    MM.insert(&heap_mem, (uint64_t)p, 0);
-  }
-}
-
-static void _heap_mem_unstore(void* p) {
-  if (heap_mem_checking) {
-    assert(((ValHeader*)p)->extra_rc == 0);
-    uint64_t v;
-    if (!MM.find(&heap_mem, (uint64_t)p, &v)) {
-      log_err("Memory check failed, freeing memory not allocated: %p", p);
-      assert(false);
-    }
-    MM.remove(&heap_mem, (uint64_t)p);
-  }
+void val_end_check_memory() {
+  assert(nb_gens_get_current(tl_runtime.gens) == -1);
+  nb_gens_check_memory(tl_runtime.gens);
+  nb_gens_set_current(tl_runtime.gens, 0);
 }
 
 void val_begin_trace() {
@@ -559,42 +522,16 @@ void val_end_trace() {
   runtime.global_tracing = false;
 }
 
-void* val_alloc_cm(uint32_t klass_id, size_t size) {
-  ValHeader* p = malloc(size);
-  memset(p, 0, size);
-  p->klass = klass_id;
-
-  _heap_mem_store(p);
-  return p;
-}
-
-void* val_alloc_f(uint32_t klass_id, size_t size) {
-  // malloc is already aligned at least 8 bytes
-  // see http://en.cppreference.com/w/c/types/max_align_t
-  ValHeader* p = malloc(size);
+void* val_alloc(uint32_t klass_id, size_t size) {
+  ValHeader* p = nb_gens_malloc(tl_runtime.gens, size);
   memset(p, 0, size);
   p->klass = klass_id;
 
   return p;
 }
 
-void* val_dup_cm(void* p, size_t osize, size_t nsize) {
-  ValHeader* r = malloc(nsize);
-
-  if (nsize > osize) {
-    memcpy(r, p, osize);
-    memset((char*)r + osize, 0, nsize - osize);
-  } else {
-    memcpy(r, p, nsize);
-  }
-  _clear_rc(r);
-
-  _heap_mem_store(r);
-  return r;
-}
-
-void* val_dup_f(void* p, size_t osize, size_t nsize) {
-  ValHeader* r = malloc(nsize);
+void* val_dup(void* p, size_t osize, size_t nsize) {
+  ValHeader* r = nb_gens_malloc(tl_runtime.gens, nsize);
 
   if (nsize > osize) {
     memcpy(r, p, osize);
@@ -607,55 +544,27 @@ void* val_dup_f(void* p, size_t osize, size_t nsize) {
   return r;
 }
 
-void* val_realloc_cm(void* p, size_t osize, size_t nsize) {
+void* val_realloc(void* p, size_t osize, size_t nsize) {
   assert(nsize > osize);
 
-  _heap_mem_unstore(p);
-
-  p = realloc(p, nsize);
-  memset((char*)p + osize, 0, nsize - osize);
-
-  _heap_mem_store(p);
+  p = nb_gens_realloc(tl_runtime.gens, p, osize, nsize);
   return p;
 }
 
-void* val_realloc_f(void* p, size_t osize, size_t nsize) {
-  assert(nsize > osize);
-
-  p = realloc(p, nsize);
-  memset((char*)p + osize, 0, nsize - osize);
-
-  return p;
-}
-
-void val_free_cm(void* _p) {
+void val_free(void* _p) {
   ValHeader* p = _p;
   assert(p->extra_rc == 0);
 
-  _heap_mem_unstore(p);
-  free(p);
+  nb_gens_free(tl_runtime.gens, p);
 }
 
-void val_free_f(void* _p) {
-  ValHeader* p = _p;
-  assert(p->extra_rc == 0);
-
-  free(p);
-}
-
-void val_perm_cm(void* _p) {
-  ValHeader* p = _p;
-  p->perm = true;
-  _heap_mem_unstore(p);
-}
-
-void val_perm_f(void* _p) {
+void val_perm(void* _p) {
   ValHeader* p = _p;
   p->perm = true;
 }
 
 // same as val_retain
-void val_retain_cm(Val v) {
+void val_retain(Val v) {
   if (VAL_IS_IMM(v)) {
     return;
   }
@@ -667,11 +576,7 @@ void val_retain_cm(Val v) {
   _inc_ref_count(v);
 }
 
-void val_retain_f(Val v) {
-  val_retain_cm(v);
-}
-
-void val_release_cm(Val v) {
+void val_release(Val v) {
   if (VAL_IS_IMM(v)) {
     return;
   }
@@ -680,34 +585,6 @@ void val_release_cm(Val v) {
     return;
   }
 
-  if (!p->rc_overflow && p->extra_rc == 0) {
-    uint32_t klass_id = VAL_KLASS((Val)p);
-    Klass* k = *Klasses.at(&runtime.klasses, klass_id);
-    if (k->delete_func) {
-      k->delete_func(p);
-    } else {
-      if (k->destruct_func) {
-        k->destruct_func(p);
-      }
-      val_free_cm(p);
-    }
-  } else {
-    _dec_ref_count(v);
-  }
-}
-
-void val_release_f(Val v) {
-  if (VAL_IS_IMM(v)) {
-    return;
-  }
-  ValHeader* p = (ValHeader*)v;
-  if (VAL_IS_PERM(p)) {
-    return;
-  }
-
-  if (p->klass == 6) {
-    printf("release node xtra_rc=%d\n", p->extra_rc);
-  }
   if (!p->rc_overflow && p->extra_rc == 0) {
     uint32_t klass_id = VAL_KLASS((Val)p);
     Klass* k = *Klasses.at(&runtime.klasses, klass_id);
@@ -728,29 +605,4 @@ int64_t val_global_ref_count(Val v) {
   int64_t res;
   bool found = GlobalRefCounts.find(&runtime.global_ref_counts, v, &res);
   return found ? res : -1;
-}
-
-#pragma mark ### arena
-
-void* val_arena_new() {
-  return arena_new();
-}
-
-void* val_arena_alloc(void* arena, uint32_t klass_id, uint8_t qword_count) {
-  ValHeader* data = arena_slot_alloc(arena, qword_count);
-  data->klass = klass_id;
-  val_perm_f(data); // NOTE should not fall into val_perm_cm
-  return data;
-}
-
-void val_arena_push(void* arena) {
-  arena_push(arena);
-}
-
-void val_arena_pop(void* arena) {
-  arena_pop(arena);
-}
-
-void val_arena_delete(void* arena) {
-  arena_delete(arena);
 }
