@@ -4,6 +4,11 @@
 .text
 .globl _val_c_call
 
+// Mark stack as non-executable
+#if defined(__linux__) && defined(__ELF__)
+.section .note.GNU-stack, "", @progbits
+#endif
+
 // align code and fill with nop
 .align 4, 0x90
 

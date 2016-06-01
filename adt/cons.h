@@ -10,13 +10,7 @@ Val nb_cons_new(Val head, Val tail);
 
 Val nb_cons_new_rev(Val init, Val last);
 
-Val nb_cons_anew(void* arena, Val head, Val tail);
-
-Val nb_cons_anew_rev(void* arena, Val init, Val last);
-
 Val nb_cons_reverse(Val list);
-
-Val nb_cons_areverse(void* arena, Val list);
 
 Val nb_cons_head(Val node);
 

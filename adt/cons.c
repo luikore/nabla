@@ -42,6 +42,8 @@ void nb_cons_init_module() {
 
 Val nb_cons_new(Val head, Val tail) {
   Cons* node = val_alloc(KLASS_CONS, sizeof(Cons));
+  RETAIN(head);
+  RETAIN(tail);
   node->head = head;
   node->tail = tail;
   return (Val)node;
@@ -56,35 +58,11 @@ Val nb_cons_new_rev(Val init, Val last) {
   return nb_cons_new(head, tail);
 }
 
-Val nb_cons_anew(void* arena, Val head, Val tail) {
-  Cons* node = val_arena_alloc(arena, KLASS_CONS, QWORDS_CONS);
-  node->head = head;
-  node->tail = tail;
-  return (Val)node;
-}
-
-Val nb_cons_anew_rev(void* arena, Val init, Val last) {
-  if (init == VAL_NIL) {
-    return nb_cons_anew(arena, last, VAL_NIL);
-  }
-  Val head = nb_cons_head(init);
-  Val tail = nb_cons_tail(init);
-  tail = nb_cons_anew_rev(arena, tail, last);
-  return nb_cons_anew(arena, head, tail);
-}
-
 Val nb_cons_reverse(Val list) {
   Val res = VAL_NIL;
   for (Val curr = list; curr != VAL_NIL; curr = nb_cons_tail(curr)) {
-    res = nb_cons_new(nb_cons_head(curr), res);
-  }
-  return res;
-}
-
-Val nb_cons_areverse(void* arena, Val list) {
-  Val res = VAL_NIL;
-  for (Val curr = list; curr != VAL_NIL; curr = nb_cons_tail(curr)) {
-    res = nb_cons_anew(arena, nb_cons_head(curr), res);
+    Val e = nb_cons_head(curr);
+    REPLACE(res, nb_cons_new(e, res));
   }
   return res;
 }
@@ -104,15 +82,7 @@ Val nb_cons_tail(Val vnode) {
 Val nb_cons_list(int32_t argc, Val* argv) {
   Val l = VAL_NIL;
   for (int i = argc - 1; i >= 0; i--) {
-    l = nb_cons_new(argv[i], l);
-  }
-  return l;
-}
-
-Val nb_cons_alist(void* arena, int32_t argc, Val* argv) {
-  Val l = VAL_NIL;
-  for (int i = argc - 1; i >= 0; i--) {
-    l = nb_cons_anew(arena, argv[i], l);
+    REPLACE(l, nb_cons_new(argv[i], l));
   }
   return l;
 }

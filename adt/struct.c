@@ -44,21 +44,6 @@ Val nb_struct_new(uint32_t klass_id, uint32_t argc, Val* argv) {
   return (Val)s;
 }
 
-Val nb_struct_anew(void* arena, uint32_t klass_id, uint32_t argc, Val* argv) {
-  // todo splat matcher logic
-  Klass* k = (Klass*)klass_val(klass_id);
-  assert(k);
-  int field_size = Fields.size(&k->fields);
-  if (field_size != argc) {
-    // todo var-length match
-    val_throw(nb_string_new_literal_c("field size mismatch"));
-  }
-
-  Struct* s = val_arena_alloc(arena, klass_id, field_size + VAL_HEADER_QWORDS);
-  memcpy(s->fields, argv, argc * sizeof(Val));
-  return (Val)s;
-}
-
 int32_t nb_struct_field_i(uint32_t klass_id, uint32_t field_id) {
   Klass* k = (Klass*)klass_val(klass_id);
   uint32_t index;
@@ -79,16 +64,6 @@ Val nb_struct_set(Val vst, uint32_t i, Val field_value) {
   Klass* k = (Klass*)klass_val(klass_id);
   int argc = Fields.size(&k->fields);
   Struct* new_st = (Struct*)nb_struct_new(klass_id, argc, st->fields);
-  REPLACE(new_st->fields[i], field_value);
-  return (Val)new_st;
-}
-
-Val nb_struct_aset(void* arena, Val vst, uint32_t i, Val field_value) {
-  Struct* st = (Struct*)vst;
-  uint32_t klass_id = st->h.klass;
-  Klass* k = (Klass*)klass_val(klass_id);
-  int argc = Fields.size(&k->fields);
-  Struct* new_st = (Struct*)nb_struct_anew(arena, klass_id, argc, st->fields);
   REPLACE(new_st->fields[i], field_value);
   return (Val)new_st;
 }

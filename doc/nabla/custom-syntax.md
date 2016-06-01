@@ -347,17 +347,26 @@ fibonacci seq
     x = 3
     $(select foo.a, foo.b from foos foo where foo.a > #{x})
 
-SQL segment: `with`
+The interpolation is safe and auto escaped.
 
-lambda args:
+SQL mapping:
+use `as AssocArray`, `as Dict`, `as JSON`, `as Array`, `as #{ty}` ...
 
-    where = -> x, $(with where foo.a > #{x});
-    $(select foo.a with #{where.call 3})
+When `as JSON` is used, it may generate code to delegate to database json generating.
 
-sql args (TODO modify to use PG `with` syntax):
+Reusing SQL segmenting: `with`
 
-    where = $(with (x) begin where foo.a > x end);
-    $(select foo.a with #{where}(foo.b))
+    WS = $(select ... $1 $2)
+
+    def bar
+      $(select ... from #{WS}(1, 2) where ws.foo = ...)
+    end
+
+It auto generates `with` statement like this:
+
+    with ws(x1, x2) as (
+      select ... x1 x2
+    ) select ... from ws(1, 2) where ws.foo = ...
 
 ### IO open with protocols
 

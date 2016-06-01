@@ -3,28 +3,30 @@
 
 void cons_suite() {
   ccut_test("cons node new") {
-    void* arena = val_arena_new();
+    val_begin_check_memory();
 
-    Val node;
-    node = nb_cons_anew(arena, VAL_FROM_INT(1), VAL_NIL);
-    node = nb_cons_anew(arena, VAL_FROM_INT(2), node);
-    node = nb_cons_anew(arena, VAL_FROM_INT(3), node);
+    Val node = VAL_NIL;
+    REPLACE(node, nb_cons_new(VAL_FROM_INT(1), node));
+    REPLACE(node, nb_cons_new(VAL_FROM_INT(2), node));
+    REPLACE(node, nb_cons_new(VAL_FROM_INT(3), node));
 
-    node = nb_cons_areverse(arena, node);
+    REPLACE(node, nb_cons_reverse(node));
 
     int i = 1;
     for (Val curr = node; curr != VAL_NIL; curr = nb_cons_tail(curr), i++) {
       assert_eq(VAL_FROM_INT(i), nb_cons_head(curr));
     }
 
-    val_arena_delete(arena);
+    RELEASE(node);
+
+    val_end_check_memory();
   }
 
   ccut_test("cons node new rev") {
     val_begin_check_memory();
 
-    Val node;
-    REPLACE(node, nb_cons_new_rev(VAL_NIL, VAL_FROM_INT(1)));
+    Val node = VAL_NIL;
+    REPLACE(node, nb_cons_new_rev(node, VAL_FROM_INT(1)));
     REPLACE(node, nb_cons_new_rev(node, VAL_FROM_INT(2)));
     REPLACE(node, nb_cons_new_rev(node, VAL_FROM_INT(3)));
 
@@ -48,7 +50,6 @@ void cons_suite() {
       assert_eq(VAL_FROM_INT(2 - i), head);
       tail = nb_cons_tail(tail);
     }
-
     RELEASE(list);
 
     val_end_check_memory();

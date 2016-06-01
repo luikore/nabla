@@ -1,5 +1,5 @@
 CFLAGS = -DNDEBUG -MMD -MP -march=native -I../vendor/ccut/include -I../vendor/siphash -I../vendor/tinycthread/source
-CFLAGS_DEBUG = -g -DCHECK_MEMORY -MMD -MP -march=native -I../vendor/ccut/include -I../vendor/siphash
+CFLAGS_DEBUG = -g -MMD -MP -march=native -I../vendor/ccut/include -I../vendor/siphash
 LDFLAGS = -L../vendor/ccut/lib -lccut -L../vendor/siphash -lsiphash
 
 CXXFLAGS = $(CFLAGS) --std=c++11
