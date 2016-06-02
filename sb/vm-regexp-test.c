@@ -27,16 +27,20 @@ static Val _range(int from, int to) {
 }
 
 static void _compile_quantified_reg(struct Iseq* iseq, int chr, const char* type) {
-  void* arena = val_arena_new();
+  val_gens_set_current(val_gens_new_gen());
+
   Val quantifier = nb_string_new_literal_c(type);
   Val a = VAL_FROM_INT(chr);
   Val quantified = _struct("Quantified", 2, (Val[]){a, quantifier});
   Val regexp = _struct("Regexp", 1, (Val[]){quantified});
-  Val err = sb_vm_regexp_compile(iseq, arena, VAL_NIL, regexp);
+  Val err = sb_vm_regexp_compile(iseq, VAL_NIL, regexp);
   if (err != VAL_NIL) {
     fatal_err("%.*s", (int)nb_string_byte_size(err), nb_string_ptr(err));
   }
-  val_arena_delete(arena);
+
+  val_gens_set_current(0);
+  val_gens_drop();
+
   RELEASE(regexp);
 }
 

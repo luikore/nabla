@@ -91,7 +91,7 @@ begin:
       CASE(NODE): {
         ArgU32U32 data = DECODE(ArgU32U32, pc);
         sb->stack.size -= data.arg1;
-        STACK_PUSH(nb_struct_anew(sb->arena, data.arg2, data.arg1, STACK_TOP()));
+        STACK_PUSH(nb_struct_new(data.arg2, data.arg1, STACK_TOP()));
         DISPATCH;
       }
 
@@ -99,7 +99,7 @@ begin:
         pc++;
         Val tail = STACK_POP();
         Val head = STACK_POP();
-        STACK_PUSH(nb_cons_anew(sb->arena, head, tail));
+        STACK_PUSH(nb_cons_new(head, tail));
         DISPATCH;
       }
 
@@ -107,7 +107,7 @@ begin:
         pc++;
         Val last = STACK_POP();
         Val init = STACK_POP();
-        STACK_PUSH(nb_cons_anew_rev(sb->arena, init, last));
+        STACK_PUSH(nb_cons_new_rev(init, last));
         DISPATCH;
       }
 

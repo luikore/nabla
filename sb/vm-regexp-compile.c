@@ -111,7 +111,7 @@ static void _push_branches(struct Stack* stack, struct Ints* labels, Val branche
   }
 }
 
-static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node, void* arena) {
+static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node) {
   Val e = nb_struct_get(node, 0);
   Val quantifier = nb_struct_get(node, 1);
 
@@ -212,7 +212,7 @@ static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node,
         Val l = _new_label(labels);
         _push_label(stack, l);
         Val args[] = {e, nb_string_new_literal(1, ptr)};
-        Val node = nb_struct_anew(arena, VAL_KLASS(node), 2, args);
+        Val node = nb_struct_new(VAL_KLASS(node), 2, args);
         Stack.push(stack, node);
         _push_atomic(stack, l);
         break;
@@ -406,11 +406,11 @@ static int _compare_range(const void* rg1, const void* rg2) {
   return f1 > f2 ? 1 : f1 < f2 ? -1 : 0;
 }
 
-static Val _invert_ranges(void* arena, Val list, uint32_t range_klass) {
+static Val _invert_ranges(Val list, uint32_t range_klass) {
   if (list == VAL_NIL) {
     Val argv[] = {VAL_FROM_INT(0), VAL_FROM_INT(UTF_8_MAX)};
-    Val e = nb_struct_anew(arena, range_klass, 2, argv);
-    return nb_cons_anew(arena, e, VAL_NIL);
+    Val e = nb_struct_new(range_klass, 2, argv);
+    return nb_cons_new(e, VAL_NIL);
   }
 
   struct Vals vals;
@@ -426,9 +426,9 @@ static Val _invert_ranges(void* arena, Val list, uint32_t range_klass) {
   int32_t last_to = (int32_t)VAL_TO_INT(nb_struct_get(first_node, 1));
   Val preserve;
   if (last_from > 0) {
-    Val e = nb_struct_anew(arena, range_klass, 2, (Val[]){VAL_FROM_INT(0), VAL_FROM_INT(last_from - 1)});
+    Val e = nb_struct_new(range_klass, 2, (Val[]){VAL_FROM_INT(0), VAL_FROM_INT(last_from - 1)});
     preserve = e;
-    res = nb_cons_anew(arena, e, res);
+    res = nb_cons_new(e, res);
   }
 
   for (int i = 1; i < Vals.size(&vals); i++) {
@@ -437,8 +437,8 @@ static Val _invert_ranges(void* arena, Val list, uint32_t range_klass) {
     int32_t to = (int32_t)VAL_TO_INT(nb_struct_get(*range, 1));
     printf("\n\n%d,%d,%d,%d\n\n", from, to, last_from, last_to);
     if (from > last_to + 1) { // disjoint
-      Val e = nb_struct_anew(arena, range_klass, 2, (Val[]){VAL_FROM_INT(last_to + 1), VAL_FROM_INT(from - 1)});
-      res = nb_cons_anew(arena, e, res);
+      Val e = nb_struct_new(range_klass, 2, (Val[]){VAL_FROM_INT(last_to + 1), VAL_FROM_INT(from - 1)});
+      res = nb_cons_new(e, res);
       last_from = from;
       last_to = to;
     } else if (to > last_to) { // overlapped
@@ -450,8 +450,8 @@ static Val _invert_ranges(void* arena, Val list, uint32_t range_klass) {
   Vals.cleanup(&vals);
 
   if (last_to + 1 <= UTF_8_MAX) {
-    Val e = nb_struct_anew(arena, range_klass, 2, (Val[]){VAL_FROM_INT(last_to + 1), VAL_FROM_INT(UTF_8_MAX)});
-    res = nb_cons_anew(arena, e, res);
+    Val e = nb_struct_new(range_klass, 2, (Val[]){VAL_FROM_INT(last_to + 1), VAL_FROM_INT(UTF_8_MAX)});
+    res = nb_cons_new(e, res);
   }
 
   return res;
@@ -459,7 +459,7 @@ static Val _invert_ranges(void* arena, Val list, uint32_t range_klass) {
 
 // return list of char ranges
 // todo language dependent ignore case
-static Val _flatten_char_group(void* arena, Val node, bool ignore_case, Val result_list) {
+static Val _flatten_char_group(Val node, bool ignore_case, Val result_list) {
   // BracketCharGroup[beginer, (CharRange | BracketCharGroup)+]
   uint32_t kCharGroup = VAL_KLASS(node);
   uint32_t kCharRange = klass_find_c("CharRange", sb_klass());
@@ -472,11 +472,11 @@ static Val _flatten_char_group(void* arena, Val node, bool ignore_case, Val resu
     Val e = nb_cons_head(list);
     // NOTE if there is overlap, let it be
     if (VAL_KLASS(e) == kCharRange) {
-      result_list = nb_cons_anew(arena, e, result_list);
+      result_list = nb_cons_new(e, result_list);
     } else {
-      Val invert_list = _flatten_char_group(arena, e, ignore_case, VAL_NIL);
+      Val invert_list = _flatten_char_group(e, ignore_case, VAL_NIL);
       for (; invert_list != VAL_NIL; invert_list = nb_cons_tail(invert_list)) {
-        result_list = nb_cons_anew(arena, nb_cons_head(invert_list), result_list);
+        result_list = nb_cons_new(nb_cons_head(invert_list), result_list);
       }
     }
   }
@@ -484,7 +484,7 @@ static Val _flatten_char_group(void* arena, Val node, bool ignore_case, Val resu
   if (is_positive) {
     return result_list;
   } else {
-    return _invert_ranges(arena, result_list, kCharRange);
+    return _invert_ranges(result_list, kCharRange);
   }
 }
 
@@ -523,7 +523,7 @@ static void _translate_label_pos(struct Iseq* iseq, struct Ints* labels, struct 
   }
 }
 
-Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val node) {
+Val sb_vm_regexp_compile(struct Iseq* iseq, Val patterns_dict, Val node) {
   _ensure_tags();
 
   uint32_t kSeq               = klass_find_c("Seq", sb_klass());
@@ -623,7 +623,7 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
       _encode_anchor(iseq, curr);
 
     } else if (klass == kQuantified) {
-      _push_quantified(&stack, &labels, curr, arena);
+      _push_quantified(&stack, &labels, curr);
 
     } else if (klass == kQuantifiedRange) {
       int res = _push_quantified_range(&stack, &labels, curr);
@@ -647,7 +647,7 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val 
       // TODO
 
     } else if (klass == kBracketCharGroup) {
-      Val ranges = _flatten_char_group(arena, curr, ignore_case, VAL_NIL);
+      Val ranges = _flatten_char_group(curr, ignore_case, VAL_NIL);
       _encode_char_group(iseq, &labels, &label_refs, ranges);
 
     } else if (klass == kFlag) {

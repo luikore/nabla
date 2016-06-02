@@ -4,7 +4,8 @@
 
 void vm_peg_suite() {
   ccut_test("peg match term") {
-    void* arena = val_arena_new();
+    int32_t gen = val_gens_new_gen();
+    val_gens_set_current(gen);
 
     uint16_t peg[] = {
       RULE_SIZE, SPLIT_ARG32(1),
@@ -16,10 +17,11 @@ void vm_peg_suite() {
       {.ty = val_strlit_new_c("foo")},
       {.ty = val_strlit_new_c("bar")}
     };
-    ValPair res = sb_vm_peg_exec(peg, arena, sizeof(tokens) / sizeof(Token), tokens);
+    ValPair res = sb_vm_peg_exec(peg, sizeof(tokens) / sizeof(Token), tokens);
     assert_eq(VAL_NIL, res.snd);
 
-    val_arena_delete(arena);
+    val_gens_set_current(0);
+    val_gens_drop();
   }
 
   ccut_test("peg match term*") {

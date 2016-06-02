@@ -81,7 +81,7 @@ static ValPair parse(Spellbreak* sb) {
   }
   int token_size = TokenStream.size(&sb->token_stream) - ce->token_pos;
   Token* token_start = TokenStream.at(&sb->token_stream, ce->token_pos);
-  ValPair pair = sb_vm_peg_exec((void*)parser, sb->arena, token_size, token_start);
+  ValPair pair = sb_vm_peg_exec((void*)parser, token_size, token_start);
   return pair;
 }
 
@@ -168,10 +168,14 @@ void sb_init_module(void) {
 }
 
 void sb_bootstrap() {
-  void* arena = val_arena_new();
-  Val ast = sb_bootstrap_ast(arena, spellbreak_klass);
-  sb_syntax_compile(arena, spellbreak_klass, ast);
-  val_arena_delete(arena);
+  int32_t gen = val_gens_new_gen();
+  val_gens_set_current(gen);
+
+  Val ast = sb_bootstrap_ast(spellbreak_klass);
+  sb_syntax_compile(spellbreak_klass, ast);
+
+  val_gens_set_current(gen - 1);
+  val_gens_drop();
 }
 
 uint32_t sb_klass() {
@@ -239,7 +243,6 @@ Spellbreak* sb_new_sb() {
 Val sb_parse(Spellbreak* s, const char* src, int64_t size) {
   s->curr = s->s = src;
   s->size = size;
-  s->arena = val_arena_new();
 
   ValPair pair = sb_vm_lex_exec(s);
   if (pair.snd != VAL_UNDEF) {
@@ -248,13 +251,12 @@ Val sb_parse(Spellbreak* s, const char* src, int64_t size) {
   return pair.fst;
 }
 
-void sb_syntax_compile(void* arena, Val ast, uint32_t target_klass) {
+void sb_syntax_compile(Val ast, uint32_t target_klass) {
   CompileCtx ctx = {
     .lex_dict = nb_dict_new(),
     .peg_dict = nb_dict_new(),
     .patterns_dict = nb_dict_new(),
     .vars_dict = nb_dict_new(),
-    .arena = arena,
     .ast = ast
   };
   Val err = sb_compile_main(&ctx);

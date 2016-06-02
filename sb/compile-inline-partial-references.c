@@ -26,7 +26,7 @@ static bool _pop_zero_deg_node(DepNode** list, int size, Val* res) {
 }
 
 // expand partial ref (it is ensured to be leaf by toposort), and eliminate nil rules
-static void _expand_lex_def(void* arena, struct ContextMap* context_map, Val name) {
+static void _expand_lex_def(struct ContextMap* context_map, Val name) {
   Val curr;
   bool found = ContextMap.find(context_map, name, &curr);
   assert(found);
@@ -42,7 +42,7 @@ static void _expand_lex_def(void* arena, struct ContextMap* context_map, Val nam
       }
       for (Val child_curr = child_nodes; child_curr != VAL_NIL; child_curr = TAIL(child_curr)) {
         if (child_curr != VAL_NIL) {
-          res = nb_cons_anew(arena, child_curr, res);
+          res = nb_cons_new(child_curr, res);
         }
       }
     }

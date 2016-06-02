@@ -28,7 +28,7 @@ static void _report_stack(struct Stack* stack, uint32_t bp, struct BranchStack* 
   }
 }
 
-ValPair sb_vm_peg_exec(uint16_t* peg, void* arena, int32_t token_size, Token* tokens) {
+ValPair sb_vm_peg_exec(uint16_t* peg, int32_t token_size, Token* tokens) {
   struct BranchStack br_stack;
   struct Stack stack;
   uint32_t br_bp = 0;
@@ -189,13 +189,13 @@ pop_cond:
       CASE(NODE) {
         ArgU32U32 data = DECODE(ArgU32U32, pc);
         stack.size -= data.arg1;
-        _PUSH(nb_struct_anew(arena, data.arg2, data.arg1, _TOP()));
+        _PUSH(nb_struct_new(data.arg2, data.arg1, _TOP()));
         DISPATCH;
       }
 
       CASE(LIFT) {
         pc++;
-        _PUSH(nb_cons_anew(arena, _POP(), VAL_NIL));
+        _PUSH(nb_cons_new(_POP(), VAL_NIL));
         DISPATCH;
       }
 
@@ -203,7 +203,7 @@ pop_cond:
         pc++;
         Val tail = _POP();
         Val head = _POP();
-        _PUSH(nb_cons_anew(arena, head, tail));
+        _PUSH(nb_cons_new(head, tail));
         DISPATCH;
       }
 
@@ -211,7 +211,7 @@ pop_cond:
         pc++;
         Val head = _POP();
         Val tail = _POP();
-        _PUSH(nb_cons_anew(arena, head, tail));
+        _PUSH(nb_cons_new(head, tail));
         DISPATCH;
       }
 

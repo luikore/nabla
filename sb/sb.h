@@ -45,7 +45,6 @@ typedef struct {
   int64_t size;  // src size
   const char* curr; // curr src
 
-  void* arena;
   int32_t capture_size;
   int32_t captures[20]; // begin: i*2, end: i*2+1
   struct TokenStream token_stream; // not copied
@@ -61,7 +60,7 @@ typedef struct {
 #define CAPTURE_BEGIN(c, i) (c)->captures[(i) * 2]
 #define CAPTURE_END(c, i) (c)->captures[(i) * 2 + 1]
 
-Val sb_bootstrap_ast(void* arena, uint32_t namespace);
+Val sb_bootstrap_ast(uint32_t namespace);
 
 void sb_init_module(void);
 
@@ -78,7 +77,7 @@ uint32_t sb_new_syntax(uint32_t name_str);
 //   ast = sb_parse(sb, src, size);
 //   sb_syntax_compile(sb->arena, src, size, klass);
 //   val_free(sb);
-void sb_syntax_compile(void* arena, Val ast, uint32_t target_klass);
+void sb_syntax_compile(Val ast, uint32_t target_klass);
 
 // NOTE separated for online-parsing
 Spellbreak* sb_new(uint32_t klass);
@@ -124,10 +123,10 @@ Val sb_vm_peg_compile(CompileCtx* ctx, Val node);
 void sb_vm_peg_decompile(struct Iseq* iseq, int32_t start, int32_t size);
 
 // returns {res, err}
-ValPair sb_vm_peg_exec(uint16_t* pc, void* arena, int32_t token_size, Token* tokens);
+ValPair sb_vm_peg_exec(uint16_t* pc, int32_t token_size, Token* tokens);
 
 // updates iseq, returns err
-Val sb_vm_regexp_compile(struct Iseq* iseq, void* arena, Val patterns_dict, Val node);
+Val sb_vm_regexp_compile(struct Iseq* iseq, Val patterns_dict, Val node);
 
 void sb_vm_regexp_decompile(struct Iseq* iseq, int32_t start, int32_t size);
 
