@@ -13,6 +13,8 @@ A value-immutable, functional, dynamic language.
 
 # Build
 
+Required system: 64bits.
+
 Required build tools:
 
 - GCC or Clang

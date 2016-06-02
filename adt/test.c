@@ -293,7 +293,7 @@ void arena_suite() {
 #pragma mark ### run them all
 
 int main (int argc, char const *argv[]) {
-  // ccut_trap_asserts();
+  val_trap_backtrace(argv[0]);
   ccut_run_suite(base_suite);
   ccut_run_suite(gens_suite);
   ccut_run_suite(box_suite);

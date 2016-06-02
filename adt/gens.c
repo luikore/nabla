@@ -18,7 +18,7 @@ static void _init() {
   }
 }
 
-MUT_ARRAY_DECL(Arenas, Arena);
+MUT_ARRAY_DECL(Arenas, Arena*);
 
 static uint64_t mm_hash(uint64_t k) {
   return siphash(hash_key, (const uint8_t*)&k, 8);
@@ -36,8 +36,9 @@ struct GensStruct {
   struct MM checked_memory_map;
 };
 
-static void _heap_mem_insert(Gens* gens, void* p) {
-  MM.insert(&gens->checked_memory_map, (uint64_t)p, 0);
+static void _heap_mem_insert(Gens* gens, void* p, uint64_t size) {
+  assert(!VAL_IS_IMM((Val)p));
+  MM.insert(&gens->checked_memory_map, (uint64_t)p, size);
   if (val_is_tracing()) {
     printf("heap store: %p, current heap:\n", p);
     MMIter it;
@@ -68,8 +69,7 @@ Gens* nb_gens_new_gens() {
   Gens* g = malloc(sizeof(Gens));
   Arenas.init(&g->arenas, 4);
 
-  Arena stub_arena;
-  Arenas.push(&g->arenas, stub_arena); // arenas[0] is not used
+  Arenas.push(&g->arenas, NULL); // arenas[0] is not used
 
   MM.init(&g->checked_memory_map);
 
@@ -80,8 +80,8 @@ Gens* nb_gens_new_gens() {
 void nb_gens_delete_gens(Gens* g) {
   // skip 0 which doesn't require free
   for (int i = 1; i < Arenas.size(&g->arenas); i++) {
-    Arena* arena = Arenas.at(&g->arenas, i);
-    arena_cleanup(arena);
+    Arena* arena = *Arenas.at(&g->arenas, i);
+    arena_delete(arena);
   }
   Arenas.cleanup(&g->arenas);
   MM.cleanup(&g->checked_memory_map);
@@ -92,12 +92,17 @@ void* nb_gens_malloc(Gens* g, size_t size) {
   if (g->current == 0) {
     return malloc(size);
   } else if (g->current > 0) {
-    Arena* arena = Arenas.at(&g->arenas, g->current);
+    Arena* arena = *Arenas.at(&g->arenas, g->current);
     int qword_count = (size + 7) / 8;
-    return arena_slot_alloc(arena, qword_count);
+    void* p = arena_slot_alloc(arena, qword_count);
+    if (val_is_tracing()) {
+      printf("[nb_gens_malloc] gen: %d, arena: %p, size: %lu, qword: %u, res: %p\n",
+        g->current, arena, size, (unsigned)qword_count, p);
+    }
+    return p;
   } else {
     void* data = malloc(size);
-    _heap_mem_insert(g, data);
+    _heap_mem_insert(g, data, size);
     return data;
   }
 }
@@ -119,14 +124,13 @@ void* nb_gens_realloc(Gens* g, void* p, size_t osize, size_t nsize) {
     new_p = realloc(p, nsize);
   } else if (g->current > 0) {
     new_p = nb_gens_malloc(g, nsize);
-    if (new_p != p) {
-      memcpy(new_p, p, osize);
-      nb_gens_free(g, p);
-    }
+    assert(new_p != p);
+    memcpy(new_p, p, osize);
+    nb_gens_free(g, p);
   } else {
     new_p = realloc(p, nsize);
     _heap_mem_remove(g, p);
-    _heap_mem_insert(g, new_p);
+    _heap_mem_insert(g, new_p, nsize);
   }
 
   memset((char*)new_p + osize, 0, nsize - osize);
@@ -135,8 +139,7 @@ void* nb_gens_realloc(Gens* g, void* p, size_t osize, size_t nsize) {
 
 // add new gen, and return the number (doesn't select it)
 int32_t nb_gens_new_gen(Gens* g) {
-  Arena arena;
-  arena_init(&arena);
+  Arena* arena = arena_new();
   int index = Arenas.size(&g->arenas);
   Arenas.push(&g->arenas, arena);
   return index;
@@ -159,16 +162,25 @@ int32_t nb_gens_get_current(Gens* g) {
 
 // set current gen number
 void nb_gens_set_current(Gens* g, int32_t i) {
+  assert(-1 <= i);
+  assert(i <= (int32_t)Arenas.size(&g->arenas));
   g->current = i;
 }
 
 // drop generations after current
 void nb_gens_drop(Gens* g) {
   for (int i = g->current + 1; i < Arenas.size(&g->arenas); i++) {
-    Arena* arena = Arenas.at(&g->arenas, i);
-    arena_cleanup(arena);
+    Arena* arena = *Arenas.at(&g->arenas, i);
+    arena_delete(arena);
   }
   g->arenas.size = g->current;
+}
+
+#pragma mark ## debug functions
+
+void nb_gens_check_objects(Gens* g) {
+
+  // TODO check if memory overlap
 }
 
 void nb_gens_check_memory(Gens* g) {

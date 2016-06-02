@@ -324,21 +324,22 @@ void val_release(Val p);
 #define RETAIN(_obj_) val_retain((Val)(_obj_))
 #define RELEASE(_obj_) val_release((Val)(_obj_))
 
-#pragma mark ### allocator control
+#pragma mark ### gens control (just delegates gens)
 
-// - each thread has its own allocator list and current allocator
-// - allocators are indexed by int:
-//   * 0 for malloc
-//   * -1 for memory checker
-//   * >0 for arenas
+// create new generation (but not select it)
+int32_t val_gens_new_gen();
 
-void val_allocator_set(int i);
-int val_allocator_get();
-int val_allocator_new();
-void val_allocator_delete(int i);
+// return max gen number
+int32_t val_gens_max_gen();
 
-void val_allocator_check(); // see if memory allocated by checker are freed
-// allocators are re-numbered after delete
+// return current gen number
+int32_t val_gens_get_current();
+
+// set current gen number
+void val_gens_set_current(int32_t i);
+
+// drop generations after current
+void val_gens_drop();
 
 #pragma mark ### trace function
 
@@ -347,3 +348,6 @@ void val_allocator_check(); // see if memory allocated by checker are freed
 void val_begin_trace();
 bool val_is_tracing();
 void val_end_trace();
+
+// display backtrace on assertion failure
+void val_trap_backtrace(const char* program_name);

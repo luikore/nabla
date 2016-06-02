@@ -6,6 +6,8 @@
 #include "sym-table.h"
 #include "gens.h"
 #include <siphash.h>
+#include <execinfo.h>
+#include <signal.h>
 
 // TODO move static global fields into vm initialization?
 
@@ -510,18 +512,6 @@ void val_end_check_memory() {
   nb_gens_set_current(tl_runtime.gens, 0);
 }
 
-void val_begin_trace() {
-  runtime.global_tracing = true;
-}
-
-bool val_is_tracing() {
-  return runtime.global_tracing;
-}
-
-void val_end_trace() {
-  runtime.global_tracing = false;
-}
-
 void* val_alloc(uint32_t klass_id, size_t size) {
   ValHeader* p = nb_gens_malloc(tl_runtime.gens, size);
   memset(p, 0, size);
@@ -605,4 +595,69 @@ int64_t val_global_ref_count(Val v) {
   int64_t res;
   bool found = GlobalRefCounts.find(&runtime.global_ref_counts, v, &res);
   return found ? res : -1;
+}
+
+#pragma mark ### gens control (just delegates gens)
+
+int32_t val_gens_new_gen() {
+  return nb_gens_new_gen(tl_runtime.gens);
+}
+
+int32_t val_gens_max_gen() {
+  return nb_gens_max_gen(tl_runtime.gens);
+}
+
+int32_t val_gens_get_current() {
+  return nb_gens_get_current(tl_runtime.gens);
+}
+
+void val_gens_set_current(int32_t i) {
+  nb_gens_set_current(tl_runtime.gens, i);
+}
+
+void val_gens_drop() {
+  nb_gens_drop(tl_runtime.gens);
+}
+
+#pragma mark ### trace
+
+void val_begin_trace() {
+  runtime.global_tracing = true;
+}
+
+bool val_is_tracing() {
+  return runtime.global_tracing;
+}
+
+void val_end_trace() {
+  runtime.global_tracing = false;
+}
+
+static const char* _program_name;
+static void _print_trace(int n) {
+  void* callstack[128];
+  int i, frames = backtrace(callstack, 128);
+  char** strs = backtrace_symbols(callstack, frames);
+
+  printf("\n");
+  for (i = 0; i < frames; ++i) {
+    printf("%s\n", strs[i]);
+
+// not working and too slow:
+// https://spin.atomicobject.com/2013/01/13/exceptions-stack-traces-c/
+//     char cmd[256];
+// #   ifdef __APPLE__
+//     sprintf(cmd, "atos -o %.256s %p", _program_name, callstack[i]);
+// #   else
+//     sprintf(cmd, "addr2line -f -p -e %.256s %p", _program_name, callstack[i]);
+// #   endif
+//     system(cmd);
+  }
+
+  free(strs);
+}
+
+void val_trap_backtrace(const char* program_name) {
+  _program_name = program_name;
+  signal(SIGABRT, _print_trace);
 }

@@ -27,8 +27,6 @@ void nb_gens_set_current(Gens* g, int32_t i);
 // drop generations after current
 void nb_gens_drop(Gens* g);
 
-void nb_gens_check_memory(Gens* g);
-
 #pragma mark ## alloc functions
 
 void* nb_gens_malloc(Gens* g, size_t size);
@@ -37,3 +35,13 @@ void nb_gens_free(Gens* g, void* p);
 
 // for special mutable node. prereq: rc=1
 void* nb_gens_realloc(Gens* g, void* p, size_t osize, size_t nsize);
+
+// TODO evacuate functions
+
+#pragma mark ## debug functions
+
+// check allocated objects
+void nb_gens_check_objects(Gens* g);
+
+// check memory all freeed
+void nb_gens_check_memory(Gens* g);

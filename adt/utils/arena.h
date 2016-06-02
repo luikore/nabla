@@ -40,8 +40,17 @@ static Arena* arena_new() {
   return arena;
 }
 
+#include <stdbool.h>
+bool val_is_tracing();
 static void* arena_slot_alloc(Arena* arena, uint8_t qword_count) {
+  // TODO
+  // - refactor to use byte size
+  // - when size is very large, use single chunk
   assert(qword_count <= ARENA_CHUNK_SIZE);
+
+  if (val_is_tracing()) {
+    //content
+  }
 
   if (arena->head->i + qword_count > ARENA_CHUNK_SIZE) {
     ArenaChunk* chunk = malloc(sizeof(ArenaChunk));

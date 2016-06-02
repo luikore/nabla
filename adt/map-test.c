@@ -38,7 +38,7 @@ void map_suite() {
   ccut_test("map of many keys and int values") {
     val_begin_check_memory();
     Val map = nb_map_new_i();
-    int sz = 10000;
+    long sz = 10000;
     for (long i = 0; i < sz; i++) {
       REPLACE(map, nb_map_insert(map, VAL_FROM_INT(i), i));
       Val v = nb_map_find(map, VAL_FROM_INT(i));
@@ -57,6 +57,21 @@ void map_suite() {
     }
     RELEASE(map);
     val_end_check_memory();
+  }
+
+  ccut_test("map of many keys (and saved in gen)") {
+    int gen = val_gens_new_gen();
+    val_gens_set_current(gen);
+
+    Val map = nb_map_new();
+    long sz = 20000;
+
+    for (long i = 0; i < sz; i++) {
+      REPLACE(map, nb_map_insert(map, VAL_FROM_INT(i), VAL_TRUE));
+    }
+
+    val_gens_set_current(0);
+    val_gens_drop();
   }
 
   ccut_test("iter empty map") {
