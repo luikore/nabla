@@ -38,7 +38,7 @@ void map_suite() {
   ccut_test("map of many keys and int values") {
     val_begin_check_memory();
     Val map = nb_map_new_i();
-    int sz = 500;
+    int sz = 10000;
     for (long i = 0; i < sz; i++) {
       REPLACE(map, nb_map_insert(map, VAL_FROM_INT(i), i));
       Val v = nb_map_find(map, VAL_FROM_INT(i));

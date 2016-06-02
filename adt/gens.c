@@ -37,7 +37,6 @@ struct GensStruct {
 };
 
 static void _heap_mem_insert(Gens* gens, void* p) {
-  assert(!VAL_IS_PERM(p));
   MM.insert(&gens->checked_memory_map, (uint64_t)p, 0);
   if (val_is_tracing()) {
     printf("heap store: %p, current heap:\n", p);
