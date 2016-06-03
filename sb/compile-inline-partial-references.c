@@ -49,7 +49,7 @@ static void _expand_lex_def(struct ContextMap* context_map, Val name) {
   }
 
   // yes it allocs more, but necessary to keep the order consistent
-  ContextMap.insert(context_map, name, nb_cons_areverse(arena, res));
+  ContextMap.insert(context_map, name, nb_cons_reverse(res));
 }
 
 static void _remove_edges(DepNode** dep_network, int size, Val name) {
@@ -138,7 +138,7 @@ void sb_inline_partial_references(CompileCtx* ctx) {
       dep_network_size--;
       // _print_network(dep_network, dep_network_size);
       _remove_edges(dep_network, dep_network_size, name);
-      _expand_lex_def(ctx->arena, &context_map, name);
+      _expand_lex_def(&context_map, name);
     } else {
       log_err("loop dependency found:");
       _print_network(dep_network, dep_network_size);
@@ -157,10 +157,10 @@ void sb_inline_partial_references(CompileCtx* ctx) {
       if (nb_string_ptr(name)[0] != '*') {
         Val converted;
         ContextMap.find(&context_map, name, &converted);
-        res = nb_cons_anew(ctx->arena, child, res);
+        res = nb_cons_new(child, res);
       }
     } else {
-      res = nb_cons_anew(ctx->arena, child, res);
+      res = nb_cons_new(child, res);
     }
   }
 

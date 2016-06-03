@@ -159,7 +159,7 @@ void vm_regexp_suite() {
 
     struct Iseq iseq;
     Iseq.init(&iseq, 0);
-    sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
+    sb_vm_regexp_compile(&iseq, VAL_NIL, regexp);
     uint16_t expected[] = {CHAR, AS_ARG32('a'), MATCH, END};
     ASSERT_ISEQ_MATCH(expected, iseq);
 
@@ -175,7 +175,7 @@ void vm_regexp_suite() {
 
     struct Iseq iseq;
     Iseq.init(&iseq, 0);
-    sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
+    sb_vm_regexp_compile(&iseq, VAL_NIL, regexp);
     uint16_t expected[] = {CHAR, AS_ARG32('a'), CHAR, AS_ARG32('b'), MATCH, END};
     ASSERT_ISEQ_MATCH(expected, iseq);
 
@@ -190,7 +190,7 @@ void vm_regexp_suite() {
 
     struct Iseq iseq;
     Iseq.init(&iseq, 0);
-    sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
+    sb_vm_regexp_compile(&iseq, VAL_NIL, regexp);
     uint16_t expected[] = {
       FORK, AS_ARG32(5), AS_ARG32(11),
       /*5*/ CHAR, AS_ARG32('a'),
@@ -213,7 +213,7 @@ void vm_regexp_suite() {
     struct Iseq iseq;
     Iseq.init(&iseq, 5);
 
-    Val err = sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
+    Val err = sb_vm_regexp_compile(&iseq, VAL_NIL, regexp);
     assert_eq(VAL_NIL, err);
     // sb_vm_regexp_decompile(&iseq, 0, Iseq.size(&iseq));
     uint16_t expected[] = {
@@ -231,7 +231,7 @@ void vm_regexp_suite() {
     struct Iseq iseq;
     Iseq.init(&iseq, 5);
 
-    Val err = sb_vm_regexp_compile(&iseq, NULL, VAL_NIL, regexp);
+    Val err = sb_vm_regexp_compile(&iseq, VAL_NIL, regexp);
     assert_eq(VAL_NIL, err);
     // sb_vm_regexp_decompile(&iseq, 0, Iseq.size(&iseq));
     uint16_t expected[] = {
@@ -249,11 +249,12 @@ void vm_regexp_suite() {
     Val cg = _struct("BracketCharGroup", 2, (Val[]){VAL_FALSE, ranges});
     Val regexp = _struct("Regexp", 1, (Val[]){cg});
 
-    void* arena = val_arena_new();
+    int32_t gen = val_gens_new_gen();
+    val_gens_set_current(gen);
     struct Iseq iseq;
     Iseq.init(&iseq, 5);
 
-    Val err = sb_vm_regexp_compile(&iseq, arena, VAL_NIL, regexp);
+    Val err = sb_vm_regexp_compile(&iseq, VAL_NIL, regexp);
     assert_eq(VAL_NIL, err);
     // sb_vm_regexp_decompile(&iseq, 0, Iseq.size(&iseq));
     int range_ops = 0;
@@ -265,7 +266,8 @@ void vm_regexp_suite() {
     assert_eq(2, range_ops);
 
     Iseq.cleanup(&iseq);
-    val_arena_delete(arena);
+    val_gens_set_current(0);
+    val_gens_drop();
     RELEASE(regexp);
   }
 
@@ -278,11 +280,12 @@ void vm_regexp_suite() {
     Val outer_cg = _struct("BracketCharGroup", 2, (Val[]){VAL_TRUE, outer});
     Val regexp = _struct("Regexp", 1, (Val[]){outer_cg});
 
-    void* arena = val_arena_new();
+    int32_t gen = val_gens_new_gen();
+    val_gens_set_current(gen);
     struct Iseq iseq;
     Iseq.init(&iseq, 5);
 
-    Val err = sb_vm_regexp_compile(&iseq, arena, VAL_NIL, regexp);
+    Val err = sb_vm_regexp_compile(&iseq, VAL_NIL, regexp);
     assert_eq(VAL_NIL, err);
     // sb_vm_regexp_decompile(&iseq, 0, Iseq.size(&iseq));
 
@@ -299,7 +302,8 @@ void vm_regexp_suite() {
     assert_eq(true, res);
 
     Iseq.cleanup(&iseq);
-    val_arena_delete(arena);
+    val_gens_set_current(0);
+    val_gens_drop();
     RELEASE(regexp);
   }
 
@@ -412,11 +416,16 @@ void vm_regexp_suite() {
     Val seq = _struct("Seq", 1, (Val[]){seq_content});
     Val regexp = _struct("Regexp", 1, (Val[]){seq});
 
-    void* arena = val_arena_new();
-    Val err = sb_vm_regexp_compile(&iseq, arena, VAL_NIL, regexp);
+    int32_t gen = val_gens_new_gen();
+    val_gens_set_current(gen);
+
+    Val err = sb_vm_regexp_compile(&iseq, VAL_NIL, regexp);
     assert_eq(VAL_NIL, err);
     RELEASE(regexp);
-    val_arena_delete(arena);
+
+    val_gens_set_current(0);
+    val_gens_drop();
+
     // sb_vm_regexp_decompile(&iseq, 0, Iseq.size(&iseq));
 
     int32_t captures[20];
