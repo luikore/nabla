@@ -5,6 +5,7 @@
 #include "sb.h"
 #include <adt/dict.h>
 
+Val sb_check_names_conflict(Val ast);
 void sb_inline_partial_references(CompileCtx* ctx);
 void sb_build_patterns_dict(CompileCtx* ctx);
 void sb_build_vars_dict(CompileCtx* ctx);

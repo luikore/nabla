@@ -3,12 +3,15 @@ require "strscan"
 Klasses = {}
 class << Klasses
   def add ty, args
-    if self[ty]
-      if self[ty] != args
-        raise "conflict fields for #{ty}: #{self[ty].inspect} -- #{args.inspect}"
-      end
-    else
-      self[ty] = args
+    self[ty] = args
+  end
+
+  def validate struct
+    name = struct.name[/\w+$/]
+    members = struct.members.map &:to_s
+    args = self[name]
+    if args != members
+      raise "mismatch struct #{name}:\n    sb.sb: #{args}\n  mini-sb: #{members}"
     end
   end
 end

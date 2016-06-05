@@ -19,6 +19,8 @@ Required build tools:
 
 - GCC or Clang
 - GNU Make
+- grep
+- ls
 
 For building in windows, you can install [MSYS2](msys2.github.io) and use pacman to install the requirements.
 

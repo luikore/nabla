@@ -5,25 +5,26 @@
 #   node.eval #=> output
 
 # NOTE
-# literals are translated into immediate values `VAL_NIL` (no need boxing, since strings are literals)
+# - literals are translated into immediate values `VAL_NIL` (no need boxing, since strings are literals)
+# - no need to parse if
 
 require_relative "mini-common"
 
 class MiniCallback
 
   Callback = Struct.new :stmts
-  Klasses.add 'Callback', ['stmts']
   class Callback
     def eval
+      Klasses.validate self.class
       multi = build_list stmts.map &:eval
       "NODE(Callback, 1, #{multi})"
     end
   end
 
   VarDecl = Struct.new :var_name
-  Klasses.add 'VarDecl', ['var_name']
   class VarDecl
     def eval
+      Klasses.validate self.class
       "NODE(VarDecl, 1, #{var_name.eval})"
     end
 
@@ -34,32 +35,32 @@ class MiniCallback
 
   # in bootstrap, no assign expression needed yet
   Assign = Struct.new :var_name, :expr
-  Klasses.add 'Assign', ['var_name', 'expr']
   class Assign
     def eval
+      Klasses.validate self.class
       "NODE(Assign, 2, #{var_name.eval}, #{expr.eval})"
     end
   end
 
-  Call = Struct.new :func_name, :args
-  Klasses.add 'Call', ['func_name', 'args']
+  Call = Struct.new :func_name, :argv
   class Call
     def self.funcs
       @funcs ||= []
     end
 
     def eval
-      Call.funcs << [func_name.to_s, args.size]
+      Klasses.validate self.class
+      Call.funcs << [func_name.to_s, argv.size]
 
-      multi = build_list args.map &:eval
+      multi = build_list argv.map &:eval
       "NODE(Call, 2, #{func_name.eval}, #{multi})"
     end
   end
 
   SplatEntry = Struct.new :expr
-  Klasses.add 'SplatEntry', ['expr']
   class SplatEntry
     def eval
+      Klasses.validate self.class
       "NODE(SplatEntry, 1, #{expr.eval})"
     end
   end
@@ -76,35 +77,35 @@ class MiniCallback
   end
 
   CreateNode = Struct.new :ty, :elems
-  Klasses.add 'CreateNode', ['ty', 'elems']
   class CreateNode
     def eval
+      Klasses.validate self.class
       multi = build_list elems.map &:eval
       "NODE(CreateNode, 2, #{ty.eval}, #{multi})"
     end
   end
 
   CreateList = Struct.new :elems
-  Klasses.add 'CreateList', ['elems']
   class CreateList
     def eval
+      Klasses.validate self.class
       multi = build_list elems.map &:eval
       "NODE(CreateList, 1, #{multi})"
     end
   end
 
   Capture = Struct.new :var_name
-  Klasses.add 'Capture', ['var_name']
   class Capture
     def eval
+      Klasses.validate self.class
       "NODE(Capture, 1, #{var_name.eval})"
     end
   end
 
   VarRef = Struct.new :var_name
-  Klasses.add 'VarRef', ['var_name']
   class VarRef
     def eval
+      Klasses.validate self.class
       "NODE(VarRef, 1, #{var_name.eval})"
     end
   end
@@ -217,7 +218,7 @@ class MiniCallback
     end
   end
 
-  # CreateNode: name.type begin.list Entry* end.list
+  # CreateNode: name.type begin.list Entries end.list
   def parse_create_node
     if ty = @s.scan(/[A-Z]\w*/)
       raise "expect '[': #{@s.inspect}" if !@s.scan(/\[\ */)
@@ -227,7 +228,7 @@ class MiniCallback
     end
   end
 
-  # CreateList: begin.list Entry* end.list
+  # CreateList: begin.list Entries end.list
   def parse_create_list
     if @s.scan(/\[\ */)
       args = expect :parse_entries
@@ -236,7 +237,7 @@ class MiniCallback
     end
   end
 
-  # Entry: Expr / op.prefix.splat Expr / space.eol
+  # Entries: Expr / Entries / op.prefix.splat Expr Entries / space.eol Entries / EPSILON
   def parse_entries
     entries = []
     loop do
@@ -260,7 +261,7 @@ class MiniCallback
     entries
   end
 
-  # expr / eol
+  # Lines: Expr Lines / space.eol Lines / EPSILON
   def parse_lines
     lines = []
     loop do

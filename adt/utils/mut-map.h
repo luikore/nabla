@@ -20,7 +20,10 @@
 //     i.slot->v;
 //   }
 
-// See bottom of this file for API
+// internal:
+//   each slot inlines the first key and value, so
+//   when inserting to an empty slot, no dynamic allocation for entry is required.
+//   when inserting to a non-empty slot, malloc a new entry and link.
 
 // NOTE this simple hash map does not take charge of memory management of k and v
 // NOTE this is a bit tricky since the type and static object are both named MyMap

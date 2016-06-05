@@ -2,6 +2,7 @@
 #include <adt/utils/utf-8.h>
 #include <adt/utils/str.h>
 #include "vm-regexp-op-codes.h"
+#include "labels.h"
 
 Val sb_vm_regexp_from_string(struct Iseq* iseq, Val s) {
   if (VAL_KLASS(s) != KLASS_STRING) {
@@ -21,7 +22,6 @@ Val sb_vm_regexp_from_string(struct Iseq* iseq, Val s) {
 }
 
 MUT_ARRAY_DECL(Stack, Val);
-MUT_ARRAY_DECL(Ints, int);
 
 static Val MATCH_NODE=0, LABEL_NODE=0, JMP_NODE=0, FORK_NODE=0, ATOMIC_NODE=0, SAVE_NODE=0;
 
@@ -35,12 +35,6 @@ static void _ensure_tags() {
     ATOMIC_NODE = (Val)(ptr + 4);
     SAVE_NODE = (Val)(ptr + 5);
   }
-}
-
-static int _new_label(struct Ints* labels) {
-  int i = Ints.size(labels);
-  Ints.push(labels, 0);
-  return i;
 }
 
 static void _push_label(struct Stack* stack, Val label) {
@@ -71,7 +65,7 @@ static void _push_seq(struct Stack* stack, Val seq) {
   }
 }
 
-static void _push_branches(struct Stack* stack, struct Ints* labels, Val branches) {
+static void _push_branches(struct Stack* stack, struct Labels* labels, Val branches) {
   /* example encoding e1 | e2 | e3
 
     fork L1 L2
@@ -89,7 +83,7 @@ static void _push_branches(struct Stack* stack, struct Ints* labels, Val branche
 
   */
 
-  Val label0 = _new_label(labels);
+  Val label0 = LABEL_NEW_NUM(labels);
   _push_label(stack, label0);
   Val tail = branches;
   if (tail != VAL_NIL) {
@@ -99,8 +93,8 @@ static void _push_branches(struct Stack* stack, struct Ints* labels, Val branche
 
   for (; tail != VAL_NIL; tail = nb_cons_tail(tail)) {
 
-    Val label1 = _new_label(labels);
-    Val label2 = _new_label(labels);
+    Val label1 = LABEL_NEW_NUM(labels);
+    Val label2 = LABEL_NEW_NUM(labels);
 
     _push_label(stack, label2);
     _push_jmp(stack, label0);
@@ -111,7 +105,7 @@ static void _push_branches(struct Stack* stack, struct Ints* labels, Val branche
   }
 }
 
-static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node) {
+static void _push_quantified(struct Stack* stack, struct Labels* labels, Val node) {
   Val e = nb_struct_get(node, 0);
   Val quantifier = nb_struct_get(node, 1);
 
@@ -124,8 +118,8 @@ static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node)
         // fork L1 L2
         // L1: e
         // L2:
-        Val l1 = _new_label(labels);
-        Val l2 = _new_label(labels);
+        Val l1 = LABEL_NEW_NUM(labels);
+        Val l2 = LABEL_NEW_NUM(labels);
         _push_label(stack, l2);
         Stack.push(stack, e);
         _push_label(stack, l1);
@@ -136,8 +130,8 @@ static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node)
         // L1: e
         // fork L1 L2
         // L2
-        Val l1 = _new_label(labels);
-        Val l2 = _new_label(labels);
+        Val l1 = LABEL_NEW_NUM(labels);
+        Val l2 = LABEL_NEW_NUM(labels);
         _push_label(stack, l2);
         _push_fork(stack, l1, l2);
         Stack.push(stack, e);
@@ -149,9 +143,9 @@ static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node)
         // L2: e
         // jmp L1
         // L3:
-        Val l1 = _new_label(labels);
-        Val l2 = _new_label(labels);
-        Val l3 = _new_label(labels);
+        Val l1 = LABEL_NEW_NUM(labels);
+        Val l2 = LABEL_NEW_NUM(labels);
+        Val l3 = LABEL_NEW_NUM(labels);
         _push_label(stack, l3);
         _push_jmp(stack, l1);
         Stack.push(stack, e);
@@ -169,8 +163,8 @@ static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node)
             // fork L2 L1
             // L1: e
             // L2:
-            Val l1 = _new_label(labels);
-            Val l2 = _new_label(labels);
+            Val l1 = LABEL_NEW_NUM(labels);
+            Val l2 = LABEL_NEW_NUM(labels);
             _push_label(stack, l2);
             Stack.push(stack, e);
             _push_label(stack, l1);
@@ -181,8 +175,8 @@ static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node)
             // L1: e
             // fork L2 L1
             // L2:
-            Val l1 = _new_label(labels);
-            Val l2 = _new_label(labels);
+            Val l1 = LABEL_NEW_NUM(labels);
+            Val l2 = LABEL_NEW_NUM(labels);
             _push_label(stack, l2);
             _push_fork(stack, l2, l1);
             Stack.push(stack, e);
@@ -194,9 +188,9 @@ static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node)
             // L2: e
             // jmp L1
             // L3:
-            Val l1 = _new_label(labels);
-            Val l2 = _new_label(labels);
-            Val l3 = _new_label(labels);
+            Val l1 = LABEL_NEW_NUM(labels);
+            Val l2 = LABEL_NEW_NUM(labels);
+            Val l3 = LABEL_NEW_NUM(labels);
             _push_label(stack, l3);
             _push_jmp(stack, l1);
             Stack.push(stack, e);
@@ -209,7 +203,7 @@ static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node)
         break;
       }
       case '+': { // possessive
-        Val l = _new_label(labels);
+        Val l = LABEL_NEW_NUM(labels);
         _push_label(stack, l);
         Val args[] = {e, nb_string_new_literal(1, ptr)};
         Val node = nb_struct_new(VAL_KLASS(node), 2, args);
@@ -225,7 +219,7 @@ static void _push_quantified(struct Stack* stack, struct Ints* labels, Val node)
 // negative range: returns 1
 // from > to: returns 2
 // range overflow: returns 3
-static int _push_quantified_range(struct Stack* stack, struct Ints* labels, Val node) {
+static int _push_quantified_range(struct Stack* stack, struct Labels* labels, Val node) {
   // node[e, from, to?, reluctant/possessive mark]
   Val e = nb_struct_get(node, 0);
   Val v_from = nb_struct_get(node, 1);
@@ -261,8 +255,8 @@ static int _push_quantified_range(struct Stack* stack, struct Ints* labels, Val 
     // fork L1 L2
     // L1: e
     // L2:
-    Val l1 = _new_label(labels);
-    Val l2 = _new_label(labels);
+    Val l1 = LABEL_NEW_NUM(labels);
+    Val l2 = LABEL_NEW_NUM(labels);
     _push_label(stack, l2);
     Stack.push(stack, e);
     _push_label(stack, l1);
@@ -435,7 +429,7 @@ static Val _invert_ranges(Val list, uint32_t range_klass) {
     Val* range = Vals.at(&vals, i);
     int32_t from = (int32_t)VAL_TO_INT(nb_struct_get(*range, 0));
     int32_t to = (int32_t)VAL_TO_INT(nb_struct_get(*range, 1));
-    printf("\n\n%d,%d,%d,%d\n\n", from, to, last_from, last_to);
+    // printf("\n\n%d,%d,%d,%d\n\n", from, to, last_from, last_to);
     if (from > last_to + 1) { // disjoint
       Val e = nb_struct_new(range_klass, 2, (Val[]){VAL_FROM_INT(last_to + 1), VAL_FROM_INT(from - 1)});
       res = nb_cons_new(e, res);
@@ -488,7 +482,7 @@ static Val _flatten_char_group(Val node, bool ignore_case, Val result_list) {
   }
 }
 
-static void _encode_char_group(struct Iseq* iseq, struct Ints* labels, struct Ints* label_refs, Val ranges) {
+static void _encode_char_group(struct Iseq* iseq, struct Labels* labels, Val ranges) {
   // example encoding of [a-b c-d e-f]:
   //   jif_range a b L0
   //   jif_range c d L0
@@ -496,14 +490,14 @@ static void _encode_char_group(struct Iseq* iseq, struct Ints* labels, struct In
   //   die
   //   L0:
 
-  int32_t l0 = _new_label(labels);
+  int32_t l0 = LABEL_NEW_NUM(labels);
   for (Val tail = ranges; tail != VAL_NIL; tail = nb_cons_tail(tail)) {
     Val head = nb_cons_head(tail);
     int32_t from = (int32_t)VAL_TO_INT(nb_struct_get(head, 0));
     int32_t to = (int32_t)VAL_TO_INT(nb_struct_get(head, 1));
     Arg323232 payload = {JIF_RANGE, from, to, l0};
     ENCODE(iseq, Arg323232, payload);
-    Ints.push(label_refs, Iseq.size(iseq) - 2); // last 2-bytes
+    LABEL_REF(labels, Iseq.size(iseq) - 2); // last 2-bytes
   }
 
   // die
@@ -511,16 +505,7 @@ static void _encode_char_group(struct Iseq* iseq, struct Ints* labels, struct In
 
   // L0:
   int offset = Iseq.size(iseq);
-  *Ints.at(labels, l0) = offset;
-}
-
-static void _translate_label_pos(struct Iseq* iseq, struct Ints* labels, struct Ints* label_refs) {
-  int refs_size = Ints.size(label_refs);
-  for (int i = 0; i < refs_size; i++) {
-    int j = *Ints.at(label_refs, i);
-    int32_t* ptr = (int32_t*)Iseq.at(iseq, j);
-    ptr[0] = *Ints.at(labels, ptr[0]);
-  }
+  LABEL_DEF(labels, l0, offset);
 }
 
 Val sb_vm_regexp_compile(struct Iseq* iseq, Val patterns_dict, Val node) {
@@ -540,12 +525,15 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, Val patterns_dict, Val node) {
   bool ignore_case = false;
   int max_capture = 0;
   struct Stack stack;
-  struct Ints labels, label_refs;
+  struct Labels labels;
   Stack.init(&stack, 25);
-  Ints.init(&labels, 15);
-  Ints.init(&label_refs, 15);
+  Labels.init(&labels);
 
   /*
+  A compile stack is used to eliminate recursion and reduce physical stack usage.
+  If a node requires encoding "summarizing" part after encoding children nodes,
+  a special sequence is pushed to compile stack.
+
   compile stack layout
   - nodes to process are pushed from back to forth.
     since list nodes are already constructed in reverse order,
@@ -559,10 +547,9 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, Val patterns_dict, Val node) {
     - save:   [n, SAVE_NODE]
 
   encoding of fork, jmp & labels
-  1. create label nodes, only number is stored.
-  2. generate label node: fill curr pos in Ints.
-     generate fork/jmp node: encode label numbers instead.
-  3. go through Splits and Jmps, replace all label numbers with label pos.
+  1. if meet a label node: fill labels.size as label_num, increase lables.size
+  2. if meet a node that refs label: encode label_num instead
+  3. go through Splits and Jmps, replace all label numbers with label pos
   */
 
   Stack.push(&stack, MATCH_NODE);
@@ -574,22 +561,22 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, Val patterns_dict, Val node) {
     Val curr = Stack.pop(&stack);
 
     if (curr == LABEL_NODE) {
-      Val num = Stack.pop(&stack);
+      Val label_num = Stack.pop(&stack);
       int offset = Iseq.size(iseq);
-      *Ints.at(&labels, num) = offset;
+      LABEL_DEF(&labels, label_num, offset);
       continue;
 
     } else if (curr == FORK_NODE) {
       int32_t offset1 = (int32_t)Stack.pop(&stack);
       int32_t offset2 = (int32_t)Stack.pop(&stack);
-      Ints.push(&label_refs, Iseq.size(iseq) + 1); // offset1
-      Ints.push(&label_refs, Iseq.size(iseq) + 3); // offset2
+      LABEL_REF(&labels, Iseq.size(iseq) + 1); // offset1
+      LABEL_REF(&labels, Iseq.size(iseq) + 3); // offset2
       ENCODE(iseq, Arg3232, ((Arg3232){FORK, offset1, offset2}));
       continue;
 
     } else if (curr == JMP_NODE) {
       int32_t offset = Stack.pop(&stack);
-      Ints.push(&label_refs, Iseq.size(iseq) + 1);
+      LABEL_REF(&labels, Iseq.size(iseq) + 1);
       ENCODE(iseq, Arg32, ((Arg32){JMP, offset}));
       continue;
 
@@ -599,7 +586,7 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, Val patterns_dict, Val node) {
 
     } else if (curr == ATOMIC_NODE) {
       int32_t offset = (int32_t)Stack.pop(&stack);
-      Ints.push(&label_refs, Iseq.size(iseq) + 1);
+      LABEL_REF(&labels, Iseq.size(iseq) + 1);
       ENCODE(iseq, Arg32, ((Arg32){ATOMIC, offset}));
       continue;
 
@@ -629,8 +616,7 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, Val patterns_dict, Val node) {
       int res = _push_quantified_range(&stack, &labels, curr);
       if (res != 0) {
         Stack.cleanup(&stack);
-        Ints.cleanup(&labels);
-        Ints.cleanup(&label_refs);
+        Labels.cleanup(&labels);
         return nb_string_new_literal_c("bad char range");
       }
 
@@ -648,7 +634,7 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, Val patterns_dict, Val node) {
 
     } else if (klass == kBracketCharGroup) {
       Val ranges = _flatten_char_group(curr, ignore_case, VAL_NIL);
-      _encode_char_group(iseq, &labels, &label_refs, ranges);
+      _encode_char_group(iseq, &labels, ranges);
 
     } else if (klass == kFlag) {
       Val flag = nb_struct_get(curr, 0);
@@ -662,17 +648,15 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, Val patterns_dict, Val node) {
 
     } else {
       Stack.cleanup(&stack);
-      Ints.cleanup(&labels);
-      Ints.cleanup(&label_refs);
+      Labels.cleanup(&labels);
       return nb_string_new_f("unrecognized AST node klass %u", klass);
     }
   }
 
-  _translate_label_pos(iseq, &labels, &label_refs);
+  LABEL_TRANSLATE(&labels, iseq);
 
   Stack.cleanup(&stack);
-  Ints.cleanup(&labels);
-  Ints.cleanup(&label_refs);
+  Labels.cleanup(&labels);
 
   ENCODE(iseq, uint16_t, END);
   return VAL_NIL;

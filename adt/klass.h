@@ -18,7 +18,7 @@ typedef struct {
   union {
     void* code;
     ValMethodFunc func;
-    ValMethodFunc2 func2;
+    ValMethodFuncV func2;
   } as;
 } Method;
 

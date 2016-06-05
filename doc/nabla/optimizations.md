@@ -1,0 +1,12 @@
+- Baseline JIT just inlines jumps and procedure calls.
+- Inline cache for most probably method entries, so JIT can determine whether inline it or not.
+- For JIT, low level part of the bytecode is generated, to:
+  - Eliminate consecutive value conversion calls
+  - Eliminate reference calls
+  - The low level bytecode is also used for static typed code targets
+- Longer, aligned 128bit bytecode with annotation or smaller bytecode just 16-bit aligned?
+- On-stack allocation of values, structs
+- Eliminate structs that doesn't escape
+- Eliminate dead code.
+- Constant folding.
+- Use mutable gpz structs when a variable can be replaced by results.

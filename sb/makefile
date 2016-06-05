@@ -1,10 +1,13 @@
 target = libsb.a
 default: $(target)
 
-files = bootstrap sb compile* vm-lex vm-lex-compile vm-regexp vm-regexp-compile vm-peg vm-peg-compile
-objects = $(addsuffix .o, $(files))
-test_srcs = bootstrap-test.c vm-*-test.c test.c
-test_srcs += $(addsuffix .c, $(files))
+# NOTE makefile doesn't expand '*', it may work but may generate file names containing '*'
+
+srcs = bootstrap.c sb.c $(shell ls -1 compile*.c) $(shell ls -1 vm-*.c | grep -v test.c)
+src_bases = $(subst .c,,$(srcs))
+objects = $(addsuffix .o, $(src_bases))
+test_srcs = bootstrap-test.c $(shell ls -1 vm-*-test.c) test.c
+test_srcs += $(addsuffix .c, $(src_bases))
 
 -include ../makefile-config
 -include *.d

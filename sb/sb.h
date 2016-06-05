@@ -6,15 +6,23 @@
 #include <adt/cons.h>
 #include <adt/utils/mut-array.h>
 
+MUT_ARRAY_DECL(Iseq, uint16_t);
+
 // klass data
 // definition of a language
 // NOTE:
 //   actions are defined as instance methods
 //   nodes are defined as structs inside the klass
 typedef struct {
-  // for initializing Ctx
-  Val lex_dict; // perm {name: lexer*}
-  Val peg_dict; // perm {name: parser*}
+  struct Iseq iseq;
+
+  // {kind('l' for lex, 'p' for peg) + name => pc_in_int}
+  // it can be built with either:
+  // - parsing spellbreak file
+  // - loading a bytecode dump
+  // using a dict instead of mutable map reduces code complexity of rebuilding a map keyed by string & arena allocation optimizations
+  Val context_dict;
+
   int32_t vars_size;
   bool compiled;
 } SpellbreakMData;
@@ -49,9 +57,11 @@ typedef struct {
   int32_t captures[20]; // begin: i*2, end: i*2+1
   struct TokenStream token_stream; // not copied
 
-  Val lex_dict; // {name: lexer*}, from mdata
-  Val peg_dict; // {name: parser*}, from mdata
+  // following fields are copied from SpellbreakMData
+  Val context_dict;
+  struct Iseq* iseq;
 
+  // TODO use dual stack
   struct Vals stack;
   struct ContextStack context_stack;
   struct Vals vars; // for all globals and locals
@@ -70,12 +80,12 @@ uint32_t sb_klass();
 // returns syntax klass by generating from node
 uint32_t sb_new_syntax(uint32_t name_str);
 
-// read *.sb call-seq:
+// To generate a class as a parser for a new syntax:
 //   klass = sb_new_syntax(...);
-//   ... define additional actions on it
-//   sb = sb_new_sb();
+//   ... define additional actions on it, actions can be invoked in lexer callback
+//   sb = sb_new(spellbreak_klass);
 //   ast = sb_parse(sb, src, size);
-//   sb_syntax_compile(sb->arena, src, size, klass);
+//   sb_syntax_compile(ast, klass);
 //   val_free(sb);
 void sb_syntax_compile(Val ast, uint32_t target_klass);
 
@@ -96,33 +106,39 @@ Val sb_parse(Spellbreak* sb, const char* src, int64_t size);
 
 typedef struct {
   Val ast; // we may transform ast
-
-  Val lex_dict;
-  Val peg_dict;
-
-  void* arena;
-  Val patterns_dict; // {"name": regexp_node}
+  Val patterns_dict; // {"name": regexp_node}, built from ast
   Val vars_dict;     // {"context:name": true}
+
+  // the following fields will be passed to runtime Spellbreak
+
+  Val context_dict;
+  struct Iseq iseq;
 } CompileCtx;
 
 // returns compile error
 Val sb_compile_main(CompileCtx* ctx);
 
+#pragma mark ### operations to context_dict
+
+void sb_compile_context_dict_insert(CompileCtx* ctx, Val name, char kind, int32_t offset);
+
+int32_t sb_compile_context_dict_find(Val context_dict, Val name, char kind);
+
 #pragma mark ### vm functions
 
-MUT_ARRAY_DECL(Iseq, uint16_t);
+// updates iseq, returns err
+Val sb_vm_lex_compile(struct Iseq* iseq, Val patterns_dict, Val vars_dict, Val node);
 
-// updates ctx->lex_dict, returns err
-Val sb_vm_lex_compile(CompileCtx* ctx, Val lex_node);
 // returns {res, err}
 ValPair sb_vm_lex_exec(Spellbreak* sb);
 
-// updates ctx->peg_dict, returns err
-Val sb_vm_peg_compile(CompileCtx* ctx, Val node);
+// updates iseq, returns err
+Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, Val node);
 
 void sb_vm_peg_decompile(struct Iseq* iseq, int32_t start, int32_t size);
 
 // returns {res, err}
+// klass is for looking up pure functions (they can use a nil as receiver)
 ValPair sb_vm_peg_exec(uint16_t* pc, int32_t token_size, Token* tokens);
 
 // updates iseq, returns err

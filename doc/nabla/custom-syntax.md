@@ -163,6 +163,12 @@ string example
 
 ## custom syntax usage ideas and examples
 
+### String formatter scanf / sprintf
+
+Not use a special syntax for it:
+
+We should allow runtime building formatters, and dynamic compiler should be able to optimize the formatting process.
+
 ### Shaders
 
     $|glsl|
@@ -300,20 +306,16 @@ pure methods can be captured as predicates
 
 ### Array programming
 
+todo: also take advantage of array programming for auto differenciation?
+
 ### C ext
 
-C inline
-
-    $|c_inline|.exec {include_paths: ..., lib_paths: ..., libs: ..., target: 'exe'}
+    $|c|.call "main" argv
+      #pragma compile -I ... -L ... -o ...
       #include <stdio.h>
       main() {
           printf("hello world\n");
       }
-
-C ext ffi (with default header and linking)
-
-    $|c|.call "printf" "hello world"
-      #include <stdio.h>
 
 ### Comprehension
 
@@ -338,6 +340,8 @@ fibonacci seq
     $(seq 1, 2, 3, 5, ...)
 
 ### Assertion
+
+Assert result and print the assignment of whole AST
 
     $|assert|
       ...

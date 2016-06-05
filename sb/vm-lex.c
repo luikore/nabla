@@ -22,7 +22,6 @@ ValPair sb_vm_lex_exec(Spellbreak* sb) {
     [NOP] = &&label_NOP
   };
 
-  Val iseq;
   bool matched;
   uint16_t* pc;
   Val err;
@@ -38,10 +37,12 @@ ValPair sb_vm_lex_exec(Spellbreak* sb) {
     .token_pos = 0,\
     .curr = sb->curr\
   };\
-  if (!nb_dict_find(sb->lex_dict, val_strlit_ptr(name), val_strlit_byte_size(name), &iseq)) {\
+  int32_t offset = sb_compile_context_dict_find(sb->context_dict, name, 'l');\
+  if (offset < 0) {\
     err = nb_string_new_f("can't find lex: %.*s", (int)val_strlit_byte_size(name), val_strlit_ptr(name));\
     goto terminate;\
   }\
+  pc = Iseq.at(sb->iseq, offset);\
   ContextStack.push(&sb->context_stack, ce);\
 })
 # define CTX_POP() ContextStack.pop(&sb->context_stack)
@@ -50,7 +51,7 @@ ValPair sb_vm_lex_exec(Spellbreak* sb) {
   for (;;) {
 begin:
     matched = false;
-    pc = Iseq.at((struct Iseq*)iseq, 0);
+    pc = Iseq.at(sb->iseq, 0);
     DISPATCH;
     switch(*pc) {
       CASE(PUSH): {
@@ -115,14 +116,14 @@ begin:
         Val cond = STACK_POP();
         int32_t offset = DECODE(Arg32, pc).arg1;
         if (!VAL_IS_TRUE(cond)) {
-          pc += offset;
+          pc = Iseq.at(sb->iseq, offset);
         }
         DISPATCH;
       }
 
       CASE(JMP): {
         int32_t offset = DECODE(Arg32, pc).arg1;
-        pc += offset;
+        pc = Iseq.at(sb->iseq, offset);
         DISPATCH;
       }
 
@@ -132,9 +133,9 @@ begin:
         matched = sb_vm_regexp_exec(pc, sb->s + sb->size - sb->curr, sb->curr, sb->captures);
         if (matched) {
           sb->curr += sb->captures[1];
-          pc += offsets.arg1;
+          pc = Iseq.at(sb->iseq, offsets.arg1);
         } else {
-          pc += offsets.arg2;
+          pc = Iseq.at(sb->iseq, offsets.arg2);
         }
         DISPATCH;
       }
@@ -146,9 +147,9 @@ begin:
         matched = sb_string_match(str, sb->s + sb->size - sb->curr, sb->curr, &sb->capture_size, sb->captures);
         if (matched) {
           sb->curr += sb->captures[1];
-          pc += offsets.arg1;
+          pc = Iseq.at(sb->iseq, offsets.arg1);
         } else {
-          pc += offsets.arg2;
+          pc = Iseq.at(sb->iseq, offsets.arg2);
         }
         DISPATCH;
       }
@@ -187,5 +188,6 @@ terminate:
 }
 
 bool sb_string_match(Val pattern_str, int64_t size, const char* str, int32_t* capture_size, int32_t* captures) {
+  // todo
   return false;
 }

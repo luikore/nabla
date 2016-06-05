@@ -19,7 +19,7 @@ void struct_suite() {
       {.matcher = VAL_UNDEF, .field_id = val_strlit_new_c("baz")}
     };
     uint32_t klass = nb_struct_def(nb_string_new_literal_c("Foo"), 0, 3, fields);
-    klass_def_method2(klass, val_strlit_new_c("sum"), 2, 2, foo_sum, true);
+    klass_def_method_v(klass, val_strlit_new_c("sum"), 2, 2, foo_sum, true);
     klass_prepared = true;
   }
 

@@ -7,8 +7,10 @@
 typedef struct {
   int32_t offset;
   uint32_t pos;
+  int32_t stack_offset;
 } Branch;
 
+// manage PEG prioritized branches
 MUT_ARRAY_DECL(BranchStack, Branch);
 
 MUT_ARRAY_DECL(Stack, Val);
@@ -62,7 +64,6 @@ ValPair sb_vm_peg_exec(uint16_t* peg, int32_t token_size, Token* tokens) {
 # define CASE(op) case op:
 # define DISPATCH continue
 
-  // code size;
   uint32_t rule_size = DECODE(ArgU32, pc).arg1;
   memoize_table = malloc(rule_size * token_size * sizeof(Val));
   for (int i = 0; i < rule_size * token_size; i++) {
@@ -70,13 +71,17 @@ ValPair sb_vm_peg_exec(uint16_t* peg, int32_t token_size, Token* tokens) {
   }
 
   for (;;) {
+    // if (val_is_tracing()) {
+    //   // debug breakpoint
+    // }
     switch (*pc) {
       CASE(TERM) {
         if (pos == token_size) {
-          goto not_matched;
+          goto pop_cond;
         }
         uint32_t tok = DECODE(ArgU32, pc).arg1;
         if (tok == tokens[pos].ty) {
+          _PUSH(tokens[pos].v); // TODO slice token string?
           pos++;
           DISPATCH;
         }
@@ -87,10 +92,12 @@ pop_cond:
           Branch br = BranchStack.pop(&br_stack);
           pc = peg + br.offset;
           pos = br.pos;
+          stack.size = br.stack_offset; // TODO free to the end
           DISPATCH;
         } else if (bp == 0) {
           goto not_matched;
         } else {
+          // TODO also make use of branch stack here?
           int new_sp = bp - 3;
           pc = peg + _SP(new_sp);
           bp = _SP(new_sp + 1);
@@ -118,14 +125,18 @@ pop_cond:
         DISPATCH;
       }
 
+      // We always have stack top here because:
+      // - if rule doesn't have action, the default action aggregates all elems into a list
+      // - even empty action returns nil
       CASE(RULE_RET) {
         if (bp == 0) {
+          pc++;
           result = *_TOP();
           goto matched;
         } else {
           Val res = *_TOP();
           int new_sp = bp - 2;
-          pc = peg + _SP(new_sp - 1);
+          pc = (uint16_t*)_SP(new_sp - 1);
           bp = _SP(new_sp);
           br_bp = _SP(new_sp + 1);
           Val rule_id = _SP(new_sp + 2);
@@ -138,13 +149,22 @@ pop_cond:
 
       CASE(PUSH_BR) {
         int32_t offset = DECODE(Arg32, pc).arg1;
-        Branch br = {pc - peg, pos};
+        Branch br = {offset, pos, Stack.size(&stack)};
         BranchStack.push(&br_stack, br);
         DISPATCH;
       }
 
       CASE(POP_BR) {
+        pc++;
         BranchStack.pop(&br_stack);
+        DISPATCH;
+      }
+
+      CASE(UNPARSE) {
+        pc++;
+        Branch br = BranchStack.pop(&br_stack);
+        pos = br.pos;
+        stack.size = br.stack_offset; // TODO free to the end
         DISPATCH;
       }
 
@@ -163,7 +183,7 @@ pop_cond:
 
       CASE(JMP) {
         int32_t offset = DECODE(Arg32, pc).arg1;
-        pc += offset;
+        pc = peg + offset;
         DISPATCH;
       }
 
@@ -182,6 +202,7 @@ pop_cond:
       }
 
       CASE(POP) {
+        pc++;
         _POP();
         DISPATCH;
       }
@@ -193,17 +214,27 @@ pop_cond:
         DISPATCH;
       }
 
-      CASE(LIFT) {
-        pc++;
-        _PUSH(nb_cons_new(_POP(), VAL_NIL));
-        DISPATCH;
-      }
-
       CASE(LIST) {
         pc++;
         Val tail = _POP();
         Val head = _POP();
         _PUSH(nb_cons_new(head, tail));
+        DISPATCH;
+      }
+
+      CASE(LIST_MAYBE) {
+        pc++;
+        Branch* br;
+        if (BranchStack.size(&br_stack)) {
+          br = BranchStack.at(&br_stack, BranchStack.size(&br_stack) - 1);
+        } else {
+          br = NULL;
+        }
+        if (br && br->stack_offset + 1 == Stack.size(&stack)) {
+          Val tail = _POP();
+          Val head = _POP();
+          _PUSH(nb_cons_new(head, tail));
+        }
         DISPATCH;
       }
 
@@ -218,13 +249,41 @@ pop_cond:
       CASE(JIF) {
         Val cond = _POP();
         int32_t offset = DECODE(Arg32, pc).arg1;
-        if (!VAL_IS_TRUE(cond)) {
-          pc += offset;
+        // TODO check offset out of bound?
+        if (VAL_IS_TRUE(cond)) {
+          pc = peg + offset;
         }
         DISPATCH;
       }
 
+      CASE(JUNLESS) {
+        Val cond = _POP();
+        int32_t offset = DECODE(Arg32, pc).arg1;
+        if (VAL_IS_FALSE(cond)) {
+          pc = peg + offset;
+        }
+        DISPATCH;
+      }
+
+      CASE(CALL) {
+        ArgU32U32 data = DECODE(ArgU32U32, pc);
+        uint32_t argc = data.arg1;
+        assert(argc >= 1); // all operators
+        uint32_t method = data.arg2;
+        Val* argv = Stack.at(&stack, stack.size - argc);
+        void* m = klass_find_method(sb_klass(), method);
+        ValPair res = klass_call_method(VAL_NIL, m, argc, argv);
+        if (res.snd) {
+          // TODO cleanup and raise error
+        }
+        stack.size -= argc;
+        _SP(stack.size - 1) = res.fst;
+        // TODO need to decrease ref or all managed by gen?
+        DISPATCH;
+      }
+
       CASE(MATCH) {
+        pc++;
         goto matched;
         DISPATCH;
       }
@@ -241,6 +300,7 @@ not_matched:
   BranchStack.cleanup(&br_stack);
   Stack.cleanup(&stack);
   free(memoize_table);
+  // todo detailed result, and maybe resumable?
   return (ValPair){VAL_NIL, nb_string_new_literal_c("error")};
 
 matched:
@@ -248,5 +308,11 @@ matched:
   BranchStack.cleanup(&br_stack);
   Stack.cleanup(&stack);
   free(memoize_table);
-  return (ValPair){result, VAL_NIL};
+  if (token_size != pos) {
+    // todo detailed result, and maybe resumable?
+    // todo release result?
+    return (ValPair){VAL_NIL, nb_string_new_literal_c("unparsed")};
+  } else {
+    return (ValPair){result, VAL_NIL};
+  }
 }
