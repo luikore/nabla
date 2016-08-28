@@ -242,7 +242,7 @@ typedef void (*ValCallbackFunc)(void*);
 # endif
 #endif
 typedef ValPair (*ValMethodFunc)(ANYARGS);
-typedef ValPair (*ValMethodFunc2)(Val, int32_t, Val*);
+typedef ValPair (*ValMethodFuncV)(Val, int32_t, Val*);
 
 typedef uint64_t (*ValHashFunc)(Val);
 typedef bool (*ValEqFunc)(Val, Val);
@@ -288,7 +288,16 @@ void klass_set_eq_func(uint32_t klass_id, ValEqFunc func);
 void klass_def_method(uint32_t klass_id, uint32_t method_id, int32_t argc, ValMethodFunc func, bool is_final);
 
 // for fixed or variadic argc
-void klass_def_method2(uint32_t klass_id, uint32_t method_id, int32_t min_argc, int32_t max_argc, ValMethodFunc2 func, bool is_final);
+void klass_def_method_v(uint32_t klass_id, uint32_t method_id, int32_t min_argc, int32_t max_argc, ValMethodFuncV func, bool is_final);
+
+// TODO expose shallow search?
+// Method* klass_find_own_method(uint32_t klass_id, uint32_t method_id);
+
+// deep search
+void* klass_find_method(uint32_t klass_id, uint32_t method_id);
+
+// klass_find_method -> klass_call_method provides more low level control than val_send
+ValPair klass_call_method(Val obj, void* m, int argc, Val* argv);
 
 void klass_include(uint32_t klass_id, uint32_t included_id);
 

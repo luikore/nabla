@@ -9,46 +9,102 @@ class MiniPeg
   TOKEN_RE = /[a-z]\w*(\-\w+)*(\.\w+(\-\w+)*)*/
 
   Peg = Struct.new :context, :rules
-  Klasses.add 'Peg', ['context', 'rules']
   class Peg
     def eval
+      Klasses.validate self.class
       multi = build_list rules.map &:eval
       "NODE(Peg, 2, #{context.eval}, #{multi})"
     end
   end
 
   PegRule = Struct.new :name, :body
-  Klasses.add 'PegRule', ['name', 'body']
   class PegRule
     def eval
-      multi = build_list body.map &:eval
-      "NODE(PegRule, 2, #{name.eval}, #{multi})"
+      Klasses.validate self.class
+      "NODE(PegRule, 2, #{name.eval}, #{body.eval})"
     end
   end
 
   SeqRule = Struct.new :terms, :code
-  Klasses.add 'SeqRule', ['terms', 'code']
   class SeqRule
     def eval
+      Klasses.validate self.class
       terms_multi = build_list terms.map &:eval
       maybe_code = build_list code.map &:eval
       "NODE(SeqRule, 2, #{terms_multi}, #{maybe_code})"
     end
   end
-  
-  BranchRight = Struct.new :branch_op, :rhs
-  Klasses.add 'BranchRight', ['branch_op', 'rhs']
-  class BranchRight
+
+  Branch = Struct.new :op, :lhs, :rhs_terms, :code
+  class Branch
     def eval
-      "NODE(BranchRight, 2, #{branch_op.eval}, #{rhs.eval})"
+      Klasses.validate self.class
+      rhs = build_list rhs_terms.map &:eval
+      maybe_code = build_list code.map &:eval
+      "NODE(Branch, 4, #{op.eval}, #{lhs.eval}, #{rhs}, #{maybe_code})"
     end
   end
 
-  Term = Struct.new :name, :affix
-  Klasses.add 'Term', ['name', 'affix']
+  TermMaybe = Struct.new :unit
+  class TermMaybe
+    def eval
+      Klasses.validate self.class
+      "NODE(TermMaybe, 1, #{unit.eval})"
+    end
+  end
+
+  TermStar = Struct.new :unit
+  class TermStar
+    def eval
+      Klasses.validate self.class
+      "NODE(TermStar, 1, #{unit.eval})"
+    end
+  end
+
+  TermPlus = Struct.new :unit
+  class TermPlus
+    def eval
+      Klasses.validate self.class
+      "NODE(TermPlus, 1, #{unit.eval})"
+    end
+  end
+
+  Term = Struct.new :unit
   class Term
     def eval
-      "NODE(Term, 2, #{name.eval}, #{affix ? affix.eval : 'VAL_NIL'})"
+      Klasses.validate self.class
+      "NODE(Term, 1, #{unit.eval})"
+    end
+  end
+
+  Lookahead = Struct.new :unit
+  class Lookahead
+    def eval
+      Klasses.validate self.class
+      "NODE(Lookahead, 1, #{unit.eval})"
+    end
+  end
+
+  NegLookahead = Struct.new :unit
+  class NegLookahead
+    def eval
+      Klasses.validate self.class
+      "NODE(NegLookahead, 1, #{unit.eval})"
+    end
+  end
+
+  class EpsilonRule
+    def eval
+      Klasses.validate self.class
+      "NODE(EpsilonRule, 0)"
+    end
+  end
+
+  RefRule = Struct.new :name
+  class RefRule
+    def eval
+      Klasses.validate self.class
+      "NODE(RefRule, 1, #{name.eval})"
     end
   end
 
@@ -84,25 +140,22 @@ class MiniPeg
     PegRule.new Token.new("name.rule", name), rule_body
   end
 
-  # RuleBody : SeqRule >* space.eol? BranchRight
+  # RuleBody : SeqRule /* space.eol? op.branch Term* PureCallback? { Branch[$3, $1, $4, $5] }
   def parse_rule_body
     seq_rule = parse_seq_rule
     return if !seq_rule
-    res = [seq_rule]
+    res = seq_rule
     loop do
       pos = @s.pos
-      parse_eols
-      if branch_right = parse_branch_right
-        res << branch_right
+      branch = parse_branch_right res
+      if branch
+        res = branch
       else
         @s.pos = pos
         break
       end
     end
-    if res.any?(&:nil?)
-      raise "nil entry in #{res.inspect}"
-    end
-    res # parse_rule will use build_list
+    res
   end
 
   # SeqRule : Term+ Callback?
@@ -116,33 +169,52 @@ class MiniPeg
     SeqRule.new terms, parse_callback
   end
 
-  # BranchRight : op.branch-like SeqRule
-  def parse_branch_right
+  # space.eol? op.branch Term* PureCallback?
+  def parse_branch_right lhs
     parse_eols
-    op = @s.scan(/[\t\ ]*(\/|\>\*)[\t\ ]*/)
+    op = @s.scan(/[\t\ ]*(\/[\*\+\?]?)[\t\ ]*/)
     return if !op
-    seq_rule = parse_seq_rule
-    raise "expect seq rule : #{@s.inspect}" if !seq_rule
-    op.strip!
-    tok = (op == '/' ? "op.branch" : "op.branch.quantified")
-    BranchRight.new Token.new(tok, op), seq_rule
+    op = Token.new('op.branch', op.strip)
+    terms = []
+    while t = parse_term
+      terms << t
+    end
+    Branch[op, lhs, terms, parse_callback]
   end
 
-  # Term : name.token-or-rule quantifier?
+  # Term : Unit op.maybe         { TermMaybe[$1] }
+  #      / Unit op.star          { TermStar[$1] }
+  #      / Unit op.plus          { TermPlus[$1] }
+  #      / Unit                  { Term[$1] }
+  #      / op.lookahead Unit     { Lookahead[$2] }
+  #      / op.neg-lookahead Unit { NegLoookahead[$2] }
   def parse_term
     @s.skip(/ +/)
-    name = @s.scan(RULE_RE)
-    name_tok = "name.rule" if name
-    name ||= @s.scan(TOKEN_RE)
-    name_tok ||= "name.token"
-    return if !name
-    name = Token.new(name_tok, name)
-
-    quantifier = @s.scan(/[\*\?\+]/)
-    if quantifier
-      quantifier = Token.new("op.quantified", quantifier)
+    if unit = parse_unit
+      if @s.scan(/ *\*/)
+        TermStar.new unit
+      elsif @s.scan(/ *\?/)
+        TermMaybe.new unit
+      elsif @s.scan(/ *\+/)
+        TermPlus.new unit
+      else
+        Term.new unit
+      end
     end
-    Term.new name, quantifier
+  end
+
+  # Unit : name.token / name.rule.epsilon { EpsilonRule[] } / name.rule { RefRule[$1] }
+  def parse_unit
+    if name = @s.scan(RULE_RE)
+      if name == 'EPSILON'
+        EpsilonRule.new
+      else
+        tok = Token.new "name.rule", name
+        RefRule.new tok
+      end
+    elsif name = @s.scan(TOKEN_RE)
+      Token.new "name.token", name
+    end
   end
 
   # always parses
@@ -168,25 +240,38 @@ class MiniPeg
 end
 
 if __FILE__ == $PROGRAM_NAME
+  Klasses.add 'Peg', ['context', 'rules']
+  Klasses.add 'PegRule', ['name', 'body']
+  Klasses.add 'SeqRule', ['terms', 'code']
+  Klasses.add 'Term', ['unit']
+  Klasses.add 'TermPlus', ['unit']
+  Klasses.add 'TermStar', ['unit']
+  Klasses.add 'TermMaybe', ['unit']
+  Klasses.add 'EpsilonRule', []
+  Klasses.add 'RefRule', ['name']
+  Klasses.add 'Lookahead', ['unit']
+  Klasses.add 'NegLoookahead', ['unit']
+  Klasses.add 'Callback', ['stmts']
+  Klasses.add 'CreateNode', ['ty', 'elems']
+  Klasses.add 'Capture', ['var_name']
+  Klasses.add 'Call', ['func_name', 'args']
+  Klasses.add 'Branch', ['op', 'lhs', 'rhs_terms', 'code']
   require "pp"
   pegcode = <<-PEGCODE
   Peg : name.context begin.peg space.eol* Rule* end.peg { Peg[$1, $4] }
-  Rule : name.rule op.def RuleBody space.eol { :node "PegRule" $1 $3 }
-  RuleBody : SeqRule { :arr_node $1 } >* space.eol? BranchRight { :push_arr_node $1 $3 }
-  BranchRight : op.branch.quantified SeqRule
-              / op.branch SeqRule
-              / op.branch.op-table
-  SeqRule : Term+ Callback? { :node "SeqRule" $1 $2 }
-  Term : Name op.quantified    { :node "Term" $1 $2 }
-       / Name op.extract       { :node "Term" $1 $2 }
-       / Name op.extract.maybe { :node "Term" $1 $2 }
-       / Name                  { :node "Term" $1 nil }
-       / op.lookahead LookaheadName { :node "Lookahead" $2 }
-  Name : name.token { $1 }
-       / name.rule  { $1 }
-  LookaheadName : name.token   { $1 }
-                / name.rule    { $1 }
-                / name.pattern { $1 }
+  Rule : name.rule op.def RuleBody space.eol { PegRule[$1, $3] }
+  RuleBody : SeqRule { $1 }
+           /* space.eol? op.branch Term* PureCallback? { Branch[$3, $1, $4, $5] }
+  SeqRule : Term+ Callback? { SeqRule[$1, $2] }
+  Term : Unit op.maybe         { TermMaybe[$1] }
+       / Unit op.star          { TermStar[$1] }
+       / Unit op.plus          { TermPlus[$1] }
+       / Unit                  { Term[$1] }
+       / op.lookahead Unit     { Lookahead[$2] }
+       / op.neg-lookahead Unit { NegLoookahead[$2] }
+  Unit : name.token { $1 }
+       / name.rule.epsilon { EpsilonRule[] }
+       / name.rule  { RefRule[$1] }
   PEGCODE
   node = MiniPeg.new("Context", pegcode).parse
   pp node

@@ -17,7 +17,7 @@ Decl:
 
 Global vars are only available in lex blocks.
 
-NOTE: Global var also marks all units in the file not reusable
+NOTE: Using a global var also marks the lex block not reusable
 
 ## Local variables (declare inside lex block)
 
@@ -53,7 +53,7 @@ NOTE `begin` callbacks should be put on top and it is not matched in the lexing 
 # End callbacks
 
     end /some-pattern/ {
-        ...
+      ...
     }
 
 if `/some-pattern/` matches, the callback code is executed and return to the parent state.

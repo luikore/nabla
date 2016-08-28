@@ -14,7 +14,9 @@
 # - no use nested regexp
 # - special chars inside `[]` are escaped
 # - no use if/infix in callbacks
-# - all `#` are escaped
+# - all `#` in regexp or string are escaped
+# - all structs are defined in one-line
+# - no lookahead for PEG
 
 # NOTE immutable data structure is vital to PEG callbacks
 #      but the most efficient way to impl queue is just reverse the list
@@ -24,13 +26,14 @@
 # so :token action is add a type to it, and then put it into stream
 # a second :token action using the same object, will duplicate it
 
-lex Main = [
-  end /\z/ { :parse }
+lex Main[
+  end /\z/ { :peg "Main" }
 
-  /pattern\b/ { :token "kw.pattern" } /\ +(@\w+)/ { :token "name.pattern" 1 } /\ *=\ /
-  /var\b/ { :token "kw.var" } /\ +([a-z]\w*)/    { :token "name.var" 1 }
-  /lex\b/ { :token "kw.lex" } /\ +(\*?[A-Z]\w*)/ { :token "name.context" 1 } /\ *=\ / Lex
-  /peg\b/ { :token "kw.peg" } /\ +([A-Z]\w*)/    { :token "name.context" 1 } /\ *=\ / Peg
+  /pattern\b/ { :token "kw.pattern" } /\ +(@\w+)/    { :token "name.pattern" 1 } /\ *=\ /
+  /var\b/     { :token "kw.var" } /\ +(\$[a-z]\w*)/  { :token "name.var.global" 1 }
+  /struct\b/  { :token "kw.struct" } /\ +([A-Z]\w*)/ { :token "name.struct" 1 } StructIns
+  /lex\b/     { :token "kw.lex" } /\ +(\*?[A-Z]\w*)/ { :token "name.context" 1 } Lex
+  /peg\b/     { :token "kw.peg" } /\ +([A-Z]\w*)/    { :token "name.context" 1 } Peg
   # TODO cfg, tag, ...
 
   String
@@ -39,22 +42,37 @@ lex Main = [
   *Spaces
 ]
 
-peg Main = [
+struct Main[ins]
+struct PatternIns[name, pattern]
+struct StructIns[name, args]
+struct VarDecl[var_name]
+struct Lex[context, rules]
+struct Peg[context, rules]
+peg Main[
   Main : Line* { Main[$1] }
 
   Line : space.eol { } / Ins { $1 }
 
   Ins : kw.pattern name.pattern space.pre-eq op.eq Pattern { PatternIns[$2, $5] }
-      / kw.var name.var { VarDecl[$2] }
+      / kw.var name.var.global { VarDecl[$2] }
+      / kw.struct name.struct name.arg* { StructIns[$2, $3] }
       / kw.lex name.context Lex { Lex[$2, $3] }
       / kw.peg name.context Peg { Peg[$2, $3] }
 
   Pattern : String { $1 } / Regexp { $1 }
 ]
 
-lex Lex = [
+lex StructIns[
+  begin "[" { }
+  end "]" { }
+  /([a-z]\w*)\s*,/ { :token "name.arg" 1 }
+  /[a-z]\w*/       { :token "name.arg" }
+  *Spaces
+]
+
+lex Lex[
   begin "[" { :token "begin.lex" }
-  end "]" { :token "end.lex", :parse }
+  end "]" { :token "end.lex", :peg "Lex" }
 
   Regexp
   String
@@ -69,7 +87,15 @@ lex Lex = [
   *Spaces
 ]
 
-peg Lex = [
+struct RefPartialContext[name]
+struct RefContext[name]
+struct SeqLexRules[rules]
+struct BeginCallback[first_cb, rules]
+struct EndCallback[first_cb, rules]
+struct LexRule[pattern, code]
+struct VarRef[var_name]
+struct GlobalVarRef[name]
+peg Lex[
   Lex : begin.lex RuleLine* end.lex { $2 }
   RuleLine : name.context.partial { RefPartialContext[$1] }
            / name.context { RefContext[$1] }
@@ -84,57 +110,64 @@ peg Lex = [
           / name.var.global { GlobalVarRef[$1] }
 ]
 
-lex Peg = [
+lex Peg[
   begin "[" { :token "begin.peg" }
-  end "]" { :token "end.peg", :parse }
+  end "]" { :token "end.peg", peg "Peg" }
 
+  "EPSILON" { :token "name.rule.epsilon" }
   /[A-Z]\w*(\.\w+)*/  { :token "name.rule" }
   /[a-z]\w*(\-\w+)*(\.\w+(\-\w+)*)*/  { :token "name.token" }
 
   ":"                 { :token "op.def" }
-  /[\*\?\+]/          { :token "op.quantifier" }
-  "!"                 { :token "op.extract" }
-  "?!"                { :token "op.extract.maybe" }
-  /[><][\*\?\+]/      { :token "op.branch.quantified" }
-  /\/$\w+/            { :token "op.branch.op-table" }
-  "/"                 { :token "op.branch" }
+  "?"                 { :token "op.maybe" }
+  "+"                 { :token "op.plus" }
+  "*"                 { :token "op.star" }
+  /[\/][\*\?\+]?/     { :token "op.branch" }
+  /\/$\w+/            { :token "op.branch" }
+  "&"                 { :token "op.lookahead" }
+  "!"                 { :token "op.neg-lookahead" }
 
   Callback
-
-  /[&\^]/  { :token "op.lookahead" }
-  /@\w+/   { :token "name.pattern" }
 
   *Spaces
 ]
 
-peg Peg = [
+struct PegRule[name, body] # body = SeqRule / Branch
+struct Branch[op, lhs, rhs_terms, code]
+struct SeqRule[terms, code]
+struct TermMaybe[unit]
+struct TermStar[unit]
+struct TermPlus[unit]
+struct Term[unit]
+struct Lookahead[unit]
+struct NegLoookahead[unit]
+struct EpsilonRule[]
+struct RefRule[name]
+peg Peg[
   Peg : begin.peg Rule* end.peg { $2 }
   Rule : name.rule op.def space.eol? RuleBody space.eol { PegRule[$1, $4] }
        / space.eol { }
-  RuleBody : SeqRule { [$1] } >* space.eol? BranchRight { [$3, *$1] }
-  BranchRight : op.branch.quantified SeqRule { BranchRight[$1, $2] }
-              / op.branch SeqRule            { BranchRight[$1, $2] }
-              / op.branch.op-table           { OpBranchRight[$1] }
-  SeqRule : Term+ Callback? { SeqRule[$1, $2] }
-  Term : Name op.quantified    { Term[$1, $2] }
-       / Name op.extract       { Term[$1, $2] }
-       / Name op.extract.maybe { Term[$1, $2] }
-       / Name                  { Term[$1, nil] }
-       / op.lookahead LookaheadName { Lookahead[$1, $2] }
-  Name : name.token { $1 }
-       / name.rule  { $1 }
-  LookaheadName : name.token   { $1 }
-                / name.rule    { $1 }
-                / name.pattern { $1 }
+  RuleBody : SeqRule { $1 }
+           /* space.eol? op.branch Term* PureCallback? { Branch[$3, $1, $4, $5] }
+  SeqRule : Term+ PureCallback? { SeqRule[$1, $2] }
+  Term : Unit op.maybe         { TermMaybe[$1] }
+       / Unit op.star          { TermStar[$1] }
+       / Unit op.plus          { TermPlus[$1] }
+       / Unit                  { Term[$1] }
+       / op.lookahead Unit     { Lookahead[$2] }
+       / op.neg-lookahead Unit { NegLoookahead[$2] }
+  Unit : name.token { $1 }
+       / name.rule.epsilon { EpsilonRule[] }
+       / name.rule  { RefRule[$1] }
 ]
 
-lex Callback = [
+# no side effects
+lex PureCallback[
   begin "{" { :token "begin.code" }
-  end "}" { :token "end.code", :parse }
+  end "}" { :token "end.code", :peg "Callback" }
 
   String
-  /\$-?\d+/    { :token "name.var.capture" }
-  /:[\w+\-*\/^&|<>=!%@]+/ { :token "name.func" }
+  /\$-?\d+/  { :token "name.var.capture" }
   /.\w+/     { :token "name.method" } # todo
   /[A-Z]\w*/ { :token "name.type" }
   /if\b/     { :token "kw.if" }
@@ -143,9 +176,7 @@ lex Callback = [
   /nil\b/    { :token "lit.nil" 0 nil }
   /true\n/   { :token "lit.true" 0 true }
   /false\n/  { :token "lit.const" 0 false }
-  /var\b/    { :token "kw.var" }
   /-?\d+/    { :token "lit.int" 0 :parse_int 0 }
-  /[a-z]\w*/ { :token "name.var" }
 
   /&&|\|\|/         { :token "op.infix.logic" }
   />|<|>=|<=|==|!=/ { :token "op.infix.compare" }
@@ -156,7 +187,6 @@ lex Callback = [
   "]" { :token "end.list" }
   "(" { :token "begin.paren" }
   ")" { :token "end.paren" }
-  "=" { :token "op.eq" }
   "!" { :token "op.prefix" }
   /(,)\s*(\*)/ { :token "space.eol" 1, :token "op.prefix.splat" 2 }
   /[,\n]/ { :token "space.eol" }
@@ -166,52 +196,78 @@ lex Callback = [
   /\ +/ { }
 ]
 
-peg Callback = [
-  Callback : begin.code Stmt* end.code { Callback[$2] }
-  Stmt : Expr { $1 }
-       / space.eol { }
-       / kw.var name.var { VarDecl[$2] }
+lex Callback[
+  *PureCallback
+  /var\b/      { :token "kw.var" }
+  /\$[a-z]\w*/ { :token "name.var.global" }
+  /[a-z]\w*/   { :token "name.var" }
+  /:[\w+\-*\/^&|<>=!%@]+/ { :token "name.func" }
+  "=" { :token "op.eq" }
+]
+
+# defined above: VarDecl VarRef
+struct Callback[stmts] # stmts reversed
+struct InfixLogic[lhs, op, rhs]
+struct Call[func_name, argv] # argv reversed
+struct Capture[var_name]
+struct CreateNode[ty, elems] # elems reversed
+struct CreateList[elems] # elems reversed
+struct Assign[var_name, expr]
+struct SplatEntry[expr]
+struct If[expr, true_lines, false_lines] # lines reversed
+peg Callback[
+  Callback : begin.code Stmts end.code { Callback[$2] }
+  Stmts : Expr Stmts { [$1, *$2] }
+        / kw.var name.var Stmts { VarDecl[$2] }
+        / space.eol Stmts { $2 }
+        / EPSILON { }
   Expr : Infix.Logic { $1 }
 
   Infix.Logic : Infix.Compare { $1 }
-              >* op.infix.logic Infix.Compare { InfixLogic[$2, [$3, $1]] }
+              /* op.infix.logic Infix.Compare { InfixLogic[$1, $2, $3] }
 
   Infix.Compare : Infix.Additive { $1 }
-                >* op.infix.compare Infix.Additive { Call[$2, [$3, $1]] }
+                /* op.infix.compare Infix.Additive { Call[$2, [$3, $1]] }
 
   Infix.Additive : Infix.Multitive { $1 }
-                 >* op.infix.additive Infix.Multitive { Call[$2, [$3, $1]] }
+                 /* op.infix.additive Infix.Multitive { Call[$2, [$3, $1]] }
 
   Infix.Multitive : Unit { $1 }
-                  >* op.infix.multitive Unit { Call[$2, [$3, $1]] }
+                  /* op.infix.multitive Unit { Call[$2, [$3, $1]] }
 
-  Unit : begin.paren Expr end.paren { $2 }
-       / op.prefix Unit { Call[$1, $2] }
+  Unit : begin.paren Lines end.paren { $2 }
+       / op.prefix Unit { Call[$1, [$2]] }
        / lit.int   { $1 }
        / lit.true  { $1 }
        / lit.false { $1 }
        / lit.nil   { $1 }
        / String    { $1 }
        / name.var.capture { Capture[$1] }
-       / name.type begin.list Entry* end.list { CreateNode[$1, $3] }
-       / begin.list Entry* end.list { CreateList[$2] }
+       / name.type begin.list Entries end.list { CreateNode[$1, $3] }
+       / begin.list Entries end.list { CreateList[$2] }
        / name.func Expr* { Call[$1, $2] }
-       / name.var { VarRef[$1] }
-       / If { $1 }
        / name.var space.pre-eq op.eq Expr { Assign[$1, $4] }
+       / name.var { VarRef[$1] }
+       / name.var.global { VarRef[$1] }
+       / If { $1 }
 
-  Entry : Expr { $1 }
-        / op.prefix.splat Expr { SplatEntry[$2] }
-        / space.eol { }
-  Line : Expr { $1 }
-       / space.eol { }
-  If : kw.if Expr space.eol Line* If.Else { If[$2, $4, $5] }
+  Entries : Expr Entries { [$1, *$2] }
+          / op.prefix.splat Expr Entries { [SplatEntry[$2], *$3] }
+          / space.eol Entries { $2 }
+          / EPSILON { }
+  Lines : Expr Lines { [$1, *$2] }
+        / space.eol Lines { $2 }
+        / EPSILON { }
+  If : kw.if Expr space.eol Lines If.Else { If[$2, $4, $5] }
+  # type: List / If
   If.Else : kw.end { }
-          / kw.else Line* kw.end { $2 }
+          / kw.else Lines kw.end { $2 }
+          / kw.else kw.end { }
           / kw.else If { $2 }
 ]
 
-lex String = [
+# TODO use vtoken instead of token to optimize parsing?
+lex String[
   begin /"/ { var buf, buf = "", :token "begin.string" }
   end /"/ { :token "end.string", :yield buf }
 
@@ -223,9 +279,9 @@ lex String = [
   /./             { :token "char",           buf = :concat_char buf :char_no_escape 0 }
 ]
 
-lex Regexp = [
+lex Regexp[
   begin "/" { :token "begin.regexp" }
-  end "/" { :token "end.regexp", :parse }
+  end "/" { :token "end.regexp", :peg "Regexp" }
 
   /\^|\$|\\[bBaAzZ]/ { :token "anchor" }
 
@@ -257,9 +313,21 @@ lex Regexp = [
   /[^\n\s]/ { :token "char" 0 :char_no_escape 0 }
 ]
 
-peg Regexp = [
+struct Regexp[reg]
+struct Seq[seq]
+struct PredefAnchor[anchor]
+struct Flag[flag]
+struct Quantified[unit, quantifier]
+struct QuantifiedRange[unit, from, to_maybe, kind]
+struct PredefInterpolate[pattern_name]
+struct Group[special, branches]
+struct CharGroupPredef[tok]
+struct UnicodeCharClass[name]
+struct BracketCharGroup[beg_tok, char_classes]
+struct CharRange[from, to]
+peg Regexp[
   Regexp : begin.regexp Branches end.regexp { Regexp[$2] }
-  Branches : Seq { [$1] } >* op.branch Seq { [$3, *$1] }
+  Branches : Seq { [$1] } /* op.branch Seq { [$3, *$1] }
   Seq : SeqUnit* { Seq[$1] }
   SeqUnit : anchor { PredefAnchor[$1] }
           / flag.case-insensitive { Flag[$1] }
@@ -285,7 +353,7 @@ peg Regexp = [
             / SingleChar { CharRange[$1, $1] }
 ]
 
-lex RegexpEscape = [
+lex RegexpEscape[
   begin "\\" { :token "char.escape" }
   end /x(\h\h)/     { :token "char.escape", :yield :char_hex 1 }
   end /u\{(\h+)\}/  { :token "char.escape", :yield :char_hex 1 }
@@ -294,7 +362,7 @@ lex RegexpEscape = [
   end /[^\n]/       { :token "char.escape", :yield :char_no_escape 0 }
 ]
 
-lex *RegexpQuantifier = [
+lex *RegexpQuantifier[
   /\?\+ | \?\? | \? | \+\+ | \+\? | \+ | \*\+ | \*\? | \*/ {
     :token "quantifier"
   }
@@ -315,7 +383,7 @@ lex *RegexpQuantifier = [
   }
 ]
 
-lex *Spaces = [
+lex *Spaces[
   /\ +(?=\{)/   { :token "space.pre-callback" }
   /\ +(?=\=)/   { :token "space.pre-eq" }
 

@@ -16,18 +16,19 @@ require_relative "mini-common"
 
 class MiniRegexp
 
-  Reg = Struct.new :reg
-  Klasses.add 'Regexp', ['reg']
-  class Reg
+  Regexp = Struct.new :reg
+  class Regexp
     def eval
+      Klasses.validate self.class
       "NODE(Regexp, 1, #{reg.eval})"
     end
   end
 
   Branches = Struct.new :branches
-  Klasses.add 'Branches', ['branches']
   class Branches
     def eval
+      # NOTE: it is list in sb generated code
+      # Klasses.validate self.class
       if branches.empty?
         raise "no branches found!"
       end
@@ -36,67 +37,67 @@ class MiniRegexp
   end
 
   Seq = Struct.new :seq
-  Klasses.add 'Seq', ['seq']
   class Seq
     def eval
+      Klasses.validate self.class
       content = build_list seq.map &:eval
       "NODE(Seq, 1, #{content})"
     end
   end
 
   PredefAnchor = Struct.new :anchor
-  Klasses.add 'PredefAnchor', ['anchor']
   class PredefAnchor
     def eval
+      Klasses.validate self.class
       "NODE(PredefAnchor, 1, #{anchor.eval})"
     end
   end
 
   Flag = Struct.new :flag
-  Klasses.add 'Flag', ['flag']
   class Flag
     def eval
+      Klasses.validate self.class
       "NODE(Flag, 1, #{flag.eval})"
     end
   end
 
   Quantified = Struct.new :unit, :quantifier
-  Klasses.add 'Quantified', ['unit', 'quantifier']
   class Quantified
     def eval
+      Klasses.validate self.class
       "NODE(Quantified, 2, #{unit.eval}, #{quantifier.eval})"
     end
   end
 
   # c is int
   Char = Struct.new :c
-  Klasses.add 'Char', ['c']
   class Char
     def eval
+      # Klasses.validate self.class
       "VAL_FROM_INT(#{c})"
     end
   end
 
   Group = Struct.new :special, :branches
-  Klasses.add 'Group', ['special', 'branches']
   class Group
     def eval
+      Klasses.validate self.class
       "NODE(Group, 2, #{special.eval}, #{branches.eval})"
     end
   end
 
   CharGroupPredef = Struct.new :tok
-  Klasses.add 'CharGroupPredef', ['tok']
   class CharGroupPredef
     def eval
+      Klasses.validate self.class
       "NODE(CharGroupPredef, 1, #{tok.eval})"
     end
   end
 
   BracketCharGroup = Struct.new :beg_tok, :char_classes
-  Klasses.add 'BracketCharGroup', ['beg_tok', 'char_classes']
   class BracketCharGroup
     def eval
+      Klasses.validate self.class
       multi = build_list char_classes.map &:eval rescue pp char_classes
       "NODE(BracketCharGroup, 2, #{beg_tok.eval}, #{multi})"
     end
@@ -104,9 +105,9 @@ class MiniRegexp
 
   # from and to are int
   CharRange = Struct.new :from, :to
-  Klasses.add 'CharRange', ['from', 'to']
   class CharRange
     def eval
+      Klasses.validate self.class
       "NODE(CharRange, 2, VAL_FROM_INT(#{from}), VAL_FROM_INT(#{to}))"
     end
   end
@@ -121,10 +122,10 @@ class MiniRegexp
     if !@s.eos?
       raise "expect eos: #{@s.inspect}"
     end
-    Reg.new res
+    Regexp.new res
   end
 
-  # Branches : Seq >* op.branch Seq
+  # Branches : Seq /* op.branch Seq
   def parse_branches
     branches = []
 

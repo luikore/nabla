@@ -21,38 +21,37 @@ The block `{ ... }` is the evaluator registered on that specific rule branch.
     &some_rule # expect look ahead
     !some_rule # negative look ahead
 
-Lookahead regexps (this may add consulting calls to lexer, should not recommended it?)
-
-    &@pattern_name
-    !@pattern_name
+[design NOTE] Looking ahead regexp is not allowed, but we can use regexp lookahead in lexer to generate distinguished tokens.
 
 ### Left recursion
 
+There are several left recursion extension proposals for PEG, for example, this one:
+
 http://www.inf.puc-rio.br/~roberto/docs/sblp2012.pdf
 
-The above impl requires a stack when starting to `inc` parse a rule
+The impl requires a stack when starting to `inc` parse a rule
 https://github.com/pegjs/pegjs/issues/231#issuecomment-54756322
 
-We may just fall back to focus just on left-associative meaning of the rule
+We don't do left recursion, focus just on left-associative interpretation of the rule
 
-    A : B C { bc } >* op D { } # $1 = acc, $2 = op, $3 = right
+    A : B C { bc } /* op D { } # $1 = acc, $2 = op, $3 = right
 
 Same for destructive right-associative meaning
 
-    A : B C { bc } <* op D { } # $1 = left, $2 = op, $3 = acc
+    A : B C { bc } /* op D { } # $1 = left, $2 = op, $3 = acc
 
-There is also `>+` and `<+` but no `>?` nor `<?`, and they are transformed the same way as `>*` does
+There is also `/+` and `/?`, and they are transformed the similar way as `/*` does
 
-    A : B >* C  ==>  A : B C*
-    A : B >+ C  ==>  A : B C+
-
-The angled bracket can be viewed as the grouping parenthesis.
-
-NOTE `foldl` is similar to left assoc, `foldr` similar to right assoc
+    A : B /* C  ==>  A : B C*
+    A : B /+ C  ==>  A : B C+
 
 Further, we may introduce a dynamic operator system.
 
 [design NOTE] parser combinators `<<` and `>>` is not implemented, since we can not omit them in prettyprinting. We have extracting mechanism to simplify the work.
+
+[design NOTE] we don't need right associative rules, since we can do this and it is right associative:
+
+    A : B A / B
 
 ### Branches without action
 
@@ -80,25 +79,39 @@ Or recursively
 
     { [$1, Foo[$2, [$3, $4]]] }
 
-Function calls and variable visits are forbidden in syntax action.
+Node has to be declared with `struct` instruction or you will get "class not found error"
 
-An empty brace ignores the rule and doesn't return anything
+    struct Foo[foo, bar, baz]
+    peg Bar[
+      Bar: foo { Foo[attr1, attr2, attr3] }
+    ]
+
+Function calls and variable visits are forbidden in syntax action since they must be pure. (TODO in future we may thunk function calls?)
+
+An empty brace ignores the captures and returns nil instead
 
     { }
 
-### Extracting
+### Rule with epsilon branch (nullable rule)
 
-We may append a `!` to return the node as the action result. This is called "extracting".
+It is OK to append an rule with epsilon branch, but then this rule can not be used in left-most position.
 
-Example:
+For example, rule `Foo` is nullable:
 
-    Foo : Xip Bar! / Baz { Foo[$1] }
-    # is equivalent to
-    Foo : Xip Bar { $2 } / Baz { Foo[$1] }
+    Foo: foo / EPSILON { }
 
-Only one `!` is allowed before every branch, and it can not be mixed with `?` or `*`.
+But then the following rule will raise compile error:
 
-[design NOTE]: Further, we may inline some rules and optimize out the branch ST node.
+    Bar: bar* Foo # an EPSILON is possible to be put in left-most position
+
+TODO: loosen this limitation?
+
+The special rule `EPSILON` is useful in simplifying rules when you want to ignore something and build a list. For example, consider you want to ignore the end of lines and return a list of statements inside a pair of parens:
+
+    Parened: paren.left Stmts paren.right { $2 }
+    Stmts: Stmt Stmts { [$1, *$2] }
+         / eol Stmts { $2 }
+         / EPSILON { [] }
 
 ### Reverse finding matched item
 
@@ -123,7 +136,7 @@ config will be like
 
 ### Precedence
 
-All branch operators `/`, `/$`, `>*`, ... are of the same precedence, which is lower than the space joining items into a sequence.
+All branch operators `/`, `/$`, `/*`, ... are of the same precedence, which is lower than the space joining items into a sequence.
 
 ### Invoking rules from other parsers
 

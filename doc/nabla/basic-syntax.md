@@ -74,7 +74,7 @@ And strings can take multiple lines
     yes
     '
 
-The spaces are significant. See custom-syntax.md for more ways to define string literals.
+The spaces are significant. See [Custom Syntax](custom-syntax.md) for more ways to define string literals.
 
 ## Ranges
 
@@ -98,7 +98,7 @@ Boolean values:
 
 `nil` also denotes the empty list.
 
-# Other basic syntax elements
+# Basic syntax elements
 
 ## Constants and variables
 
@@ -270,7 +270,7 @@ then control structures
 
     if else case ...
 
-## on prefix operators
+## On prefix operators
 
 The prefix operators are: `!`, `-` and `+`
 
@@ -300,7 +300,7 @@ since `+` and `-` may be ambiguous as infix or prefix, the defining syntax of pr
 
 The method names are `!self`, `+self`, `-self`
 
-## chaining binary operators
+## Chaining binary operators
 
     a.< b c   # a < b and b < c
     a.+ b c   # a + b + c
@@ -349,7 +349,7 @@ for (see below for for section)
     if a, b;
     if a, b, else if c, d, else e; end
 
-## exception handling
+## Exception handling
 
 `try...when` is a control structure for exception handling
 
@@ -374,7 +374,7 @@ for (see below for for section)
 
 # Data structures
 
-## array and hash literals
+## Array and hash literals
 
 create an array (compiler may choose list, or HAMT, or array buffer for underlying implementation)
 
@@ -420,28 +420,28 @@ And there is `@=` operator:
 
 NOTE: we use the `@` operator, so looking for subscript looks cleaner, and not conflict with object creating syntax `A[foo, bar]`, `A{foo: foo, bar: bar}`
 
-## alternative collections
+## Alternative collections
 
-### assoc array
+### Assoc array
 
-assoc-array (backed by array)
+assoc-array (map-like structure backed by array)
 
-    AssocArray[
+    AssocArray{
       a: a
       b: c
-    ]
+    }
 
 it can store repeated values
 
-    foo = AssocArray[
+    foo = AssocArray{
       "a": 1
       "a": 2
-    ]
+    }
     foo.add "a", 3
 
 assoc-array is aware of insertion order
 
-    foo['a'] # 3
+    foo@'a' # 3
 
 assoc-array can be used as a multiple array.
 
@@ -453,19 +453,19 @@ And it also has `@=` and `:delete!` methods to update or remove existing values 
 
 When elem number is very large (hundreds or so), assoc-array may become slow for random access, but methods like iterating is still very fast.
 
-### set
+### Set
 
-Set (backed by map)
+Set (array-like structure backed by map)
 
-    Set{a, b}
+    Set[a, b]
 
-### dict
+### Dict
 
-dict has little memory for large string dictionary, but unordered
+Dict has little memory for large string dictionary, but unordered
 
     Dict{ ... }
 
-### rbtree
+### Rbtree
 
 rb tree, find is by default binary search
 
@@ -473,21 +473,21 @@ rb tree, find is by default binary search
 
 can be used as priority queue
 
-### pattern matching collections
+### Pattern matching collections
 
 Left and right must match the type exactly.
 
 If the right pattern is `[]`, will call `.to_l` of left.
 If the right pattern is `{}`, will call `.to_h` of left. (`Set:to_h` will expose the internal hash map, and the values are `true`)
 
-### design notes
+### Design notes
 
 [design NOTE] list is not really useful: slicing, deleting, or concatenating 2 immutable lists still require O(n) operations
 RRB tree may be a good option for list impl.
 
 [design NOTE] there is no need for a linked hash map, an immutable one is very slow. For mutable impl, redis may be a better choice.
 
-## splat operator for generating new arrays
+## Splat operator for generating new arrays
 
 To unroll an seq-like data structure, use `*`
 To unroll a map-like data structure, use `**`
@@ -497,7 +497,13 @@ To unroll a map-like data structure, use `**`
 
 NOTE it can also be used in patterns
 
-## data types (structs)
+But it can't be used for arguments in method call. You need to use `callv` on lambdas:
+
+    \(:f).callv [a, *b, c]
+
+This is a drawback of our call syntax, but the workaround is not hard.
+
+## Data types (structs)
 
 [design NOTE]: adding ivars to core struct types is not allowed (so allocations and copying are easier), however, it should be easy to delegate methods to them.
 
@@ -583,7 +589,7 @@ When a field ends with `?`, it is converted and stored in boolean
 
 It is pure text, a bit readable, and can be parsed (with only the value rules, no other operations allowed).
 
-## delegate
+## Delegate
 
 [design NOTE] it is weird to design a syntax for delegate... so make it a macro method instead
 
@@ -720,7 +726,7 @@ the "while" applicative
       select bar # all elements are collected into the array
     end
 
-[NOTE] we don't have elvis operator `?.`, it makes syntax hard to recognize when combined with question mark method names. but we can specify syntax for this kind of visits, see custom-syntax for more information.
+[NOTE] we don't have elvis operator `?.`, it makes syntax hard to recognize when combined with question mark method names. but we can specify syntax for this kind of visits, see [Custom Syntax](custom-syntax.md) for more information.
 
 [TODO] it is like fmap ... should we use `map` instead? or simpler, `for` ?
 
@@ -803,7 +809,25 @@ if you define final methods that are overriden by struct, it throws error
 
 [TODO] do we add syntax for `import Behavior` so methods in the object can be limited?
 
-## scope with parameters
+## Import methods with lexical scoping
+
+Think you are writing a compiler with OO-manner, you may need to define a method `visit` for each AST node type, and you wish to use some primitive data types for efficiency and simplicity. But then, you are worried about poluting global environment since you need to define `visit` methods on primitive types.
+
+`local include` is for solving this kind of problems.
+
+    class Foo
+      def visit ctx
+        ...
+      end
+    end
+
+    class Integer
+      local include Foo
+    end
+
+Like `local def`, all method lookups in this source file is prepended with a local method table. Different to `include`, the local included class must be defined before the call. And please be careful: all methods defined afterwards will not be included.
+
+## Scope with parameters
 
 scope can accept parameters just like methods, and they can be accessed via reader methods
 
@@ -821,9 +845,9 @@ scope can accept parameters just like methods, and they can be accessed via read
     (f.foo 3 4).x   # 3
     (f.foo 3 4).bar # 3
 
-scope parameters can use pattern match too, see more in pattern-match.md
+scope parameters can use pattern match too, see more in [Pattern Match](pattern-match.md)
 
-## class with struct
+## Class with struct
 
 `struct` defines a new data type and a class with the same name, and adds final attribute accessors. But when `include` the class defined by `struct`, the attribute accessors are not included.
 
@@ -846,7 +870,7 @@ We may define the behavior before defining the data, an example:
 
     struct Foo[foo]
 
-## defining method
+## Defining method
 
     def foo
       ...
@@ -886,7 +910,7 @@ To mention a method, we can use `Klass:method`, but it is not valid syntax (just
 
 [design NOTE] We should not impl `local def`, it can be quite complex if we impl dynamic method calling.
 
-## namespaces
+## Namespaces
 
 Every class also acts as a namespace
 
@@ -903,7 +927,7 @@ Change constant/macro searching namespace
       ... # constants and macros are searched from Foo::Bar::Baz instead
     end
 
-## object path changing
+## Object path changing
 
 Consider this expression:
 
@@ -938,7 +962,7 @@ Note: Bang methods can only be used in the tail of the chain.
 
 Note: The chain can be optimized by compiler
 
-## special methods
+## Special methods
 
     def hash
 
@@ -952,7 +976,7 @@ Note: The chain can be optimized by compiler
       Foo[a * 3, 4]
     end
 
-## default params
+## Default params
 
 params with default values must be put after other params
 
@@ -972,7 +996,7 @@ there are no "named params", the following code just sets a default map to param
     :foo a {c: 1, d: 2} d
     :foo a {c: 1} d # match error
 
-## default params can be put in reverse order
+## Default params can be put in reverse order
 
     def foo a=3 b=4 c
       ...
@@ -982,11 +1006,11 @@ Arity is still the same as normal order (`1..3` in the above example). `:method(
 
 [design NOTE]: there is no arbitrary arity, the syntax is harder to fit in.
 
-## matching args
+## Matching args
 
 see pattern-match
 
-## method calling
+## Method calling
 
 method definition is the boundary of lexical scoping for local vars
 
@@ -1014,7 +1038,7 @@ not composed
 
 [design NOTE]: keyword `self` instead of `@`, to free the usage of `@`
 
-## method search rule
+## Method search rule
 
 search own methods, then search methods defined in latest included class
 
@@ -1055,7 +1079,7 @@ Note `:prepend` is a macro method, not declarative instruction like `include`, o
 
 [design NOTE] this is the same method search mechanism as in Ruby, so all own-defined methods can easily be put in a map for less search steps
 
-## the final modifier
+## The final modifier
 
 a `final` method can not be modified, even in the inherited class.
 
@@ -1097,7 +1121,7 @@ NOTE: there is no modifiers like `private` and `protected` -- we can always use 
 
 # Lambda and subroutines
 
-## lambda
+## Lambda
 
 Can capture local vars but can not change it:
 
@@ -1181,7 +1205,7 @@ NOTE nesting lambda and subroutine
 `a` in lambda capture is changed, but outside of lambda, `a` is not changed.
 compiler should generate warning: assigning local variable inside closure has no effect for the outside (lower warning level just warns the subroutine-in-lambda change, higher warning level warns lambda change)
 
-## shadow naming and variable scoping
+## Shadow naming and variable scoping
 
 shadow naming means the variable is in fact a different one than the original variable
 
@@ -1228,7 +1252,7 @@ So we can cache constants, but folding is not allowed. --- should we force all c
 
 Constants have a `source` meta connected to it, when reloading a source, all constants defined by it is undefined and all constant / final caches are cleared. -- so `final` method just skips a little bit overhead of class testing?
 
-## back arrows
+## Back arrows
 
 back arrows generates nested lambda
 
@@ -1285,6 +1309,6 @@ back arrows can be used inside any syntax structures with `end` or `when` delimi
 
 back arrows can be considered as monad of the universal sum type. they can be tail-call optimized.
 
-## matching args
+## Matching args
 
-see pattern-match
+See [Pattern Match](pattern-match.md)

@@ -8,9 +8,9 @@ class MiniLex
   CALLBACK_RE = /\{("(\\.|[^"])"|[^\}])*\}/
 
   Lex = Struct.new :context, :rules
-  Klasses.add 'Lex', ['context', 'rules']
   class Lex
     def eval
+      Klasses.validate self.class
       multi = build_list rules.map &:eval
       "NODE(Lex, 2, #{context.eval}, #{multi})"
     end
@@ -18,42 +18,42 @@ class MiniLex
 
   # see also `lex String` and `peg String`
   Str = Struct.new :str
-  Klasses.add 'String', ['str']
   class Str
     def eval
-      "NODE(String, 1, STR(#{str.inspect}))"
+      # Klasses.validate self.class
+      "STR(#{str.inspect})"
     end
   end
 
   RefPartialContext = Struct.new :name
-  Klasses.add 'RefPartialContext', ['name']
   class RefPartialContext
     def eval
+      Klasses.validate self.class
       "NODE(RefPartialContext, 1, #{name.eval})"
     end
   end
 
   RefContext = Struct.new :name
-  Klasses.add 'RefContext', ['name']
   class RefContext
     def eval
+      Klasses.validate self.class
       "NODE(RefContext, 1, #{name.eval})"
     end
   end
 
   SeqLexRules = Struct.new :rules
-  Klasses.add 'SeqLexRules', ['rules']
   class SeqLexRules
     def eval
+      Klasses.validate self.class
       multi_rules = build_list rules.map &:eval
       "NODE(SeqLexRules, 1, #{multi_rules})"
     end
   end
 
   BeginCallback = Struct.new :first_cb, :rules
-  Klasses.add 'BeginCallback', ['first_cb', 'rules']
   class BeginCallback
     def eval
+      Klasses.validate self.class
       cb = first_cb ? first_cb.eval : "VAL_NIL"
       multi_rules = build_list rules.map &:eval
       "NODE(BeginCallback, 2, #{cb}, #{multi_rules})"
@@ -61,9 +61,9 @@ class MiniLex
   end
 
   EndCallback = Struct.new :first_cb, :rules
-  Klasses.add 'EndCallback', ['first_cb', 'rules']
   class EndCallback
     def eval
+      Klasses.validate self.class
       cb = first_cb ? first_cb.eval : "VAL_NIL"
       multi_rules = build_list rules.map &:eval
       "NODE(EndCallback, 2, #{cb}, #{multi_rules})"
@@ -72,9 +72,9 @@ class MiniLex
 
   # pattern can be string or regex
   LexRule = Struct.new :pattern, :code
-  Klasses.add 'LexRule', ['pattern', 'code']
   class LexRule
     def eval
+      Klasses.validate self.class
       maybe_code = build_list code.map &:eval
       "NODE(LexRule, 2, #{pattern.eval}, #{maybe_code})"
     end

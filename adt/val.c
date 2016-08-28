@@ -200,24 +200,6 @@ static void _check_final_method_conflict(Klass* klass, uint32_t method_id) {
   }
 }
 
-static Method* _deep_search_method(Klass* klass, uint32_t method_id) {
-  Method* m = _search_own_method(klass, method_id);
-  if (m) {
-    return m;
-  }
-
-  int size = Includes.size(&klass->includes);
-  for (int i = size - 1; i >= 0; i--) {
-    uint32_t include_id = *Includes.at(&klass->includes, i);
-    Klass* include_klass = *Klasses.at(&runtime.klasses, include_id);
-    Method *m = _deep_search_method(include_klass, method_id);
-    if (m) {
-      return m;
-    }
-  }
-  return NULL;
-}
-
 #pragma mark ### klass
 
 void klass_def_internal(uint32_t klass_id, uint32_t name_id) {
@@ -321,7 +303,7 @@ void klass_def_method(uint32_t klass_id, uint32_t method_id, int32_t argc, ValMe
 
 }
 
-void klass_def_method2(uint32_t klass_id, uint32_t method_id, int32_t min_argc, int32_t max_argc, ValMethodFunc2 func, bool is_final) {
+void klass_def_method_v(uint32_t klass_id, uint32_t method_id, int32_t min_argc, int32_t max_argc, ValMethodFuncV func, bool is_final) {
   Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
   _check_final_method_conflict(klass, method_id);
 
@@ -331,6 +313,34 @@ void klass_def_method2(uint32_t klass_id, uint32_t method_id, int32_t min_argc, 
   meth->as.func2 = func;
 
   IdMethods.insert(&klass->id_methods, method_id, meth);
+}
+
+void* klass_find_method(uint32_t klass_id, uint32_t method_id) {
+  Klass* klass = *Klasses.at(&runtime.klasses, klass_id);
+  Method* m = _search_own_method(klass, method_id);
+  if (m) {
+    return m;
+  }
+
+  int size = Includes.size(&klass->includes);
+  for (int i = size - 1; i >= 0; i--) {
+    uint32_t include_id = *Includes.at(&klass->includes, i);
+    Method *m = klass_find_method(include_id, method_id);
+    if (m) {
+      return m;
+    }
+  }
+  return NULL;
+}
+
+ValPair klass_call_method(Val obj, void* m, int argc, Val* argv) {
+  if (m) {
+    return METHOD_INVOKE(obj, m, argc, argv);
+  } else {
+    // TODO error class hierachy
+    Val no_method_err = nb_string_new_literal_c("method not found");
+    return (ValPair){VAL_NIL, no_method_err};
+  }
 }
 
 void klass_include(uint32_t klass_id, uint32_t included_id) {
@@ -467,15 +477,8 @@ uint64_t val_hash_mem(const void* memory, size_t size) {
 
 ValPair val_send(Val obj, uint32_t method_id, int32_t argc, Val* args) {
   uint32_t klass_id = VAL_KLASS(obj);
-  Klass* k = *Klasses.at(&runtime.klasses, klass_id);
-  Method* m = _deep_search_method(k, method_id);
-  if (m) {
-    return METHOD_INVOKE(obj, m, argc, args);
-  } else {
-    // TODO error class hierachy
-    Val no_method_err = nb_string_new_literal_c("method not found");
-    return (ValPair){VAL_NIL, no_method_err};
-  }
+  Method* m = klass_find_method(klass_id, method_id);
+  return klass_call_method(obj, m, argc, args);
 }
 
 noreturn void val_throw(Val obj) {

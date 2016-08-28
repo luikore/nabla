@@ -290,6 +290,78 @@ void arena_suite() {
   }
 }
 
+#pragma mark ### test utils/dual_stack.h
+
+#include "utils/dual-stack.h"
+DUAL_STACK_DECL(DStack, int16_t, int32_t);
+
+typedef struct {
+  int8_t magic;
+  int lbp;
+  int rbp;
+} DStackFrame;
+
+void dual_stack_suite() {
+  ccut_test("test dual stack push/pop") {
+    struct DStack d;
+    DStack.init(&d);
+    for (int i = 0; i < 5; i++) {
+      DStack.lpush(&d, i);
+      DStack.rpush(&d, i * 9);
+      DStack.rpush(&d, i * 10);
+    }
+    assert_eq(5, DStack.lsize(&d));
+    assert_eq(10, DStack.rsize(&d));
+    // l:[4,3,2,1,0] r:[40,36, 30,27, 20,18, 10,9, 0,0]
+
+    DStack.lpop(&d);
+    for (int i = 0; i < 6; i++) {
+      DStack.rpop(&d);
+    }
+    assert_eq(4, DStack.lsize(&d));
+    assert_eq(4, DStack.rsize(&d));
+    // l:[3,2,1,0] r:[10,9,0,0]
+
+    int lsum = 0;
+    for (int i = 0; i < DStack.lsize(&d); i++) {
+      int16_t* l = DStack.lat(&d, i);
+      lsum += *l;
+    }
+    assert_eq(6, lsum);
+
+    int rsum = 0;
+    for (int i = 0; i < DStack.rsize(&d); i++) {
+      int32_t* r = DStack.rat(&d, i);
+      rsum += *r;
+    }
+    assert_eq(19, rsum);
+
+    DStack.cleanup(&d);
+  }
+
+  ccut_test("test dual stack frame management") {
+    struct DStack d;
+    DStackFrame* dsf;
+
+    DStack.init(&d);
+
+    DStack.lpush(&d, 23);
+    int lbp = DStack.lsize(&d);
+    int rbp = DStack.rsize(&d);
+    dsf = DStack.push_frame(&d, sizeof(DStackFrame));
+    dsf->lbp = lbp;
+    dsf->rbp = rbp;
+    DStack.lpush(&d, 1);
+    DStack.rpush(&d, 3);
+
+    DStack.restore(&d, dsf->lbp, dsf->rbp);
+    int16_t* ltop = DStack.lat(&d, 0);
+    assert_eq(23, *ltop);
+
+    DStack.cleanup(&d);
+  }
+}
+
 #pragma mark ### run them all
 
 int main (int argc, char const *argv[]) {
@@ -302,6 +374,7 @@ int main (int argc, char const *argv[]) {
   ccut_run_suite(pool_suite);
   ccut_run_suite(utf_8_suite);
   ccut_run_suite(arena_suite);
+  ccut_run_suite(dual_stack_suite);
   ccut_run_suite(val_suite);
   ccut_run_suite(array_suite);
   ccut_run_suite(dict_suite);

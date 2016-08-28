@@ -66,17 +66,17 @@ static ValPair concat_char(Spellbreak* ctx, Val left_s, Val right_c) {
   return (ValPair){res_s, VAL_NIL};
 }
 
-// invoke parser defined in peg_dict, set result in context_stack
+// invoke peg parser defined in peg_dict, set result in context_stack
 // NOTE ending current context is managed in lex vm
-static ValPair parse(Spellbreak* sb) {
+// TODO when we support importing external rules, we need to find the right action
+static ValPair peg(Spellbreak* sb, Val s) {
   size_t context_stack_size = ContextStack.size(&sb->context_stack);
   assert(context_stack_size);
   ContextEntry* ce = ContextStack.at(&sb->context_stack, context_stack_size);
-  Val s = VAL_FROM_STR(ce->name_str);
   int token_pos = ce->token_pos;
 
   Val parser;
-  if (!nb_dict_find(sb->peg_dict, nb_string_ptr(s), nb_string_byte_size(s), &parser)) {
+  if (!nb_dict_find(sb->context_dict, nb_string_ptr(s), nb_string_byte_size(s), &parser)) {
     return (ValPair){VAL_NIL, nb_string_new_literal_c("bad context name str")};
   }
   int token_size = TokenStream.size(&sb->token_stream) - ce->token_pos;
@@ -150,7 +150,7 @@ static void _sb_destruct(void* p) {
 }
 
 #define METHOD(k, func, argc) klass_def_method(k, val_strlit_new_c(#func), argc, func, true)
-#define METHOD2(k, func, min_argc, max_argc) klass_def_method2(k, val_strlit_new_c(#func), min_argc, max_argc, (ValMethodFunc2)func, true)
+#define METHOD2(k, func, min_argc, max_argc) klass_def_method_v(k, val_strlit_new_c(#func), min_argc, max_argc, (ValMethodFuncV)func, true)
 #define STR(v) nb_string_new_literal_c(v)
 
 void sb_init_module(void) {
@@ -189,7 +189,7 @@ uint32_t sb_new_syntax(uint32_t name_str) {
   klass_set_data(klass, mdata);
   klass_set_destruct_func(klass, _sb_destruct);
 
-  METHOD(klass, parse, 1);
+  METHOD(klass, peg, 1);
   METHOD(klass, yield, 1);
   METHOD(klass, tail, 1);
   METHOD2(klass, style, 1, 2);
@@ -211,8 +211,7 @@ Spellbreak* sb_new(uint32_t syntax_klass) {
 
   Spellbreak* s = val_alloc(syntax_klass, sizeof(Spellbreak));
 
-  s->lex_dict = mdata->lex_dict;
-  s->peg_dict = mdata->peg_dict;
+  s->context_dict = mdata->context_dict;
 
   Vals.init(&s->stack, 10);
   ContextStack.init(&s->context_stack, 5);
@@ -253,25 +252,23 @@ Val sb_parse(Spellbreak* s, const char* src, int64_t size) {
 
 void sb_syntax_compile(Val ast, uint32_t target_klass) {
   CompileCtx ctx = {
-    .lex_dict = nb_dict_new(),
-    .peg_dict = nb_dict_new(),
+    .context_dict = nb_dict_new(),
     .patterns_dict = nb_dict_new(),
     .vars_dict = nb_dict_new(),
     .ast = ast
   };
+  Iseq.init(&ctx.iseq, 30);
   Val err = sb_compile_main(&ctx);
 
   if (err != VAL_UNDEF) {
-    RELEASE(ctx.lex_dict);
-    RELEASE(ctx.peg_dict);
+    RELEASE(ctx.context_dict);
     RELEASE(ctx.patterns_dict);
     RELEASE(ctx.vars_dict);
     val_throw(err);
   }
 
   SpellbreakMData* mdata = klass_get_data(target_klass);
-  mdata->lex_dict = ctx.lex_dict;
-  mdata->peg_dict = ctx.peg_dict;
+  mdata->context_dict = ctx.context_dict;
   mdata->vars_size = nb_dict_size(ctx.vars_dict);
   mdata->compiled = true;
   RELEASE(ctx.patterns_dict);
