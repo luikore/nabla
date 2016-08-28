@@ -79,6 +79,7 @@ static void _label_ref(LabelTable* lt, int offset) {
 
 // SeqRule or Branch
 static void _encode_rule_body_unit(struct Iseq* iseq, Val e, LabelTable* lt);
+static void _encode_callback_lines(struct Iseq* iseq, Val stmts, int terms_size, LabelTable* lt);
 
 static void _encode_term(struct Iseq* iseq, Val term_node, LabelTable* lt) {
   if (VAL_KLASS(term_node) == kRefRule) {
@@ -296,37 +297,115 @@ static void _encode_callback_expr(struct Iseq* iseq, Val expr, int terms_size, L
   } else if (klass == kCapture) {
     // Capture[var_name]
 
-    // $3: capture 3
+    // TODO $-\d+
+    Val tok = nb_struct_get(expr, 0);
+    int size = nb_string_byte_size(tok);
+    // TODO raise error if size > 2
+    char s[size];
+    strncpy(s, nb_string_ptr(tok) + 1, size - 1);
+    s[size - 1] = '\0';
+    int i = atoi(s);
+    if (i > terms_size) {
+      // raise error
+      // TODO maybe we don't need to pass terms_size everywhere
+      // just check it after the bytecode is compiled
+    }
+    ENCODE(iseq, uint16_t, CAPTURE);
+    ENCODE(iseq, uint16_t, (uint16_t)i);
 
   } else if (klass == kCreateNode) {
     // CreateNode[ty, (Expr | SplatEntry)*]
 
     // node[a, *b]:
-    //   node_beg klass
+    //   node_beg klass_name
     //   a
     //   node_set
     //   b
     //   node_setv
     //   node_end
 
+    Val klass_name = nb_struct_get(expr, 0);
+    Val elems = nb_struct_get(expr, 1);
+    ENCODE(iseq, ArgU32, ((ArgU32){NODE_BEG, VAL_TO_STR(klass_name)}));
+    elems = nb_cons_reverse(elems);
+    for (Val tail = elems; tail; tail = nb_cons_tail(tail)) {
+      Val e = nb_cons_head(tail);
+      if (VAL_KLASS(e) == kSplatEntry) {
+        Val to_splat = nb_struct_get(e, 0);
+        _encode_callback_expr(iseq, to_splat, terms_size, lt);
+        ENCODE(iseq, uint16_t, NODE_SETV);
+      } else {
+        _encode_callback_expr(iseq, e, terms_size, lt);
+        ENCODE(iseq, uint16_t, NODE_SET);
+      }
+    }
+    ENCODE(iseq, uint16_t, NODE_END);
+
   } else if (klass == kCreateList) {
     // CreateList[(Expr | SplatEntry)*]
 
     // [a, *b]: b, a, list
     // [*a, b]: b, a, r_list
+    // NOTE: no need to reverse list here
+    Val elems = nb_struct_get(expr, 0);
+    if (elems) {
+      Val e = nb_cons_head(elems);
+      Val tail = nb_cons_tail(elems);
+      if (VAL_KLASS(e) == kSplatEntry) {
+        Val to_splat = nb_struct_get(e, 0);
+        _encode_callback_expr(iseq, to_splat, terms_size, lt);
+        // we can continue with this list
+      } else {
+        ENCODE(iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
+        _encode_callback_expr(iseq, e, terms_size, lt);
+        ENCODE(iseq, uint16_t, LIST);
+      }
+      for (; tail; tail = nb_cons_tail(tail)) {
+        e = nb_cons_head(tail);
+        if (VAL_KLASS(e) == kSplatEntry) {
+          Val to_splat = nb_struct_get(e, 0);
+          _encode_callback_expr(iseq, to_splat, terms_size, lt);
+          ENCODE(iseq, uint16_t, R_LIST);
+        } else {
+          _encode_callback_expr(iseq, e, terms_size, lt);
+          ENCODE(iseq, uint16_t, LIST);
+        }
+      }
+    } else {
+      ENCODE(iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
+    }
 
   } else {
     assert(klass == kIf);
     // If[Expr, Expr*, (Expr* | If)]
 
-    // if expr, true_clause, else, false_clause:
-    //   expr
+    // if cond, true_clause, else, false_clause:
+    //   cond
     //   junless L0
     //   true_clause
     //   jmp L1
     //   L0: false_clause
     //   L1:
 
+    Val cond = nb_struct_get(expr, 0);
+    Val true_clause = nb_struct_get(expr, 1);
+    Val false_clause = nb_struct_get(expr, 2);
+    int l0 = _label_new_num(lt);
+    int l1 = _label_new_num(lt);
+
+    _encode_callback_expr(iseq, cond, terms_size, lt);
+    _label_ref(lt, Iseq.size(iseq) + 1);
+    ENCODE(iseq, Arg32, ((Arg32){JUNLESS, l0}));
+    _encode_callback_lines(iseq, true_clause, terms_size, lt);
+    _label_ref(lt, Iseq.size(iseq) + 1);
+    ENCODE(iseq, Arg32, ((Arg32){JMP, l1}));
+    _label_def(lt, l0, Iseq.size(iseq));
+    if (VAL_KLASS(false_clause) == kIf) {
+      _encode_callback_expr(iseq, false_clause, terms_size, lt);
+    } else {
+      _encode_callback_lines(iseq, false_clause, terms_size, lt);
+    }
+    _label_def(lt, l1, Iseq.size(iseq));
   }
 }
 

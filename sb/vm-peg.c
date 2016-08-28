@@ -56,6 +56,7 @@ ValPair sb_vm_peg_exec(uint16_t* peg, int32_t token_size, Token* tokens) {
 # define _PUSH(e) Stack.push(&stack, e)
 # define _POP() Stack.pop(&stack)
 # define _TOP() Stack.at(&stack, Stack.size(&stack) - 1)
+# define _TOPN(n) Stack.at(&stack, Stack.size(&stack) - (1 + n))
 
   BranchStack.init(&br_stack, 5);
   Stack.init(&stack, 10);
@@ -207,10 +208,59 @@ pop_cond:
         DISPATCH;
       }
 
-      CASE(NODE) {
-        ArgU32U32 data = DECODE(ArgU32U32, pc);
-        stack.size -= data.arg1;
-        _PUSH(nb_struct_new(data.arg2, data.arg1, _TOP()));
+      CASE(NODE_BEG) {
+        uint32_t klass_id = DECODE(ArgU32, pc).arg1;
+        ValPair val_and_size = nb_struct_new_empty(klass_id);
+        _PUSH(val_and_size.fst);
+        uint64_t limit = (uint32_t)val_and_size.snd;
+        _PUSH(limit << 32);
+        DISPATCH;
+      }
+
+      CASE(NODE_SET) {
+        pc++;
+        Val e = _POP();
+        Val n = *_TOP();
+        uint32_t limit = (uint32_t)(n >> 32);
+        uint32_t i = (n & 0xFFFFFFFFU);
+        if (i >= limit) {
+          // TODO raise error
+        }
+        Val node = *_TOPN(1);
+        nb_struct_set(node, i, e);
+        _TOP()[0]++;
+        DISPATCH;
+      }
+
+      CASE(NODE_SETV) {
+        pc++;
+        Val e = _POP();
+        Val n = *_TOP();
+        uint32_t limit = (uint32_t)(n >> 32);
+        uint32_t i = (n & 0xFFFFFFFFU);
+        if (i >= limit) {
+          // TODO raise error
+        }
+        if (n && VAL_KLASS(n) != KLASS_CONS) {
+          // TODO raise error splatting non-cons
+        }
+        Val node = *_TOPN(1);
+        for (Val tail = e; tail; tail = nb_cons_tail(tail)) {
+          Val head = nb_cons_head(tail);
+          nb_struct_set(node, i++, head);
+          _TOP()[0]++;
+        }
+        DISPATCH;
+      }
+
+      CASE(NODE_END) {
+        pc++;
+        Val n = _POP();
+        uint32_t limit = (uint32_t)(n >> 32);
+        uint32_t i = (n & 0xFFFFFFFFU);
+        if (i != limit) {
+          // TODO raise error if arg count not match
+        }
         DISPATCH;
       }
 

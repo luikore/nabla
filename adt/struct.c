@@ -29,6 +29,15 @@ uint32_t nb_struct_def(Val name, uint32_t parent_id, uint32_t field_size, NbStru
   return klass_id;
 }
 
+ValPair nb_struct_new_empty(uint32_t klass_id) {
+  Klass* k = (Klass*)klass_val(klass_id);
+  assert(k);
+  int argc = Fields.size(&k->fields);
+  Struct* s = val_alloc(klass_id, STRUCT_BYTE_SIZE(argc));
+  memset(s->fields, 0, STRUCT_BYTE_SIZE(argc));
+  return (ValPair){(Val)s, (Val)argc};
+}
+
 Val nb_struct_new(uint32_t klass_id, uint32_t argc, Val* argv) {
   // todo splat matcher logic
   Klass* k = (Klass*)klass_val(klass_id);

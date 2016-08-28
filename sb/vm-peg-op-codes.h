@@ -22,7 +22,7 @@ enum OpCodes {
   CAPTURE,     // n:uint16                    # load capture at bp[n]
   PUSH,        // val:Val                     # push literal
   POP,         //                             # pop top of stack
-  NODE_BEG,    // klass:uint32                # push [node, (limit, counter=0)] [*****]
+  NODE_BEG,    // klass_name:uint32           # push [node, (limit, counter=0)] [*****]
   NODE_SET,    //                             # (assume stack top is [node, (limit, counter), val]) node[counter++] = val
   NODE_SETV,   //                             # (assume stack top is [node, (limit, counter), *vals]) node[counter..counter+vals.size] = *vals
   NODE_END,    //                             # (assume stack top is [node, (limit, counter)]) finish building node, remove counter from stack top
@@ -55,7 +55,9 @@ enum OpCodes {
 //       code generator can take this advantage to use a single LABEL_REF to compute the offsets
 // [****] if we don't pop cond, the following expression is not right: `[(if foo, bar), (if foo, bar)]`
 
-// [*****] for node building: we can't use LIST/R_LIST tricks here...
+// [*****] since we only define structs after compilation done, the klass is not be defined yet in compile time,
+//         so find in run-time.
+//         for node building: we can't use LIST/R_LIST tricks here...
 //         we allocate the node first, and then set attrs one by one or put several attrs by a splat.
 //         if attr size exceeds limit of the node, deallocate the node and raise error.
 //         (TODO we need some extra matching if node is defined like Foo[bar, *baz])
@@ -73,7 +75,7 @@ static const char* op_code_names[] = {
   [CAPTURE] = "capture",
   [PUSH] = "push",
   [POP] = "pop",
-  [NODE_BEG] = "node",
+  [NODE_BEG] = "node_beg",
   [NODE_SET] = "node_set",
   [NODE_SETV] = "node_setv",
   [NODE_END] = "node_end",

@@ -214,7 +214,7 @@ struct CreateNode[ty, elems] # elems reversed
 struct CreateList[elems] # elems reversed
 struct Assign[var_name, expr]
 struct SplatEntry[expr]
-struct If[expr, true_lines, false_lines] # lines reversed
+struct If[expr, true_clause, false_clause] # lines reversed, false_clause can be If
 peg Callback[
   Callback : begin.code Stmts end.code { Callback[$2] }
   Stmts : Expr Stmts { [$1, *$2] }

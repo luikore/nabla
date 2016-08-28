@@ -16,7 +16,7 @@ DEF_NODE(EpsilonRule, );
 DEF_NODE(Flag, "flag");
 DEF_NODE(GlobalVarRef, "name");
 DEF_NODE(Group, "special", "branches");
-DEF_NODE(If, "expr", "true_lines", "false_lines");
+DEF_NODE(If, "expr", "true_clause", "false_clause");
 DEF_NODE(InfixLogic, "lhs", "op", "rhs");
 DEF_NODE(Lex, "context", "rules");
 DEF_NODE(LexRule, "pattern", "code");

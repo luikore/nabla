@@ -94,6 +94,10 @@ class MiniPeg
   end
 
   class EpsilonRule
+    def self.members
+      []
+    end
+
     def eval
       Klasses.validate self.class
       "NODE(EpsilonRule, 0)"
