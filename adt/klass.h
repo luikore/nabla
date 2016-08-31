@@ -7,7 +7,7 @@
 #include "utils/mut-map.h"
 
 // def foo a b c      # min_argc = max_argc = 3
-// def foo [a, *b]    # min_argc = 1, max_argc = -1
+// case def foo       # min_argc = -1, max_argc = -1
 // def foo a b c=3    # min_argc = 2, max_argc = 3
 typedef struct {
   ValHeader h; // user1: is_cfunc, user2: is_final

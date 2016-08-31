@@ -62,9 +62,8 @@ typedef struct {
   struct Iseq* iseq;
 
   // TODO use dual stack
-  struct Vals stack;
+  struct Vals stack; // all globals and locals are numbered and put into the top of stack
   struct ContextStack context_stack;
-  struct Vals vars; // for all globals and locals
 } Spellbreak;
 
 #define CAPTURE_BEGIN(c, i) (c)->captures[(i) * 2]
@@ -132,10 +131,20 @@ Val sb_vm_lex_compile(struct Iseq* iseq, Val patterns_dict, Val vars_dict, Val n
 // returns {res, err}
 ValPair sb_vm_lex_exec(Spellbreak* sb);
 
-// updates iseq, returns err
-Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, Val node);
+// stmts: list of statements
+// peg_mode: if set to true, will forbid variables (TODO local variables still makes it pure)
+// see compile.h for label table type
+Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, struct {} ctx);
 
-void sb_vm_peg_decompile(struct Iseq* iseq, int32_t start, int32_t size);
+void sb_vm_callback_decompile(uint16_t* pc);
+
+// replaces stack, returns err | TODO need stack from position
+ValPair sb_vm_callback_exec(uint16_t* pc, struct Vals* stack, uint32_t bp);
+
+// updates iseq, returns err
+Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, Val node, void* klass_refs);
+
+void sb_vm_peg_decompile(uint16_t* pc);
 
 // returns {res, err}
 // klass is for looking up pure functions (they can use a nil as receiver)
@@ -144,12 +153,12 @@ ValPair sb_vm_peg_exec(uint16_t* pc, int32_t token_size, Token* tokens);
 // updates iseq, returns err
 Val sb_vm_regexp_compile(struct Iseq* iseq, Val patterns_dict, Val node);
 
-void sb_vm_regexp_decompile(struct Iseq* iseq, int32_t start, int32_t size);
+void sb_vm_regexp_decompile(uint16_t* pc);
 
 Val sb_vm_regexp_from_string(struct Iseq* iseq, Val s);
 
 // captures.size stored in captures[0]
 // matched string size stored in captures[1]
-bool sb_vm_regexp_exec(uint16_t* pc, int64_t size, const char* str, int32_t* captures);
+bool sb_vm_regexp_exec(uint16_t* pc, int64_t str_size, const char* str, int32_t* captures);
 
-bool sb_string_match(Val pattern_str, int64_t size, const char* str, int32_t* capture_size, int32_t* captures);
+bool sb_string_match(Val pattern_str, int64_t str_size, const char* str, int32_t* capture_size, int32_t* captures);

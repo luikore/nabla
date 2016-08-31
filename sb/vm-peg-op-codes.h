@@ -4,9 +4,7 @@
 
 enum OpCodes {
   // op        // args                        # description
-
-  // metadata
-  RULE_SIZE,   // sz:uint32                   # size of total rules, for initialize memoize table size
+  META,        // size:uint32, data:void*     # rule_size = (uint32_t)data
 
   // rule & aux ops, operates on stack / br stack
   TERM=1,      // str:uint32                  # match a terminal, push stack, else handle error [*]
@@ -17,26 +15,14 @@ enum OpCodes {
   UNPARSE,     //                             # pop br stack, restore `curr` and `stack_offset`, but NOT `pc_offset`
   LOOP_UPDATE, // offset:int32                # try goto offset for looping [**]
   JMP,         // offset:int32                # jump to an offset in bytecode
+  LIST_MAYBE,  //                             # if br_stack.top.stack_offset + 1 == stack.offset, create list
+               //                             # else do nothing
+  PUSH,        // val:Val                     # push val on to stack
+  POP,         //                             # pop stack
 
-  // callback ops, similar to the ones in vm-lex, operates on stack
-  CAPTURE,     // n:uint16                    # load capture at bp[n]
-  PUSH,        // val:Val                     # push literal
-  POP,         //                             # pop top of stack
-  NODE_BEG,    // klass_id:uint32             # push [node, (limit, counter=0)] [*****]
-  NODE_SET,    //                             # (assume stack top is [node, (limit, counter), val]) node[counter++] = val
-  NODE_SETV,   //                             # (assume stack top is [node, (limit, counter), *vals]) node[counter..counter+vals.size] = *vals
-  NODE_END,    //                             # (assume stack top is [node, (limit, counter)]) finish building node, remove counter from stack top
-  LIST,        //                             # pop b:Cons, a:Val, push [a, *b] (members are pushed from left to right)
-  LIST_MAYBE,  //                             # similar to list, do nothing if br_stack.top.stack_offset + 1 != stack.offset
-  LISTV,       //                             # pop b:Cons, a:Cons, push [*a, *b] (members are pushed from left to right)
-  JIF,         // true_clause:uint32          # pops cond [****]
-  JUNLESS,     // false_clause:uint32         # pops cond
-  CALL,        // argc:uint32, fname:uint32   # invoke a method (only pure builtin operators are supported), argc includes receiver obj
-
-  // terminating
+  CALLBACK,    // next_offset:uint32          # invoke callback VM, then move to pc + next_offset
   MATCH,       //                             # end parsing, check if token stream is terminated, and replace it
   FAIL,        // info:uint32                 # quickly fail parsing and report
-
   END,         //                             # end of iseq, won't reach
 
   OP_CODES_SIZE
@@ -53,15 +39,9 @@ enum OpCodes {
 //      else update top of br stack with (old_offset, curr), then goto offset.
 // [***] the first arg of RULE_CALL, PUSH_BR, LOOP_UPDATE, JMP, JIF are all offsets,
 //       code generator can take this advantage to use a single LABEL_REF to compute the offsets
-// [****] if we don't pop cond, the following expression is not right: `[(if foo, bar), (if foo, bar)]`
-
-// [*****] For node building: we can't use LIST/LISTV tricks here...
-//         we allocate the node first, and then set attrs one by one or put several attrs by a splat.
-//         if attr size exceeds limit of the node, deallocate the node and raise error.
-//         (TODO we need some extra matching if node is defined like Foo[bar, *baz])
 
 static const char* op_code_names[] = {
-  [RULE_SIZE] = "rule_size",
+  [META] = "meta",
   [TERM] = "term",
   [RULE_CALL] = "rule_call",
   [RULE_RET] = "rule_ret",
@@ -70,19 +50,10 @@ static const char* op_code_names[] = {
   [UNPARSE] = "unparse",
   [LOOP_UPDATE] = "loop_update",
   [JMP] = "jmp",
-  [CAPTURE] = "capture",
+  [LIST_MAYBE] = "list_maybe",
   [PUSH] = "push",
   [POP] = "pop",
-  [NODE_BEG] = "node_beg",
-  [NODE_SET] = "node_set",
-  [NODE_SETV] = "node_setv",
-  [NODE_END] = "node_end",
-  [LIST] = "list",
-  [LIST_MAYBE] = "list_maybe",
-  [LISTV] = "listv",
-  [JIF] = "jif",
-  [JUNLESS] = "junless",
-  [CALL] = "call",
+  [CALLBACK] = "callback",
   [MATCH] = "match",
   [FAIL] = "fail",
   [END] = "end"

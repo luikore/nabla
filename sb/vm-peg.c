@@ -13,26 +13,24 @@ typedef struct {
 // manage PEG prioritized branches
 MUT_ARRAY_DECL(BranchStack, Branch);
 
-MUT_ARRAY_DECL(Stack, Val);
-
-static void _report_stack(struct Stack* stack, uint32_t bp, struct BranchStack* br_stack, uint32_t br_bp) {
+static void _report_stack(struct Vals* stack, uint32_t bp, struct BranchStack* br_stack, uint32_t br_bp) {
   int top;
-  top = Stack.size(stack);
+  top = Vals.size(stack);
 
   while (bp) {
-    printf("%lu: ", *Stack.at(stack, top));
+    printf("%lu: ", *Vals.at(stack, top));
     for (int i = bp; i < top; i++) {
-      printf("%lu ", *Stack.at(stack, i));
+      printf("%lu ", *Vals.at(stack, i));
     }
     printf("\n");
     top = bp - 3;
-    bp = *Stack.at(stack, bp - 2);
+    bp = *Vals.at(stack, bp - 2);
   }
 }
 
 ValPair sb_vm_peg_exec(uint16_t* peg, int32_t token_size, Token* tokens) {
   struct BranchStack br_stack;
-  struct Stack stack;
+  struct Vals stack;
   uint32_t br_bp = 0;
   uint32_t bp = 0;
   uint16_t* pc = peg;
@@ -52,20 +50,23 @@ ValPair sb_vm_peg_exec(uint16_t* peg, int32_t token_size, Token* tokens) {
   //
   // The root frame starts from main rule id
 
-# define _SP(i) *Stack.at(&stack, i)
-# define _PUSH(e) Stack.push(&stack, e)
-# define _POP() Stack.pop(&stack)
-# define _TOP() Stack.at(&stack, Stack.size(&stack) - 1)
-# define _TOPN(n) Stack.at(&stack, Stack.size(&stack) - (1 + n))
+# define _SP(i) *Vals.at(&stack, i)
+# define _PUSH(e) Vals.push(&stack, e)
+# define _POP() Vals.pop(&stack)
+# define _TOP() Vals.at(&stack, Vals.size(&stack) - 1)
 
+  // TODO use dual stack?
   BranchStack.init(&br_stack, 5);
-  Stack.init(&stack, 10);
+  Vals.init(&stack, 10);
   _PUSH(0); // main rule_id: 0
 
 # define CASE(op) case op:
 # define DISPATCH continue
 
-  uint32_t rule_size = DECODE(ArgU32, pc).arg1;
+  // meta bytecode_size, void*
+  DECODE(ArgU32, pc);
+  uint32_t rule_size = (uint32_t)DECODE(void*, pc);
+  // TODO use on-stack alloc if table size is not large
   memoize_table = malloc(rule_size * token_size * sizeof(Val));
   for (int i = 0; i < rule_size * token_size; i++) {
     memoize_table[i] = VAL_UNDEF;
@@ -119,7 +120,7 @@ pop_cond:
           _PUSH(return_addr);
           _PUSH(bp);
           _PUSH(br_bp);
-          bp = Stack.size(&stack);
+          bp = Vals.size(&stack);
           br_bp = BranchStack.size(&br_stack);
           _PUSH((Val)payload.arg2);
         }
@@ -150,7 +151,7 @@ pop_cond:
 
       CASE(PUSH_BR) {
         int32_t offset = DECODE(Arg32, pc).arg1;
-        Branch br = {offset, pos, Stack.size(&stack)};
+        Branch br = {offset, pos, Vals.size(&stack)};
         BranchStack.push(&br_stack, br);
         DISPATCH;
       }
@@ -188,11 +189,19 @@ pop_cond:
         DISPATCH;
       }
 
-      CASE(CAPTURE) {
+      CASE(LIST_MAYBE) {
         pc++;
-        uint16_t index = *pc;
-        pc++;
-        _PUSH(_SP(bp + index));
+        Branch* br;
+        if (BranchStack.size(&br_stack)) {
+          br = BranchStack.at(&br_stack, BranchStack.size(&br_stack) - 1);
+        } else {
+          br = NULL;
+        }
+        if (br && br->stack_offset + 1 == Vals.size(&stack)) {
+          Val tail = _POP();
+          Val head = _POP();
+          _PUSH(nb_cons_new(head, tail));
+        }
         DISPATCH;
       }
 
@@ -208,136 +217,13 @@ pop_cond:
         DISPATCH;
       }
 
-      CASE(NODE_BEG) {
-        uint32_t klass_id = DECODE(ArgU32, pc).arg1;
-        ValPair val_and_size = nb_struct_new_empty(klass_id);
-        _PUSH(val_and_size.fst);
-        uint64_t limit = (uint32_t)val_and_size.snd;
-        _PUSH(limit << 32);
-        DISPATCH;
-      }
-
-      CASE(NODE_SET) {
-        pc++;
-        Val e = _POP();
-        Val n = *_TOP();
-        uint32_t limit = (uint32_t)(n >> 32);
-        uint32_t i = (n & 0xFFFFFFFFU);
-        if (i >= limit) {
-          // TODO raise error
-        }
-        Val node = *_TOPN(1);
-        nb_struct_set(node, i, e);
-        _TOP()[0]++;
-        DISPATCH;
-      }
-
-      CASE(NODE_SETV) {
-        pc++;
-        Val e = _POP();
-        Val n = *_TOP();
-        uint32_t limit = (uint32_t)(n >> 32);
-        uint32_t i = (n & 0xFFFFFFFFU);
-        if (i >= limit) {
-          // TODO raise error
-        }
-        if (n && VAL_KLASS(n) != KLASS_CONS) {
-          // TODO raise error splatting non-cons
-        }
-        Val node = *_TOPN(1);
-        for (Val tail = e; tail; tail = nb_cons_tail(tail)) {
-          Val head = nb_cons_head(tail);
-          nb_struct_set(node, i++, head);
-          _TOP()[0]++;
-        }
-        DISPATCH;
-      }
-
-      CASE(NODE_END) {
-        pc++;
-        Val n = _POP();
-        uint32_t limit = (uint32_t)(n >> 32);
-        uint32_t i = (n & 0xFFFFFFFFU);
-        if (i != limit) {
-          // TODO raise error if arg count not match
-        }
-        DISPATCH;
-      }
-
-      CASE(LIST) {
-        pc++;
-        Val b = _POP();
-        Val a = _POP();
-        _PUSH(nb_cons_new(a, b));
-        DISPATCH;
-      }
-
-      CASE(LIST_MAYBE) {
-        pc++;
-        Branch* br;
-        if (BranchStack.size(&br_stack)) {
-          br = BranchStack.at(&br_stack, BranchStack.size(&br_stack) - 1);
-        } else {
-          br = NULL;
-        }
-        if (br && br->stack_offset + 1 == Stack.size(&stack)) {
-          Val tail = _POP();
-          Val head = _POP();
-          _PUSH(nb_cons_new(head, tail));
-        }
-        DISPATCH;
-      }
-
-      CASE(LISTV) {
-        pc++;
-        Val b = _POP();
-        Val a = _POP();
-        int n = 0;
-        for (Val tail = a; tail; tail = nb_cons_tail(tail)) {
-          _PUSH(nb_cons_head(a));
-          n++;
-        }
-        for (int i = 0; i < n; i++) {
-          Val e = _POP();
-          b = nb_cons_new(e, b);
-        }
-        _PUSH(b);
-        DISPATCH;
-      }
-
-      CASE(JIF) {
-        Val cond = _POP();
-        int32_t offset = DECODE(Arg32, pc).arg1;
-        // TODO check offset out of bound?
-        if (VAL_IS_TRUE(cond)) {
-          pc = peg + offset;
-        }
-        DISPATCH;
-      }
-
-      CASE(JUNLESS) {
-        Val cond = _POP();
-        int32_t offset = DECODE(Arg32, pc).arg1;
-        if (VAL_IS_FALSE(cond)) {
-          pc = peg + offset;
-        }
-        DISPATCH;
-      }
-
-      CASE(CALL) {
-        ArgU32U32 data = DECODE(ArgU32U32, pc);
-        uint32_t argc = data.arg1;
-        assert(argc >= 1); // all operators
-        uint32_t method = data.arg2;
-        Val* argv = Stack.at(&stack, stack.size - argc);
-        void* m = klass_find_method(sb_klass(), method);
-        ValPair res = klass_call_method(VAL_NIL, m, argc, argv);
+      CASE(CALLBACK) {
+        uint16_t* callback = pc + 1;
+        ValPair res = sb_vm_callback_exec(callback, &stack, bp);
         if (res.snd) {
-          // TODO cleanup and raise error
+          // TODO raise error
         }
-        stack.size -= argc;
-        _SP(stack.size - 1) = res.fst;
-        // TODO need to decrease ref or all managed by gen?
+        pc = peg + DECODE(ArgU32, pc).arg1;
         DISPATCH;
       }
 
@@ -351,13 +237,18 @@ pop_cond:
         goto not_matched;
         DISPATCH;
       }
+
+      CASE(END) {
+        // TODO raise error
+        goto not_matched;
+      }
     }
   }
 
 not_matched:
 
   BranchStack.cleanup(&br_stack);
-  Stack.cleanup(&stack);
+  Vals.cleanup(&stack);
   free(memoize_table);
   // todo detailed result, and maybe resumable?
   return (ValPair){VAL_NIL, nb_string_new_literal_c("error")};
@@ -365,7 +256,7 @@ not_matched:
 matched:
 
   BranchStack.cleanup(&br_stack);
-  Stack.cleanup(&stack);
+  Vals.cleanup(&stack);
   free(memoize_table);
   if (token_size != pos) {
     // todo detailed result, and maybe resumable?

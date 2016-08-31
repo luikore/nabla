@@ -2,17 +2,9 @@
 
 # pre-process: replace tabs with '  ', replace "\r\n" with "\n"
 
-# we need an ST representation that can be restored to code, so:
-# - some tokens are for css styling only
-# - eol is a token which may contain comment and space before comment
-# - spaces before a action/eql-sign should be kept
-# - spaces in regexp gets special treatment
-
 # for bootstrap, this file uses only the minimal subset of spellbreak
-# - calls with optional params are filled with concrete params
 # - no use of `\u`, `\x` and `{n}` in regexp
-# - no use nested regexp
-# - special chars inside `[]` are escaped
+# - special chars inside `[]` are all escaped
 # - no use if/infix in callbacks
 # - all `#` in regexp or string are escaped
 # - all structs are defined in one-line
@@ -30,7 +22,7 @@ lex Main[
   end /\z/ { :peg "Main" }
 
   /pattern\b/ { :token "kw.pattern" } /\ +(@\w+)/    { :token "name.pattern" 1 } /\ *=\ /
-  /var\b/     { :token "kw.var" } /\ +(\$[a-z]\w*)/  { :token "name.var.global" 1 }
+  /var\b/     { :token "kw.var" } /\ +([a-z]\w*)/    { :token "name.var.global" 1 }
   /struct\b/  { :token "kw.struct" } /\ +([A-Z]\w*)/ { :token "name.struct" 1 } StructIns
   /lex\b/     { :token "kw.lex" } /\ +(\*?[A-Z]\w*)/ { :token "name.context" 1 } Lex
   /peg\b/     { :token "kw.peg" } /\ +([A-Z]\w*)/    { :token "name.context" 1 } Peg
@@ -54,7 +46,7 @@ peg Main[
   Line : space.eol { } / Ins { $1 }
 
   Ins : kw.pattern name.pattern space.pre-eq op.eq Pattern { PatternIns[$2, $5] }
-      / kw.var name.var.global { VarDecl[$2] }
+      / kw.var name.var { VarDecl[$2] }
       / kw.struct name.struct name.arg* { StructIns[$2, $3] }
       / kw.lex name.context Lex { Lex[$2, $3] }
       / kw.peg name.context Peg { Peg[$2, $3] }
@@ -82,7 +74,6 @@ lex Lex[
   /\*[A-Z]\w*/ { :token "name.context.partial" }
   /[A-Z]\w*/   { :token "name.context" }
   /[a-z]\w*/   { :token "name.var" }
-  /$[a-z]\w*/  { :token "name.var.global" }
 
   *Spaces
 ]
@@ -198,9 +189,8 @@ lex PureCallback[
 
 lex Callback[
   *PureCallback
-  /var\b/      { :token "kw.var" }
-  /\$[a-z]\w*/ { :token "name.var.global" }
-  /[a-z]\w*/   { :token "name.var" }
+  /var\b/      { :token "kw.var" } /[a-z]\w*/
+  /[a-z]\w*/   { :token "name.var" 0 }
   /:[\w+\-*\/^&|<>=!%@]+/ { :token "name.func" }
   "=" { :token "op.eq" }
 ]
@@ -218,7 +208,7 @@ struct If[expr, true_clause, false_clause] # lines reversed, false_clause can be
 peg Callback[
   Callback : begin.code Stmts end.code { Callback[$2] }
   Stmts : Expr Stmts { [$1, *$2] }
-        / kw.var name.var Stmts { VarDecl[$2] }
+        / kw.var name.var Stmts { VarDecl[$2] } # only allowed in begin block
         / space.eol Stmts { $2 }
         / EPSILON { }
   Expr : Infix.Logic { $1 }

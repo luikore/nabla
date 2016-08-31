@@ -88,7 +88,14 @@ static bool _exec(uint16_t* init_pc, int64_t size, const char* init_s, int32_t* 
     t->s += scanned;\
   } while (0)
 
-  _add_thread(&ts, init_pc, init_s, captures);
+  // skip meta
+  {
+    uint16_t* pc_start = init_pc;
+    DECODE(ArgU32, pc_start);
+    DECODE(void*, pc_start);
+    _add_thread(&ts, pc_start, init_s, captures);
+  }
+
   while (ts.size) {
     Thread* t = Threads.at(&ts, ts.size - 1);
     ts.size--;

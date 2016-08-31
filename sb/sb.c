@@ -145,7 +145,6 @@ static void _sb_destruct(void* p) {
   Spellbreak* sb = p;
   Vals.cleanup(&sb->stack);
   ContextStack.cleanup(&sb->context_stack);
-  Vals.cleanup(&sb->vars);
   TokenStream.cleanup(&sb->token_stream);
 }
 
@@ -183,7 +182,7 @@ uint32_t sb_klass() {
 }
 
 uint32_t sb_new_syntax(uint32_t name_str) {
-  uint32_t klass = klass_ensure(name_str, klass_ensure(STR("Lang"), 0));
+  uint32_t klass = klass_def(name_str, klass_def(STR("Lang"), 0));
   SpellbreakMData* mdata = malloc(sizeof(SpellbreakMData));
   mdata->compiled = false;
   klass_set_data(klass, mdata);
@@ -213,13 +212,12 @@ Spellbreak* sb_new(uint32_t syntax_klass) {
 
   s->context_dict = mdata->context_dict;
 
-  Vals.init(&s->stack, 10);
+  Vals.init(&s->stack, mdata->vars_size + 10);
   ContextStack.init(&s->context_stack, 5);
   TokenStream.init(&s->token_stream, 20);
-  Vals.init(&s->vars, mdata->vars_size);
 
   for (int i = 0; i < mdata->vars_size; i++) {
-    Vals.at(&s->vars, i)[0] = VAL_NIL;
+    Vals.at(&s->stack, i)[0] = VAL_NIL;
   }
 
   return s;
@@ -229,8 +227,8 @@ void sb_reset(Spellbreak* s) {
   s->stack.size = 0;
   s->context_stack.size = 0;
   s->token_stream.size = 0;
-  for (int i = 0; i < Vals.size(&s->vars); i++) {
-    Vals.at(&s->vars, i)[0] = VAL_NIL;
+  for (int i = 0; i < Vals.size(&s->stack); i++) {
+    Vals.at(&s->stack, i)[0] = VAL_NIL;
   }
   s->curr = s->s;
 }

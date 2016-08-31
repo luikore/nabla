@@ -247,8 +247,9 @@ typedef ValPair (*ValMethodFuncV)(Val, int32_t, Val*);
 typedef uint64_t (*ValHashFunc)(Val);
 typedef bool (*ValEqFunc)(Val, Val);
 
-// define klass_id < KLASS_USER
+// define internal default klasses (with klass_id < KLASS_USER)
 // todo do not expose this func
+// for custom structs, see struct.h
 void klass_def_internal(uint32_t klass_id, uint32_t name_id);
 
 // return 0 if not exist
@@ -257,8 +258,17 @@ uint32_t klass_find(Val name, uint32_t parent_id);
 uint32_t klass_find_c(const char* name, uint32_t parent_id);
 
 // create if not exist
-uint32_t klass_ensure(Val name, uint32_t parent_id);
+// returns klass id
+uint32_t klass_def(Val name, uint32_t parent_id);
 
+// mark a checkpoint
+// returns current max klass_id
+uint32_t klass_push();
+
+// undefine klasses > the marked klass_id
+void klass_pop(uint32_t klass_id);
+
+// get klass object from klass_id
 Val klass_val(uint32_t klass_id);
 
 Val klass_name(uint32_t klass_id);

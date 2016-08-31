@@ -4,7 +4,7 @@
 void sb_build_vars_dict(CompileCtx* ctx) {
   for (Val lines = AT(ctx->ast, 0); lines != VAL_NIL; lines = TAIL(lines)) {
     Val e = HEAD(lines);
-    if (IS_A(e, "PatternIns") || IS_A(e, "Lex") || IS_A(e, "Peg") || e == VAL_UNDEF) {
+    if (IS_A(e, "PatternIns") || IS_A(e, "Lex") || IS_A(e, "Peg") || IS_A(e, "StructIns") || e == VAL_UNDEF) {
     } else if (IS_A(e, "VarDecl")) {
       Val var_name = AT(e, 0);
       size_t size = nb_string_byte_size(var_name);

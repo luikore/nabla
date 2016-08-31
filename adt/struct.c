@@ -20,7 +20,7 @@ static void _struct_destruct(void* ptr) {
 }
 
 uint32_t nb_struct_def(Val name, uint32_t parent_id, uint32_t field_size, NbStructField* fields) {
-  uint32_t klass_id = klass_ensure(name, parent_id);
+  uint32_t klass_id = klass_def(name, parent_id);
   Klass* k = (Klass*)klass_val(klass_id);
   for (int i = 0; i < field_size; i++) {
     Fields.push(&k->fields, fields[i]);

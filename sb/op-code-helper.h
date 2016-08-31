@@ -39,9 +39,11 @@ typedef struct {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #define AS_ARG32(c) c, 0
 #define SPLIT_ARG32(x) ((x) & 0xFFFFU), ((x) >> 16)
-#define SPLIT_ARG64(x) SPLIT_ARG32((x) & 0xFFFFFFFFU), SPLIT_ARG32((x) >> 32)
+#define SPLIT_ARG64(x) SPLIT_ARG32((x) & 0xFFFFFFFFU), SPLIT_ARG32(((uint64_t)(x)) >> 32)
 #else
 #define AS_ARG32(c) 0, c
 #define SPLIT_ARG32(x) ((x) >> 16), ((x) & 0xFFFFU)
 #define SPLIT_ARG64(x) SPLIT_ARG32((x) >> 32), SPLIT_ARG32((x) & 0xFFFFFFFFU)
 #endif
+
+#define SPLIT_META(bytecode_size, rule_size) META, SPLIT_ARG32(bytecode_size), SPLIT_ARG64(rule_size)

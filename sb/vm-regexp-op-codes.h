@@ -5,6 +5,8 @@
 // NOTE: to reduce runtime state size,
 //       ignore case / language / encoding flags are all set in compile time
 enum OpCodes {
+  META,            // size:uint32, data:void*
+
   // op            // args                   # description
   CHAR=1,          // c:int32_t              # match a char
   SET,             // size:int32_t           # follows with int32_t[size] chars
@@ -39,6 +41,7 @@ enum OpCodes {
 };
 
 static const char* op_code_names[] = {
+  [META] = "meta",
   [CHAR] = "char",
   [SET] = "set",
   [MATCH] = "match",

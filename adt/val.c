@@ -146,11 +146,11 @@ static void _clear_rc(ValHeader* r) {
   r->perm = false;
 }
 
-static Klass* _klass_new(uint32_t klass_id, Val name, uint32_t parent) {
+static Klass* _klass_new(uint32_t klass_id, Val name, uint32_t parent_id) {
   Klass* k = val_alloc(KLASS_KLASS, sizeof(Klass));
   k->id = klass_id;
   k->name = name;
-  k->parent_id = parent;
+  k->parent_id = parent_id;
 
   IdMethods.init(&k->id_methods);
   Includes.init(&k->includes, 0);
@@ -164,11 +164,24 @@ static Klass* _klass_new(uint32_t klass_id, Val name, uint32_t parent) {
   k->debug_func = NULL;
   val_perm(k);
 
-  ConstSearchKey key = {.parent = parent, .name_str = VAL_TO_STR(name)};
-  KlassSearchMap.insert(&runtime.klass_search_map, key, klass_id);
+  ConstSearchKey key = {.parent = k->parent_id, .name_str = VAL_TO_STR(k->name)};
+  KlassSearchMap.insert(&runtime.klass_search_map, key, k->id);
   ConstSearchMap.insert(&runtime.const_search_map, key, (Val)k);
 
   return k;
+}
+
+static void _klass_delete(Klass* k) {
+  ConstSearchKey key = {.parent = k->parent_id, .name_str = VAL_TO_STR(k->name)};
+  KlassSearchMap.remove(&runtime.klass_search_map, key);
+  ConstSearchMap.remove(&runtime.const_search_map, key);
+
+  IdMethods.cleanup(&k->id_methods);
+  Includes.cleanup(&k->includes);
+  IdFieldIndexes.cleanup(&k->id_field_indexes);
+  Fields.cleanup(&k->fields);
+
+  val_free(k);
 }
 
 static Method* _method_new(uint32_t method_id, int32_t min_argc, int32_t max_argc, bool is_final) {
@@ -223,7 +236,7 @@ uint32_t klass_find_c(const char* name, uint32_t parent) {
   return klass_find(nb_string_new_literal_c(name), parent);
 }
 
-uint32_t klass_ensure(Val name, uint32_t parent) {
+uint32_t klass_def(Val name, uint32_t parent) {
   uint32_t res = klass_find(name, parent);
   if (res) {
     return res;
@@ -233,6 +246,20 @@ uint32_t klass_ensure(Val name, uint32_t parent) {
     Klasses.push(&runtime.klasses, k);
     return klass_id;
   }
+}
+
+uint32_t klass_push() {
+  return (uint32_t)Klasses.size(&runtime.klasses);
+}
+
+void klass_pop(uint32_t klass_id) {
+  if (klass_id + 1 > Klasses.size(&runtime.klasses)) {
+    fatal_err("klass_pop klass_id + 1 > klasses.size");
+  }
+  for (uint32_t i = klass_id; i < Klasses.size(&runtime.klasses); i++) {
+    _klass_delete(*Klasses.at(&runtime.klasses, i));
+  }
+  runtime.klasses.size = klass_id + 1;
 }
 
 Val klass_val(uint32_t klass_id) {
@@ -298,6 +325,10 @@ void klass_def_method(uint32_t klass_id, uint32_t method_id, int32_t argc, ValMe
   METHOD_IS_CFUNC(meth) = true;
   METHOD_FUNC_TAKES_ARGV(meth) = false;
   meth->as.func = func;
+
+  // TODO !! deallocate old method if overwriting
+  //      and if the method calls `super` and there is existing method, link the 2 methods together
+  //      but: do not link methods if `super` is calling the method in other klass
 
   IdMethods.insert(&klass->id_methods, method_id, meth);
 

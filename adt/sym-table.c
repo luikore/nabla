@@ -1,4 +1,5 @@
 #include "sym-table.h"
+#include "utils/mut-array.h"
 #include "utils/mut-map.h"
 #include <stdlib.h>
 #include <string.h>
@@ -18,6 +19,8 @@ static bool str_eq(Str s1, Str s2) {
 
 MUT_MAP_DECL(MM, Str, uint64_t, str_hash, str_eq);
 
+MUT_ARRAY_DECL(Strs, Str);
+
 // todo pool alloc MM slot to improve performance
 
 // TODO raise error when too big
@@ -29,9 +32,7 @@ struct NbSymTableStruct {
 
   // map of int -> Str*
   // NOTE that we can't use that values for mm's key, because when strs are resized, the address may change
-  size_t strs_cap;
-  size_t strs_size;
-  Str* strs;
+  struct Strs strs;
 };
 
 // for insertion
@@ -60,18 +61,16 @@ inline static Str STR_OF(size_t size, const char* p) {
 NbSymTable* nb_sym_table_new() {
   NbSymTable* t = malloc(sizeof(NbSymTable));
   MM.init(&t->mm);
-  t->strs_cap = 8;
-  t->strs_size = 0;
-  t->strs = malloc(sizeof(Str) * t->strs_cap);
+  Strs.init(&t->strs, 8);
   return t;
 }
 
 void nb_sym_table_delete(NbSymTable* t) {
   MM.cleanup(&t->mm);
-  for (size_t i = 0; i < t->strs_size; i++) {
-    STR_DELETE(t->strs[i]);
+  for (size_t i = 0; i < Strs.size(&t->strs); i++) {
+    STR_DELETE(*Strs.at(&t->strs, i));
   }
-  free(t->strs);
+  Strs.cleanup(&t->strs);
   free(t);
 }
 
@@ -81,17 +80,11 @@ void nb_sym_table_get_set(NbSymTable* t, size_t ksize, const char* k, uint64_t* 
   }
 
   if (vid) {
-    *vid = t->strs_size;
-  }
-  if (t->strs_size + 1 >= t->strs_cap) {
-    t->strs_cap *= 2;
-    t->strs = realloc(t->strs, sizeof(Str) * t->strs_cap);
+    *vid = Strs.size(&t->strs);
   }
   Str s = STR_NEW(ksize, k);
-  MM.insert(&t->mm, s, t->strs_size);
-  t->strs[t->strs_size] = s;
-
-  t->strs_size = INC(t->strs_size);
+  MM.insert(&t->mm, s, Strs.size(&t->strs));
+  Strs.push(&t->strs, s);
 }
 
 bool nb_sym_table_get(NbSymTable* t, size_t ksize, const char* k, uint64_t* vid) {
@@ -103,11 +96,11 @@ bool nb_sym_table_get(NbSymTable* t, size_t ksize, const char* k, uint64_t* vid)
   return res;
 }
 
-bool nb_sym_table_reverse_get(NbSymTable* table, size_t* ksize, char** k, uint64_t i) {
-  if (i < table->strs_size) {
-    Str str = table->strs[i];
-    *k = str.data;
-    *ksize = str.size;
+bool nb_sym_table_reverse_get(NbSymTable* t, size_t* ksize, char** k, uint64_t i) {
+  if (i < Strs.size(&t->strs)) {
+    Str* str = Strs.at(&t->strs, i);
+    *k = str->data;
+    *ksize = str->size;
     return true;
   } else {
     return false;

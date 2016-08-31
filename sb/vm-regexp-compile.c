@@ -2,7 +2,6 @@
 #include <adt/utils/utf-8.h>
 #include <adt/utils/str.h>
 #include "vm-regexp-op-codes.h"
-#include "labels.h"
 
 Val sb_vm_regexp_from_string(struct Iseq* iseq, Val s) {
   if (VAL_KLASS(s) != KLASS_STRING) {
@@ -12,11 +11,14 @@ Val sb_vm_regexp_from_string(struct Iseq* iseq, Val s) {
   const char* ptr = nb_string_ptr(s);
   int size = nb_string_byte_size(s);
 
+  int original_iseq_pos = Iseq.size(iseq);
+  ENCODE_META(iseq);
   for (int i = 0; i < size; i++) {
     ENCODE(iseq, Arg32, ((Arg32){CHAR, ptr[i]}));
   }
   ENCODE(iseq, uint16_t, MATCH);
   ENCODE(iseq, uint16_t, END);
+  ENCODE_FILL_META(iseq, original_iseq_pos, NULL);
 
   return VAL_NIL;
 }
@@ -529,6 +531,10 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, Val patterns_dict, Val node) {
   Stack.init(&stack, 25);
   Labels.init(&labels);
 
+  // encode meta data
+  int iseq_original_size = Iseq.size(iseq);
+  ENCODE_META(iseq);
+
   /*
   A compile stack is used to eliminate recursion and reduce physical stack usage.
   If a node requires encoding "summarizing" part after encoding children nodes,
@@ -659,13 +665,17 @@ Val sb_vm_regexp_compile(struct Iseq* iseq, Val patterns_dict, Val node) {
   Labels.cleanup(&labels);
 
   ENCODE(iseq, uint16_t, END);
+
+  ENCODE_FILL_META(iseq, iseq_original_size, NULL);
   return VAL_NIL;
 }
 
-void sb_vm_regexp_decompile(struct Iseq* iseq, int32_t start, int32_t size) {
-  uint16_t* pc_start = Iseq.at(iseq, start);
-  uint16_t* pc_end = pc_start + size;
+void sb_vm_regexp_decompile(uint16_t* pc_start) {
   uint16_t* pc = pc_start;
+  uint32_t size = DECODE(ArgU32, pc).arg1;
+  uint16_t* pc_end = pc_start + size;
+  DECODE(void*, pc);
+
   while (pc < pc_end) {
     printf("%ld: %s", pc - pc_start, op_code_names[*pc]);
     switch (*pc) {
@@ -688,10 +698,18 @@ void sb_vm_regexp_decompile(struct Iseq* iseq, int32_t start, int32_t size) {
       case CG_S:
       case CG_N_S:
       case MATCH:
-      case DIE:
+      case DIE: {
+        printf("\n");
+        pc++;
+        break;
+      }
+
       case END: {
         printf("\n");
         pc++;
+        if (pc != pc_end) {
+          fatal_err("end ins %d and pc_end %d not match", (int)pc, (int)pc_end);
+        }
         break;
       }
 

@@ -2,7 +2,6 @@
 #include "vm-peg-op-codes.h"
 #include <adt/cons.h>
 #include <adt/utils/mut-map.h>
-#include "labels.h"
 
 #pragma mark ## decls
 
@@ -17,16 +16,6 @@ static uint32_t kLookahead = 0;
 static uint32_t kNegLookahead = 0;
 static uint32_t kRefRule = 0;
 static uint32_t kCallback = 0;
-
-static uint32_t kInfixLogic = 0;
-static uint32_t kCall = 0;
-static uint32_t kCapture = 0;
-static uint32_t kCreateNode = 0;
-static uint32_t kCreateList = 0;
-static uint32_t kSplatEntry = 0;
-static uint32_t kIf = 0;
-
-MUT_ARRAY_DECL(Stack, Val);
 
 static uint64_t _rule_num_key_hash(uint32_t k) {
   return val_hash_mem(&k, sizeof(uint32_t));
@@ -43,16 +32,17 @@ typedef struct {
   // NOTE an entry in map is much heavier than one in array
   struct RuleNumMap m;
   struct Labels l;
+  struct KlassRefs klass_refs;
 } LabelTable;
 
 static void _encode_rule_body_unit(struct Iseq* iseq, Val e, LabelTable* lt);
-static void _encode_callback_lines(struct Iseq* iseq, Val stmts, int terms_size, LabelTable* lt);
 
 #pragma mark ## impls
 
-static void _label_init(LabelTable* lt) {
+static void _label_init(LabelTable* lt, KlassRefs* klass_refs) {
   RuleNumMap.init(&lt->m);
   Labels.init(&lt->l);
+  lt->klass_refs = klass_refs;
 }
 
 static void _label_cleanup(LabelTable* lt) {
@@ -82,6 +72,26 @@ static void _label_def(LabelTable* lt, int num, int offset) {
 
 static void _label_ref(LabelTable* lt, int offset) {
   LABEL_REF(&lt->l, offset);
+}
+
+// callback_maybe: [Callback]
+static void _encode_callback_maybe(struct Iseq* iseq, Val callback_maybe, int terms_size, LabelTable* lt) {
+  if (callback_maybe != VAL_NIL) {
+    Val callback = nb_cons_head(callback_maybe);
+
+    Val stmts = nb_struct_get(callback, 0);
+    if (stmts == VAL_NIL) {
+      goto nil_callback;
+    }
+
+    sb_vm_callback_compile(iseq, stmts, terms_size, &lt->l, true);
+    ENCODE(iseq, uint16_t, RULE_RET);
+    return;
+  }
+
+nil_callback:
+  ENCODE(iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
+  ENCODE(iseq, uint16_t, RULE_RET);
 }
 
 static void _encode_term(struct Iseq* iseq, Val term_node, LabelTable* lt) {
@@ -240,216 +250,6 @@ static int _encode_terms(struct Iseq* iseq, Val terms, LabelTable* lt) {
   return terms_size;
 }
 
-// returns change of stack
-// terms_size is for checking of capture overflows
-static void _encode_callback_expr(struct Iseq* iseq, Val expr, int terms_size, LabelTable* lt) {
-  uint32_t klass = VAL_KLASS(expr);
-  // Expr = InfixLogic | Call | Capture | CraeteNode | CreateList | Assign | If | Nul
-  // NOTE: no VarRef for PEG
-  if (klass == kInfixLogic) {
-    // InfixLogic[Expr, op, Expr]
-
-    // a && b:
-    //   lhs
-    //   junless L0
-    //   rhs
-    //   L0:
-
-    // a || b:
-    //   lhs
-    //   jif L0
-    //   rhs
-    //   L0:
-
-    Val lhs = nb_struct_get(expr, 0);
-    Val op = nb_struct_get(expr, 1);
-    Val rhs = nb_struct_get(expr, 2);
-    int l0 = _label_new_num(lt);
-    uint16_t ins;
-
-    _encode_callback_expr(iseq, lhs, terms_size, lt);
-    _label_ref(lt, Iseq.size(iseq) + 1);
-    if (nb_string_byte_size(op) == 2 && nb_string_ptr(op)[0] == '&' && nb_string_ptr(op)[1] == '&') {
-      ins = JUNLESS;
-    } else {
-      ins = JIF;
-    }
-    ENCODE(iseq, Arg32, ((Arg32){ins, l0}));
-    _encode_callback_expr(iseq, rhs, terms_size, lt);
-    _label_def(lt, l0, Iseq.size(iseq));
-
-  } else if (klass == kCall) {
-    // Call[func_name, Expr*] # args reversed
-    // NOTE
-    //   methods in PEG is shared with methods in LEX.
-    //   but only operators are supported,
-    //   this makes sure the method call doesn't generate any side effects.
-    //   methods are all defined under sb_klass and the receiver is context,
-    //   when executing methods in PEG, we use a nil receiver since all pure operator methods don't need receiver.
-    //   (context receiver is not flexible for being compatible with custom methods, TODO use Val receiver?)
-    uint32_t func_name = VAL_TO_STR(nb_struct_get(expr, 0));
-    Val exprs = nb_struct_get(expr, 1);
-    uint32_t argc = 0;
-    for (Val tail = exprs; tail; tail = nb_cons_tail(tail)) {
-      Val e = nb_cons_head(tail);
-      _encode_callback_expr(iseq, e, terms_size, lt);
-      argc += 1;
-    }
-    ENCODE(iseq, ArgU32U32, ((ArgU32U32){CALL, argc, func_name}));
-
-  } else if (klass == kCapture) {
-    // Capture[var_name]
-
-    // TODO $-\d+
-    Val tok = nb_struct_get(expr, 0);
-    int size = nb_string_byte_size(tok);
-    // TODO raise error if size > 2
-    char s[size];
-    strncpy(s, nb_string_ptr(tok) + 1, size - 1);
-    s[size - 1] = '\0';
-    int i = atoi(s);
-    if (i > terms_size) {
-      // raise error
-      // TODO maybe we don't need to pass terms_size everywhere
-      // just check it after the bytecode is compiled
-    }
-    ENCODE(iseq, uint16_t, CAPTURE);
-    ENCODE(iseq, uint16_t, (uint16_t)i);
-
-  } else if (klass == kCreateNode) {
-    // CreateNode[ty, (Expr | SplatEntry)*]
-
-    // node[a, *b]:
-    //   node_beg klass_name # postprocess: replace name_lit with klasses, in LEX compile
-    //   a
-    //   node_set
-    //   b
-    //   node_setv
-    //   node_end
-
-    Val klass_name = nb_struct_get(expr, 0);
-    Val elems = nb_struct_get(expr, 1);
-    ENCODE(iseq, ArgU32, ((ArgU32){NODE_BEG, VAL_TO_STR(klass_name)}));
-    elems = nb_cons_reverse(elems);
-    for (Val tail = elems; tail; tail = nb_cons_tail(tail)) {
-      Val e = nb_cons_head(tail);
-      if (VAL_KLASS(e) == kSplatEntry) {
-        Val to_splat = nb_struct_get(e, 0);
-        _encode_callback_expr(iseq, to_splat, terms_size, lt);
-        ENCODE(iseq, uint16_t, NODE_SETV);
-      } else {
-        _encode_callback_expr(iseq, e, terms_size, lt);
-        ENCODE(iseq, uint16_t, NODE_SET);
-      }
-    }
-    ENCODE(iseq, uint16_t, NODE_END);
-
-  } else if (klass == kCreateList) {
-    // CreateList[(Expr | SplatEntry)*]
-
-    // [a, *b]: a, b, list
-    // [*a, *b]: a, b, listv
-    // [a]: a, nil, list
-    // NOTE: no need to reverse list here
-    // NOTE: expressions should be evaluated from left to right,
-    //       but the list is built from right to left
-    Val elems = nb_struct_get(expr, 0);
-    int size = 0;
-    for (Val tail = elems; tail; tail = nb_cons_tail(tail)) {
-      size++;
-    }
-    char a[size]; // stack to reverse list/listv operations
-    int i = 0;
-    for (Val tail = elems; tail; tail = nb_cons_tail(tail)) {
-      Val e = nb_cons_head(elems);
-      if (VAL_KLASS(e) == kSplatEntry) {
-        Val to_splat = nb_struct_get(e, 0);
-        _encode_callback_expr(iseq, to_splat, terms_size, lt);
-        a[i++] = 1;
-      } else {
-        _encode_callback_expr(iseq, e, terms_size, lt);
-        a[i++] = 0;
-      }
-    }
-
-    ENCODE(iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
-    for (i = size - 1; i >= 0; i--) {
-      if (a[i]) {
-        ENCODE(iseq, uint16_t, LISTV);
-      } else {
-        ENCODE(iseq, uint16_t, LIST);
-      }
-    }
-
-  } else {
-    assert(klass == kIf);
-    // If[Expr, Expr*, (Expr* | If)]
-
-    // if cond, true_clause, else, false_clause:
-    //   cond
-    //   junless L0
-    //   true_clause
-    //   jmp L1
-    //   L0: false_clause
-    //   L1:
-
-    Val cond = nb_struct_get(expr, 0);
-    Val true_clause = nb_struct_get(expr, 1);
-    Val false_clause = nb_struct_get(expr, 2);
-    int l0 = _label_new_num(lt);
-    int l1 = _label_new_num(lt);
-
-    _encode_callback_expr(iseq, cond, terms_size, lt);
-    _label_ref(lt, Iseq.size(iseq) + 1);
-    ENCODE(iseq, Arg32, ((Arg32){JUNLESS, l0}));
-    _encode_callback_lines(iseq, true_clause, terms_size, lt);
-    _label_ref(lt, Iseq.size(iseq) + 1);
-    ENCODE(iseq, Arg32, ((Arg32){JMP, l1}));
-    _label_def(lt, l0, Iseq.size(iseq));
-    if (VAL_KLASS(false_clause) == kIf) {
-      _encode_callback_expr(iseq, false_clause, terms_size, lt);
-    } else {
-      _encode_callback_lines(iseq, false_clause, terms_size, lt);
-    }
-    _label_def(lt, l1, Iseq.size(iseq));
-  }
-}
-
-static void _encode_callback_lines(struct Iseq* iseq, Val stmts, int terms_size, LabelTable* lt) {
-  // Expr* (NOTE: no VarDecl in PEG callback)
-
-  // NOTE: should only push the last expr to stack so this code can be correct: `[a, (b, c)]`
-  // TODO: to support debugging we need to allocate more slots in stack to hold results of each line
-  stmts = nb_cons_reverse(stmts);
-  for (Val tail = stmts; tail; tail = nb_cons_tail(tail)) {
-    Val e = nb_cons_head(tail);
-    _encode_callback_expr(iseq, e, terms_size, lt);
-    if (nb_cons_tail(tail) != VAL_NIL) {
-      ENCODE(iseq, uint16_t, POP);
-    }
-  }
-}
-
-// callback_maybe: [Callback]
-static void _encode_callback_maybe(struct Iseq* iseq, Val callback_maybe, int terms_size, LabelTable* lt) {
-  if (callback_maybe != VAL_NIL) {
-    Val callback = nb_cons_head(callback_maybe);
-
-    Val stmts = nb_struct_get(callback, 0);
-    if (stmts == VAL_NIL) {
-      goto nil_callback;
-    }
-
-    _encode_callback_lines(iseq, stmts, terms_size, lt);
-    ENCODE(iseq, uint16_t, RULE_RET);
-    return;
-  }
-
-nil_callback:
-  ENCODE(iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
-  ENCODE(iseq, uint16_t, RULE_RET);
-}
-
 static void _encode_seq_rule(struct Iseq* iseq, Val seq_rule, LabelTable* lt) {
   Val terms = nb_struct_get(seq_rule, 0);
   Val callback_maybe = nb_struct_get(seq_rule, 1);
@@ -588,7 +388,7 @@ static void _encode_rule_body_unit(struct Iseq* iseq, Val e, LabelTable* lt) {
 // but since we don't know the rule offset yet when compiling,
 // we need build a {rule_name => num} mapping.
 // (TODO this mapping should be put in init metadata)
-Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, Val node) {
+Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, Val node, void* klass_refs) {
   if (!kPegRule) {
     uint32_t sb   = sb_klass();
     kPegRule      = klass_find_c("PegRule", sb); assert(kPegRule);
@@ -602,56 +402,44 @@ Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, Val node) {
     kNegLookahead = klass_find_c("NegLookahead", sb);
     kRefRule      = klass_find_c("RefRule", sb);
     kCallback     = klass_find_c("Callback", sb);
-
-    // callback klasses (without kAssign)
-    kInfixLogic = klass_find_c("InfixLogic", sb);
-    kCall       = klass_find_c("Call", sb);
-    kCapture    = klass_find_c("Capture", sb);
-    kCreateNode = klass_find_c("CreateNode", sb);
-    kCreateList = klass_find_c("CreateList", sb);
-    kSplatEntry = klass_find_c("SplatEntry", sb);
-    kIf         = klass_find_c("If", sb);
   }
 
   // peg = [(PegRule | nil)*]
   // PegRule[name.rule, (Branch | SeqRule)]
   // Branch[op.branch, SeqRule, [Term], Callback]
 
-  struct Stack stack; // TODO use stack to deal with recursive constructs so we can trace more info
+  struct Vals stack; // TODO use stack to deal with recursive constructs so we can trace more info
   LabelTable lt;
-  // Stack.init(&stack, 25);
-  _label_init(&lt);
+  // Vals.init(&stack, 25);
+  _label_init(&lt, klass_refs);
 
   uint32_t rule_size = 0;
-  for (Val curr = node; curr != VAL_NIL; curr = nb_cons_tail(curr)) {
-    Val e = nb_cons_head(curr);
-    if (e != VAL_NIL) {
-      assert(VAL_KLASS(e) == kPegRule);
-      rule_size++;
-    }
-  }
-  ENCODE(iseq, ArgU32, ((ArgU32){RULE_SIZE, rule_size}));
+  int iseq_original_size = Iseq.size(iseq);
+  ENCODE_META(iseq);
 
   for (Val curr = node; curr != VAL_NIL; curr = nb_cons_tail(curr)) {
     Val e = nb_cons_head(curr);
     if (e != VAL_NIL) {
       Val rule_name_tok = nb_struct_get(e, 0); // TODO use PegRule.name.rule
       _encode_rule_body_unit(iseq, nb_struct_get(e, 1), &lt);
+      rule_size++;
     }
   }
 
-terminate:
-
   _label_cleanup(&lt);
-  // Stack.cleanup(&stack);
+  // Vals.cleanup(&stack);
 
+  union { void* as_void; uint32_t as_u32; } cast = {.as_u32 = rule_size};
+  ENCODE_FILL_META(iseq, iseq_original_size, cast.as_void);
   return VAL_NIL;
 }
 
-void sb_vm_peg_decompile(struct Iseq* iseq, int32_t start, int32_t size) {
-  uint16_t* pc_start = Iseq.at(iseq, start);
-  uint16_t* pc_end = pc_start + size;
+void sb_vm_peg_decompile(uint16_t* pc_start) {
   uint16_t* pc = pc_start;
+  uint32_t size = DECODE(ArgU32, pc).arg1;
+  uint16_t* pc_end = pc_start + size;
+  DECODE(void*, pc);
+
   while (pc < pc_end) {
     printf("%ld: %s", pc - pc_start, op_code_names[*pc]);
     switch (*pc) {
@@ -659,27 +447,36 @@ void sb_vm_peg_decompile(struct Iseq* iseq, int32_t start, int32_t size) {
       case RULE_RET:
       case POP_BR:
       case UNPARSE:
-      case POP:
-      case NODE_SET:
-      case NODE_SETV:
-      case NODE_END:
-      case LIST:
       case LIST_MAYBE:
-      case LISTV:
-      case MATCH:
-      case END: {
+      case POP:
+      case MATCH: {
         printf("\n");
         pc++;
         break;
       }
 
-      case RULE_SIZE:
+      case END: {
+        printf("\n");
+        pc++;
+        if (pc != pc_end) {
+          fatal_err("end ins %d and pc_end %d not match", (int)pc, (int)pc_end);
+        }
+        break;
+      }
+
       case TERM:
-      case NODE_BEG:
-      case JIF:
-      case JUNLESS:
       case FAIL: {
         printf(" %u\n", DECODE(ArgU32, pc).arg1);
+        break;
+      }
+
+      case CALLBACK: {
+        uint32_t next_offset = DECODE(ArgU32, pc).arg1;
+        printf(" %u\n", next_offset);
+        printf(" --- begin callback ---");
+        sb_vm_callback_decompile(pc);
+        printf(" --- end callback ---");
+        pc = pc_start + next_offset;
         break;
       }
 
@@ -690,15 +487,9 @@ void sb_vm_peg_decompile(struct Iseq* iseq, int32_t start, int32_t size) {
         break;
       }
 
-      case RULE_CALL:
-      case CALL: {
+      case RULE_CALL: {
         ArgU32U32 args = DECODE(ArgU32U32, pc);
         printf(" %u %u\n", args.arg1, args.arg2);
-        break;
-      }
-
-      case CAPTURE: {
-        printf(" %u\n", DECODE(Arg16, pc).arg1);
         break;
       }
 
