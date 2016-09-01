@@ -22,13 +22,13 @@ enum OpCodes {
   CAPTURE,     // n:uint16                    # load capture at bp[n]
   PUSH,        // val:Val                     # push literal
   POP,         //                             # pop top of stack
-  NODE_BEG,    // klass_name:uint32           # push [node, (limit, counter=0)] [*****]
+  NODE_BEG,    // klass_id:uint32             # push [node, (limit, counter=0)] [*****]
   NODE_SET,    //                             # (assume stack top is [node, (limit, counter), val]) node[counter++] = val
   NODE_SETV,   //                             # (assume stack top is [node, (limit, counter), *vals]) node[counter..counter+vals.size] = *vals
   NODE_END,    //                             # (assume stack top is [node, (limit, counter)]) finish building node, remove counter from stack top
-  LIST,        //                             # pop b:Val, a:Val, push [a, *b]
+  LIST,        //                             # pop b:Cons, a:Val, push [a, *b] (members are pushed from left to right)
   LIST_MAYBE,  //                             # similar to list, do nothing if br_stack.top.stack_offset + 1 != stack.offset
-  R_LIST,      //                             # pop b:Val, a:Val, push [*a, b]
+  LISTV,       //                             # pop b:Cons, a:Cons, push [*a, *b] (members are pushed from left to right)
   JIF,         // true_clause:uint32          # pops cond [****]
   JUNLESS,     // false_clause:uint32         # pops cond
   CALL,        // argc:uint32, fname:uint32   # invoke a method (only pure builtin operators are supported), argc includes receiver obj
@@ -55,9 +55,7 @@ enum OpCodes {
 //       code generator can take this advantage to use a single LABEL_REF to compute the offsets
 // [****] if we don't pop cond, the following expression is not right: `[(if foo, bar), (if foo, bar)]`
 
-// [*****] since we only define structs after compilation done, the klass is not be defined yet in compile time,
-//         so find in run-time.
-//         for node building: we can't use LIST/R_LIST tricks here...
+// [*****] For node building: we can't use LIST/LISTV tricks here...
 //         we allocate the node first, and then set attrs one by one or put several attrs by a splat.
 //         if attr size exceeds limit of the node, deallocate the node and raise error.
 //         (TODO we need some extra matching if node is defined like Foo[bar, *baz])
@@ -81,7 +79,7 @@ static const char* op_code_names[] = {
   [NODE_END] = "node_end",
   [LIST] = "list",
   [LIST_MAYBE] = "list_maybe",
-  [R_LIST] = "r_list",
+  [LISTV] = "listv",
   [JIF] = "jif",
   [JUNLESS] = "junless",
   [CALL] = "call",

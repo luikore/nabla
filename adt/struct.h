@@ -5,6 +5,7 @@
 #include "val.h"
 
 // create a new struct klass, return the klass id
+// set parent_id=0 for top level struct
 uint32_t nb_struct_def(Val name, uint32_t parent_id, uint32_t field_size, NbStructField* fields);
 
 // example: nb_struct_new(klass_find(nb_string_new_literal_c("Foo"), 0), n, attrs);
