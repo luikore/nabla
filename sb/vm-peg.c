@@ -266,9 +266,9 @@ pop_cond:
 
       CASE(LIST) {
         pc++;
-        Val tail = _POP();
-        Val head = _POP();
-        _PUSH(nb_cons_new(head, tail));
+        Val b = _POP();
+        Val a = _POP();
+        _PUSH(nb_cons_new(a, b));
         DISPATCH;
       }
 
@@ -288,11 +288,20 @@ pop_cond:
         DISPATCH;
       }
 
-      CASE(R_LIST) {
+      CASE(LISTV) {
         pc++;
-        Val head = _POP();
-        Val tail = _POP();
-        _PUSH(nb_cons_new(head, tail));
+        Val b = _POP();
+        Val a = _POP();
+        int n = 0;
+        for (Val tail = a; tail; tail = nb_cons_tail(tail)) {
+          _PUSH(nb_cons_head(a));
+          n++;
+        }
+        for (int i = 0; i < n; i++) {
+          Val e = _POP();
+          b = nb_cons_new(e, b);
+        }
+        _PUSH(b);
         DISPATCH;
       }
 

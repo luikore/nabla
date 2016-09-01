@@ -12,7 +12,7 @@ ValPair sb_vm_lex_exec(Spellbreak* sb) {
     [CALL] = &&label_CALL,
     [NODE] = &&label_NODE,
     [LIST] = &&label_LIST,
-    [R_LIST] = &&label_R_LIST,
+    [LISTV] = &&label_LISTV,
     [JIF] = &&label_JIF,
     [JMP] = &&label_JMP,
     [MATCH_RE] = &&label_MATCH_RE,
@@ -104,7 +104,7 @@ begin:
         DISPATCH;
       }
 
-      CASE(R_LIST): {
+      CASE(LISTV): {
         pc++;
         Val last = STACK_POP();
         Val init = STACK_POP();

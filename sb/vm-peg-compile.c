@@ -4,6 +4,8 @@
 #include <adt/utils/mut-map.h>
 #include "labels.h"
 
+#pragma mark ## decls
+
 static uint32_t kPegRule = 0;
 static uint32_t kBranch = 0;
 static uint32_t kSeqRule = 0;
@@ -43,6 +45,11 @@ typedef struct {
   struct Labels l;
 } LabelTable;
 
+static void _encode_rule_body_unit(struct Iseq* iseq, Val e, LabelTable* lt);
+static void _encode_callback_lines(struct Iseq* iseq, Val stmts, int terms_size, LabelTable* lt);
+
+#pragma mark ## impls
+
 static void _label_init(LabelTable* lt) {
   RuleNumMap.init(&lt->m);
   Labels.init(&lt->l);
@@ -76,10 +83,6 @@ static void _label_def(LabelTable* lt, int num, int offset) {
 static void _label_ref(LabelTable* lt, int offset) {
   LABEL_REF(&lt->l, offset);
 }
-
-// SeqRule or Branch
-static void _encode_rule_body_unit(struct Iseq* iseq, Val e, LabelTable* lt);
-static void _encode_callback_lines(struct Iseq* iseq, Val stmts, int terms_size, LabelTable* lt);
 
 static void _encode_term(struct Iseq* iseq, Val term_node, LabelTable* lt) {
   if (VAL_KLASS(term_node) == kRefRule) {
@@ -317,7 +320,7 @@ static void _encode_callback_expr(struct Iseq* iseq, Val expr, int terms_size, L
     // CreateNode[ty, (Expr | SplatEntry)*]
 
     // node[a, *b]:
-    //   node_beg klass_name
+    //   node_beg klass_name # postprocess: replace name_lit with klasses, in LEX compile
     //   a
     //   node_set
     //   b
@@ -344,35 +347,38 @@ static void _encode_callback_expr(struct Iseq* iseq, Val expr, int terms_size, L
   } else if (klass == kCreateList) {
     // CreateList[(Expr | SplatEntry)*]
 
-    // [a, *b]: b, a, list
-    // [*a, b]: b, a, r_list
+    // [a, *b]: a, b, list
+    // [*a, *b]: a, b, listv
+    // [a]: a, nil, list
     // NOTE: no need to reverse list here
+    // NOTE: expressions should be evaluated from left to right,
+    //       but the list is built from right to left
     Val elems = nb_struct_get(expr, 0);
-    if (elems) {
+    int size = 0;
+    for (Val tail = elems; tail; tail = nb_cons_tail(tail)) {
+      size++;
+    }
+    char a[size]; // stack to reverse list/listv operations
+    int i = 0;
+    for (Val tail = elems; tail; tail = nb_cons_tail(tail)) {
       Val e = nb_cons_head(elems);
-      Val tail = nb_cons_tail(elems);
       if (VAL_KLASS(e) == kSplatEntry) {
         Val to_splat = nb_struct_get(e, 0);
         _encode_callback_expr(iseq, to_splat, terms_size, lt);
-        // we can continue with this list
+        a[i++] = 1;
       } else {
-        ENCODE(iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
         _encode_callback_expr(iseq, e, terms_size, lt);
+        a[i++] = 0;
+      }
+    }
+
+    ENCODE(iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
+    for (i = size - 1; i >= 0; i--) {
+      if (a[i]) {
+        ENCODE(iseq, uint16_t, LISTV);
+      } else {
         ENCODE(iseq, uint16_t, LIST);
       }
-      for (; tail; tail = nb_cons_tail(tail)) {
-        e = nb_cons_head(tail);
-        if (VAL_KLASS(e) == kSplatEntry) {
-          Val to_splat = nb_struct_get(e, 0);
-          _encode_callback_expr(iseq, to_splat, terms_size, lt);
-          ENCODE(iseq, uint16_t, R_LIST);
-        } else {
-          _encode_callback_expr(iseq, e, terms_size, lt);
-          ENCODE(iseq, uint16_t, LIST);
-        }
-      }
-    } else {
-      ENCODE(iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
     }
 
   } else {
@@ -659,7 +665,7 @@ void sb_vm_peg_decompile(struct Iseq* iseq, int32_t start, int32_t size) {
       case NODE_END:
       case LIST:
       case LIST_MAYBE:
-      case R_LIST:
+      case LISTV:
       case MATCH:
       case END: {
         printf("\n");
