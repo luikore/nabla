@@ -1,6 +1,6 @@
 We use the shorter name `Proc` to denote the light weight process (as in "process calculus"), and longer name `Process` to denote the much heavier operating system process.
 
-# spawning a new proc
+# Spawning a new proc
 
     Proc[->
       ...
@@ -10,7 +10,7 @@ We use the shorter name `Proc` to denote the light weight process (as in "proces
 
 Proc starts running right after the spawning
 
-### new proc utils
+### New proc utils
 
     Proc{sleep: true, call: ->
       ...
@@ -18,7 +18,7 @@ Proc starts running right after the spawning
 
 We don't need `new_seq` ? We can manual code the invoking.
 
-# sleeping and terminating a proc
+# Sleeping and terminating a proc
 
     proc.stop
 
@@ -33,7 +33,7 @@ sleep current proc
     :sleep 5.0
     Proc.current.sleep
 
-# proc communication
+# Proc communication
 
 Only through channels
 
@@ -64,11 +64,11 @@ A simpler, parallel way
       chany.recv
     end
 
-### uniq channel
+### Uniq channel
 
     Channel{"uniq": true}
 
-# timer proc
+# Timer proc
 
     # one-shot
     Proc.timeout 5.3 ->
@@ -86,7 +86,7 @@ A simpler, parallel way
       ...
     end
 
-# error handling
+# Error handling
 
 Proc dies if error is thrown. We can make a pool to monitor procs inside.
 
@@ -102,7 +102,7 @@ Proc dies if error is thrown. We can make a pool to monitor procs inside.
 
     pool.stop_all
 
-# utils to avoid resource locking
+# Utils to avoid resource locking
 
 Grouped channels - with biased priority
 
@@ -110,7 +110,7 @@ Grouped channels - with biased priority
     c1 = g.new_channel
     c2 = g.new_channel
 
-# uniq channel (reconcilation?)
+# Uniq channel (reconcilation?)
 
 Note: only keep messages in buffer uniq
 
@@ -118,7 +118,7 @@ Note: only keep messages in buffer uniq
     c.send 1
     c.send 1
 
-# channel lifecycle
+# Channel lifecycle
 
 channel is ref-counted (closes external connection too)
 
@@ -127,15 +127,15 @@ If a channel is totally used for external connection, just retain it.
     some_chan.retain # additional retain
     some_chan.release
 
-# channel with limited slots?
+# Channel with limited slots?
 
 No need, just check size of the channel and decide whether to drop the message.
 
-# semaphore
+# Semaphore
 
 Just start same proc several times.
 
-# about static analysis
+# About static analysis
 
 It is hard to do so in a dynamic language, but maybe we can make the analysis in some point after all processes are loaded and detect resource exhausion after building channel/process graph.
 

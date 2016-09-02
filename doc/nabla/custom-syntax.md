@@ -81,7 +81,7 @@ We should use
     require "code"
     include FooModule
 
-## multiple dangling blocks
+## Multiple dangling blocks
 
     :puts $|foo| $|bar|
       ... # foo
@@ -90,7 +90,7 @@ We should use
 
 [design NOTE] not implemented for the first release of nabla
 
-## define syntax
+## Define a new syntax
 
     def $foo src compile_context
       :check_interp compile_context src
@@ -102,14 +102,14 @@ We should use
 
 we may attach something to the top of the lexical scope context
 
-## define digit macro
+## Define a digit macro
 
 for `$1`
 
     def $? digit
       ...
 
-### the context object
+## The context object
 
 for runtime retrospection
 
@@ -126,7 +126,7 @@ the language should be able to expose several component parsers as library, so t
 
 `src` processor should be abel to invoke part of the language parsers.
 
-## some built-in literals
+## Some built-in literals
 
     $(env path)   # env var (ignores case)
     $env          # map-like
@@ -153,14 +153,14 @@ string example
     $|quote|
       hello #{a} world
 
-## summary of def syntax
+## Summary of def syntax
 
     def method
     def $syntax
     def $?
     def #comment
 
-## custom syntax usage ideas and examples
+## Custom syntax usage ideas and examples
 
 ### String formatter scanf / sprintf
 
@@ -409,7 +409,7 @@ The expression only evaluates when output is required.
 
 Note - the syntax in `$sym` is limited to calls, operators and constants.
 
-## language composability considerations
+## Language composability considerations
 
 We recommend `#{}` for interpolating, if not possible, `@{}`, `${}`, `{{}}` ... can be chosen
 
@@ -421,9 +421,11 @@ We support run-time bytecode transformation tool instead of compile-time AST tra
 
 The higher entrance barrier for bytecode transformation is on purpose: if you can do it without altering semantics, then don't change semantics.
 
-## bytecode transform examples
+From the implementation perspective: we don't have AST at runtime, so we can only change bytecode...
 
-### optimize
+## Bytecode transform examples
+
+### Optimize
 
 The options are the same as command line compile options only without the leading `--`
 
@@ -437,7 +439,7 @@ The options are the same as command line compile options only without the leadin
 
 NOTE `lazy` means the optimization is invoked the first time the method is invoked instead of doing it at once, so some methods defined afterwards can be located.
 
-### maybe
+### Maybe
 
     Kernel.maybe 'a' $
     def foo a
@@ -485,7 +487,7 @@ treats `a.b` as `a @ "b"`
 
 [NOTE] We may lose some compile-time advantages for syntax simplicity...
 
-# custom operators
+# Custom operators
 
 to add new infix operators
 
@@ -499,7 +501,7 @@ then it can be used in `def`, `.` or `:` calling
 
 operator naming rule: `{Symbol}({Word}|{Symbol})*{Symbol}` and can not generate ambiguity with other operators and `#`, `@`, `$`
 
-# custom comment processors
+# Custom comment processors
 
 Default comment processor only do some minimal processing.
 
@@ -527,7 +529,7 @@ NOTE for cross reference, a doc page contains simplified links which can be re-w
 
 NOTE if previous token is `def`, `#` is not interpreted as comment.
 
-# nesting
+# Nesting
 
 If the macro preprocessor is an update to the main syntax, we may use some additional tricks
 

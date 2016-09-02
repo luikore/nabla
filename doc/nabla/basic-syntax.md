@@ -1141,9 +1141,9 @@ Can capture local vars but can not change it:
 
 Recall note: comma (`,`) means "new line"
 
-## `\` syntax for quick lambdas
+## Quick lambdas
 
-`\` followed by an operator is a lambda. These 2 lambdas are equivalent:
+`\` followed by an operator is a lambda. The following 2 lambdas are equivalent:
 
     -> x y, x + y;
     \+
@@ -1163,7 +1163,7 @@ To compute factorial for example:
 
 [design NOTE] if we use placeholder lambdas as in scala, then too many meanings are put onto `_`, while saving very few typings.
 
-Curry
+## Currying
 
     -> x y
       x + y

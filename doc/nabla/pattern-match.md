@@ -13,7 +13,7 @@ Pattern match is an intuitive way to reduce many boilerplate code.
       ...
 
     case [1, 2, 3]
-    when [Hash, ->(==).bind 3, ->(.present?)]
+    when [Hash, \(== 3), \(.present?)]
       ...
     when _
       ...
@@ -26,7 +26,7 @@ NOTE
 
 * prog can warn dead match routines
 
-## using `as` for splitting var and pattern
+## Using `as` for splitting var and pattern
 
     case a
     when [head as Head, *_]
@@ -85,7 +85,7 @@ Then bootstrap parser should be written in nabla
 
 This form can be used for tree transform too.
 
-## matching and mass-assign
+## Matching and mass-assign
 
     <match-expr> =~ <expr>
 
@@ -101,14 +101,14 @@ case of const:
     _ as Foo =~ 3    # matching (can raise)
     Foo as Int =~ 3  # matching and assign (can raise)
 
-## matching error
+## Matching error
 
 both `=~` and `=` works as assignment operator, but:
 
 - `=` throws error when not match
 - `=~` as it looks, doesn't care so much and only returns `false` when not match
 
-## matching Map
+## Matching a Map
 
 example (use `*: rest_var` to match the rest)
 
@@ -123,7 +123,7 @@ function params are NOT match exprs, they allow default assignments
 
 [impl NOTE] compiler and doc-generator should be able to extract the first several lines of matchers for further use
 
-## matching Set
+## Matching a Set
 
 We can match a set to another set
 
@@ -131,7 +131,7 @@ We can match a set to another set
 
 But the order for `a`, `b` are not garanteed
 
-## matching arguments
+## Matching arguments
 
 When args are quoted with brackets, we are matching the arg array, and it means `if match then...`
 
@@ -161,11 +161,11 @@ Lambdas and subroutines may also be defined with matching args
       ...
     end
 
-The back arrow is also powered with matching syntax
+The back arrow is also powered with matching syntax, which makes this syntax more powerful
 
     make
-      [x as ->(.even?)] <- xs.each
-      [y as ->(.odd?)] <- ys.each
+      [x as \(.even?)] <- xs.each
+      [y as \(.odd?)] <- ys.each
       pick x * y
     end
 
@@ -193,7 +193,7 @@ We can them use like this:
 
     foo = do x, x > 4;
     bar = do x, x < 10;
-    baz = ->(.even?)
+    baz = \(.even?)
     x =~ (foo | bar) & baz.neg
 
 ## On recursive matching
@@ -217,5 +217,5 @@ Another way:
 With struct referencing self
 
     struct Foo[
-      parent as ->(.nil?) | Foo
+      parent as \(.nil?) | Foo
     ]

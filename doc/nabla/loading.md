@@ -8,7 +8,7 @@
     load 'foo'           # force loading a file
     history_reload 'foo' # force loading a file and every file after it
 
-## code reloading mechanism
+## Code reloading mechanism
 
 Code reloading use cases:
 
