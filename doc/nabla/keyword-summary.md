@@ -1,4 +1,4 @@
-~38 keywords, comparing with other languages:
+~37 keywords, comparing with other languages:
 
     lang   keywords
     COBOL85 ~357
@@ -16,9 +16,9 @@
 
 the following words can not be used as variables, but can be used as method names.
 
-declarative (9)
+declarative (8)
 
-    struct class using
+    struct class
     include scope def
     undef final var
 

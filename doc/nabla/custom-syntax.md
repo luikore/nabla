@@ -66,9 +66,8 @@ To make the following mixed use comfortable, literals are designed to be noun-li
 Use macros from other namespace
 
     # macros search Net::HTTP first, then search Net, then search top level
-    using Net::HTTP
-      ...
-    end
+    include Net::HTTP
+    $(GET ...)
 
 [design NOTE]: since literals are noun-like, if we need to inject some run-time variable as options, define a method on it and call. if we use a prefix notation to inject options like `{opt: 3}$foo`, then namespaced syntax require a weird tweak: `3Foo::$bar` -> `3$Foo::bar`, and doesn't help much: we don't need dynamic syntax, and most options must be determined at compile time.
 

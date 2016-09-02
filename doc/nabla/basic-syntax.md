@@ -313,7 +313,7 @@ NOTE: the methods are defined with arbitrary members, but VM can optimize them.
 
 # Control structures
 
-if cond
+`if` cond
 
     if foo1
       bar1
@@ -323,26 +323,32 @@ if cond
       bar3
     end
 
-while loop
+`while` loop
 
     while foo
       bar
     end
 
-wend loop
+`wend` ... `while` loop
 
     wend
       bar
     while foo # perform loop body first, then check condition
 
-for (see below for for section)
+`make` ... `pick` (see more in [Make Constructor](#make-constructor)
 
     make
       a <- as.each
       pick a * 2
     end
 
-`case` ... `when` (see pattern-match)
+`case` ... `when` (see more in [Pattern Match](pattern-match.md))
+
+    case x
+    when 1, ...
+    when String, ...
+    else, ...
+    end
 
 [design NOTE] we don't need mod clauses, just use `,` for one-liners, and it is easier to modify
 
@@ -751,7 +757,7 @@ https://ghc.haskell.org/trac/ghc/wiki/MonadComprehensions
 a struct type is inherently a behavior type, but there can be behavior types that are not struct types
 
     class Foo
-      include Bar
+      include Bar # note: you must define Bar first
     end
 
 the name being included must be class
@@ -917,10 +923,17 @@ Every class also acts as a namespace
       end
     end
 
-Change constant/macro searching namespace
+Macros are searched via namespaces too. The following example shows how to use diffrent sql dialect macros:
 
-    using Foo::Bar::Baz
-      ... # constants and macros are searched from Foo::Bar::Baz instead
+    class Foo
+      include Pg
+      $(select ...)
+    end
+
+    class Bar
+      include Mysql
+      $(select ...)
+      Pg::$(select ...)
     end
 
 ## Object path changing
@@ -1277,10 +1290,6 @@ back arrows can be used inside any syntax structures with `end` or `when` delimi
       e <- a.each
 
       scope foo
-        e <- a.each
-      end
-
-      using ::Bar
         e <- a.each
       end
     end
