@@ -163,10 +163,10 @@ Lambdas and subroutines may also be defined with matching args
 
 The back arrow is also powered with matching syntax
 
-    for
+    make
       [x as ->(.even?)] <- xs.each
       [y as ->(.odd?)] <- ys.each
-      select x * y
+      pick x * y
     end
 
 [design NOTE] can we make mismatch an error?

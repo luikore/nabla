@@ -1,4 +1,4 @@
-~42 keywords, comparing with other languages:
+~38 keywords, comparing with other languages:
 
     lang   keywords
     COBOL85 ~357
@@ -19,9 +19,8 @@ the following words can not be used as variables, but can be used as method name
 declarative (9)
 
     struct class using
-    include scope
-    def undef final where
-    var
+    include scope def
+    undef final var
 
 type checker (1)
 
@@ -31,10 +30,12 @@ logic shortcut operator (4)
 
     not and or xor
 
-control flow (12)
+control flow (11)
 
-    if else case when ensure fall_through
-    while wend do end for select
+    if else case
+    when ensure end
+    while wend do
+    make pick
 
 jumps must be inside `while`/`wend`/`do` (can we jump inside lambda?) (2)
 
@@ -44,17 +45,13 @@ jump out of nearest `def` or lambda (1)
 
     return
 
-syntax sugars (1)
+special invocations (2)
 
-    redo
+    redo super
 
 special literals (5)
 
     true false nil self _
-
-last same name method invocation (1)
-
-    super
 
 require/load (3)
 

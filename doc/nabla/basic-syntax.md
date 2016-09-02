@@ -337,9 +337,9 @@ wend loop
 
 for (see below for for section)
 
-    for
+    make
       a <- as.each
-      select a * 2
+      pick a * 2
     end
 
 `case` ... `when` (see pattern-match)
@@ -642,28 +642,28 @@ matchers can not be used together
       **ys # error: mixed matchers
     ]
 
-## `for` constructor
+## `make` constructor
 
 It is as expressive as (or more) applicative do or list comprehensions.
 
 For example:
 
-    sums = for Array
+    sums = make Array
       a <- as.each
       [b as Integer, *_] <- bs.each_slice 4
-      select a * b
+      pick a * b
     end
 
-`for` may also be used in other struct types
+`make` may also be used in other struct types
 
-    for Point
+    make Point
       x <- coords.each
-      select x
+      pick x
     end
 
-    for Foo
+    make Foo
       [k, v] <- kvs.each
-      select k => v
+      pick k => v
     end
 
 since this form is not very pleasing:
@@ -672,15 +672,15 @@ since this form is not very pleasing:
       ...
     end.call
 
-we can `for` without `select` instead
+we can `make` without `pick` instead
 
-    for
+    make
       ...
     end
 
 example with IO:
 
-    for
+    make
       h <- IO.open 'f' 'w'
       line <- a.read_line
       if /foo/.match? line
@@ -690,7 +690,7 @@ example with IO:
 
 or simplify with pattern match:
 
-    for
+    make
       h <- IO.open 'f' 'w'
       [line as /foo/] <- a.read_line
       h.write line
@@ -698,9 +698,9 @@ or simplify with pattern match:
 
 example with try (`Object[o]` yields `o`, and `Object[]` yields `nil`):
 
-    for Object
+    make Object
       a <- b.try
-      select a.foo
+      pick a.foo
     end
 
 but there is no "state monad", since we only build result in last phase
@@ -709,26 +709,24 @@ but there is no "state monad", since we only build result in last phase
 
 the "if" applicative
 
-    for Object
+    make Object
       <- :if foo
-      select bar
+      pick bar
     end
 
 the "while" applicative
 
-    for Object
+    make Object
       <- :while ->, foo;
-      select bar # only the first works
+      pick bar # only the first works
     end
 
-    for Array
+    make Array
       <- :while ->, foo;
-      select bar # all elements are collected into the array
+      pick bar # all elements are collected into the array
     end
 
 [NOTE] we don't have elvis operator `?.`, it makes syntax hard to recognize when combined with question mark method names. but we can specify syntax for this kind of visits, see [Custom Syntax](custom-syntax.md) for more information.
-
-[TODO] it is like fmap ... should we use `map` instead? or simpler, `for` ?
 
 [impl NOTE]:
 
@@ -739,7 +737,7 @@ See also https://ghc.haskell.org/trac/ghc/wiki/ApplicativeDo for applicative do 
 [design NOTE]:
 
 - It is in essential a monad
-- In the block is just normal nabla code, with just one addition: `select elem` or `select k => v` (NOTE we should disable the syntax `select k: v` since in this case k is usually string)
+- In the block is just normal nabla code, with just one addition: `pick elem` or `pick k => v` (NOTE we should disable the syntax `pick k: v` since in this case k is usually string)
 - if we use `collect Array[...]` syntax, then it becomes a bit ambiguous with `Array[...]`, and we know the languages between
 - it is so more like a control syntax instead of a constructor syntax
 - the syntax is a relieve for lambdas not being able to change outer variables
@@ -907,8 +905,6 @@ predicate methods end with `?` and return values are always converted to `true` 
     end
 
 To mention a method, we can use `Klass:method`, but it is not valid syntax (just for simplicity of reflection API).
-
-[design NOTE] We should not impl `local def`, it can be quite complex if we impl dynamic method calling.
 
 ## Namespaces
 

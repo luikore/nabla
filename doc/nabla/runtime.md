@@ -14,12 +14,11 @@ Methods on objects
     a.presence
     a.blank?
 
-    obj.iv_get k
-    obj.iv_set! k v
     obj.methods
     obj.object_id
     obj.method m
 
+    # following methods make new objects with new methods
     obj.def! m lambda
     obj.undef! m
     obj.extend! module

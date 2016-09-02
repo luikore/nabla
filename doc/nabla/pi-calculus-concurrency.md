@@ -24,8 +24,8 @@ We don't need `new_seq` ? We can manual code the invoking.
 
 sleep and awake
 
-    proc.sleep $5seconds # wake after 5 seconds
-    proc.sleep           # sleep permantly
+    proc.sleep $(5 seconds) # wake after 5 seconds
+    proc.sleep              # sleep permantly
     proc.wake
 
 sleep current proc
