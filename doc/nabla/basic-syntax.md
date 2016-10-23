@@ -120,49 +120,44 @@ Variables better be named in snake case. Examples:
     foo_bar
     fooBar # still OK, but not recommended as code style
 
-The local environment is mutable, local vars can be changed inside a subroutine, but such kind of sub can not be turned into a lambda
+The local environment is mutable, local vars can be changed by another assignment, even in a lambda:
 
     a = 0
-    sub1 = do
-      b = 3
-    end
-    sub2 = do
+    l = ->
       a = 3
     end
-    Lambda[sub1] # good, sub1 doesn't change local variables outside
-    Lambda[sub2] # error, sub2 has side effect on local variables
+    l.call
+    a # 3
 
-If you need to store blocks for futher use, it is better for the method to require lambda instead. When a local scope ends, the reference count to the associated blocks are checked -- if more than 1, it raises an error.
-
-Variables are declared the first time you assign it. 
+Variables are declared the first time you assign it.
 Can use `var` to force declare variable instead of search up captures
 
     a = 0
-    do
+    ->
       var a = 3
       a # 3
-    end # this subroutine is pure and can be turned into a lambda
+    end
     a # 0
 
-## Difference in `return` between subroutines and lambda
+See more in [Constant Management](constant-management.md).
 
-- `return` in lambda terminates the lambda itself
-- `return` in subroutine terminates the enclosing `def` block
+## Non-exposing constants
+
+By default constants will be exposed in current scope, use `local` to not expose constants:
+
+    local A = 3
 
 ## Anonymous value `_`
 
 If it is "left value" which lies on the left of assignment or matching-assignment, then it has no effect. (see also pattern matching)
+
+Since `_` is so special, it can not be used as variable name or method name.
 
     [_, x] = [3, 4]
     x as _ ~ 4
     x as _.f ~ 4 # syntax error
     _.f ~ 4 # syntax error
     x._ ~ 4 # syntax error
-
-if it is a "right value", then it represents value of expression in the context. (good for repl)
-
-    3 + 4
-    _ * 5
 
 ## Comments
 
@@ -215,7 +210,7 @@ There are two important syntax sugars to make it easy to compose single-line or 
 
     if foo, bar;
 
-A single `$` at the end of the line means joining 2 lines together
+A single `$` means evaluate the expression before, then use it as input of next expression (can be put in the next line)
 
     :foo bar $
     baz
@@ -223,6 +218,12 @@ A single `$` at the end of the line means joining 2 lines together
     # is equivalent to
 
     :foo bar baz
+
+A single `$` in the middle of line makes the spaces around it "more significant"
+
+    :foo :bar :baz          #=> :foo (:bar :baz)
+    :foo :bar $ :baz        #=> :foo (:bar) :baz
+    :foo :bar $ :baz $ :xip #=> :foo (:bar) (:baz) (:xip)
 
 # Operators
 
@@ -313,7 +314,7 @@ NOTE: the methods are defined with arbitrary members, but VM can optimize them.
 
 # Control structures
 
-`if` cond
+`if` conditional statement
 
     if foo1
       bar1
@@ -342,7 +343,7 @@ NOTE: the methods are defined with arbitrary members, but VM can optimize them.
       pick a * 2
     end
 
-`case` ... `when` (see more in [Pattern Match](pattern-match.md))
+`case` ... `when` (see more in [Pattern Match](pattern-match.md)) is exhaustive match: if no `else` branch and no valid matching cases, it will raise error.
 
     case x
     when 1, ...
@@ -426,6 +427,22 @@ And there is `@=` operator:
 
 NOTE: we use the `@` operator, so looking for subscript looks cleaner, and not conflict with object creating syntax `A[foo, bar]`, `A{foo: foo, bar: bar}`
 
+A shorthand to make maps with local variables:
+
+    {
+      a
+      b
+      c
+    }
+
+is equivalent to:
+
+    {
+      a: a
+      b: b
+      c: c
+    }
+
 ## Alternative collections
 
 ### Assoc array
@@ -486,8 +503,6 @@ Left and right must match the type exactly.
 If the right pattern is `[]`, will call `.to_l` of left.
 If the right pattern is `{}`, will call `.to_h` of left. (`Set:to_h` will expose the internal hash map, and the values are `true`)
 
-### Design notes
-
 [design NOTE] list is not really useful: slicing, deleting, or concatenating 2 immutable lists still require O(n) operations
 RRB tree may be a good option for list impl.
 
@@ -495,7 +510,7 @@ RRB tree may be a good option for list impl.
 
 ## Splat operator for generating new arrays
 
-To unroll an seq-like data structure, use `*`
+To unroll an sequence-like data structure, use `*`
 To unroll a map-like data structure, use `**`
 
     [a, *b, c]
@@ -585,6 +600,12 @@ When a field ends with `?`, it is converted and stored in boolean
     foo.b?    # false
     foo.b = 1 # Foo{true, true}
 
+Like local constants, struct can be local-only:
+
+    local struct Foo[
+      ...
+    ]
+
 [design NOTE]: only boolean converter is available, but we can use lambda's as converter.
 
 [design NOTE]: if we allow methods defined under `struct`, then the difference from `class` is unclear (let `struct` mutate members? but how about more members?)
@@ -672,13 +693,13 @@ For example:
       pick k => v
     end
 
-since this form is not very pleasing:
+since the following form doesn't look very pleasing:
 
-    do
+    ->
       ...
     end.call
 
-we can `make` without `pick` instead
+we can use `make` without `pick` to achieve the same effect
 
     make
       ...
@@ -732,7 +753,7 @@ the "while" applicative
       pick bar # all elements are collected into the array
     end
 
-[NOTE] we don't have elvis operator `?.`, it makes syntax hard to recognize when combined with question mark method names. but we can specify syntax for this kind of visits, see [Custom Syntax](custom-syntax.md) for more information.
+[NOTE] we don't have Elvis operator `?.`, it makes syntax hard to recognize when combined with question mark method names. but we can specify syntax for this kind of visits, see [Custom Syntax](custom-syntax.md) for more information.
 
 [impl NOTE]:
 
@@ -793,7 +814,7 @@ the order of behavior type and struct type can be switched
     end
     struct Foo[...]
 
-but accessor methods are overriden:
+but accessor methods are overridden:
 
     class Foo
       def x= v
@@ -802,7 +823,7 @@ but accessor methods are overriden:
     end
     struct Foo[x] # overrides Foo#x and Foo#x=
 
-if you define final methods that are overriden by struct, it throws error
+if you define final methods that are overridden by struct, it throws error
 
     class Foo
       final def x=v
@@ -811,29 +832,16 @@ if you define final methods that are overriden by struct, it throws error
     end
     struct Foo[x] # error overriding final method
 
+A local class means the constant is not available in global constant lookup:
+
+    local class Foo
+    end
+
 [TODO] do we add syntax for `import Behavior` so methods in the object can be limited?
-
-## Import methods with lexical scoping
-
-Think you are writing a compiler with OO-manner, you may need to define a method `visit` for each AST node type, and you wish to use some primitive data types for efficiency and simplicity. But then, you are worried about poluting global environment since you need to define `visit` methods on primitive types.
-
-`local include` is for solving this kind of problems.
-
-    class Foo
-      def visit ctx
-        ...
-      end
-    end
-
-    class Integer
-      local include Foo
-    end
-
-Like `local def`, all method lookups in this source file is prepended with a local method table. Different to `include`, the local included class must be defined before the call. And please be careful: all methods defined afterwards will not be included.
 
 ## Scope with parameters
 
-scope can accept parameters just like methods, and they can be accessed via reader methods
+Scope accepts parameters just like methods, and they can be accessed via reader methods
 
     struct Foo[]
 
@@ -849,7 +857,22 @@ scope can accept parameters just like methods, and they can be accessed via read
     (f.foo 3 4).x   # 3
     (f.foo 3 4).bar # 3
 
-scope parameters can use pattern match too, see more in [Pattern Match](pattern-match.md)
+Scope parameters can use pattern match too, see more in [Pattern Match](pattern-match.md)
+
+Scope can be considered currying in OO programming, and it is not necessary ordered.
+
+    class Foo
+      scope bar x
+      end
+
+      scope baz y
+      end
+    end
+
+    foo = Foo[]
+    foo.bar! 1 $ .baz! 2
+    foo.x # 1
+    foo.y # 2
 
 ## Class with struct
 
@@ -911,6 +934,14 @@ predicate methods end with `?` and return values are always converted to `true` 
     end
 
 To mention a method, we can use `Klass:method`, but it is not valid syntax (just for simplicity of reflection API).
+
+To make a method only visible to local file, can add a `local` prefix
+
+    local def foo
+      ...
+    end
+
+`local` methods are always `final`.
 
 ## Namespaces
 
@@ -1017,7 +1048,7 @@ Arity is still the same as normal order (`1..3` in the above example). `:method(
 
 ## Matching args
 
-see pattern-match
+see [Pattern Match](pattern-match.md)
 
 ## Method calling
 
@@ -1029,11 +1060,11 @@ method definition is the boundary of lexical scoping for local vars
     :bar
     ::bar
 
-chain: right-value `_` represents the last expression value in the same block
+The chain operator `$` can chain lines together
 
-    foo.bar baz xip
-    _.lower baz xip
-    _.continue baz xip
+    foo.bar baz xip $
+    .lower baz xip $
+    .continue baz xip
 
 composed
 
@@ -1128,11 +1159,9 @@ NOTE: there is no modifiers like `private` and `protected` -- we can always use 
 
 [design NOTE]: the modifiers are not methods? `:final`, `:include`, `:scope` makes compiler optimizations harder, and not as easy to write either. And `include`, `scope` all require implicit receiver: the scoped class, making them methods is a bit complex.
 
-# Lambda and subroutines
+# Lambda
 
-## Lambda
-
-Can capture local vars but can not change it:
+Can capture local vars and change them
 
     -> x
       x + 2
@@ -1141,7 +1170,19 @@ Can capture local vars but can not change it:
 
 Recall note: comma (`,`) means "new line"
 
-## Quick lambdas
+Lambdas with side effects dies when it goes out of scope, only a pure lambda can live long, `Lambda#snapshot` generates a pure lambda (TODO more decent example to address the use):
+
+    x = 0
+    l = -> v
+      x = v
+    end
+    l.call 1
+    x # 1
+    l.snapshot!
+    l.call 2
+    x # 1
+
+## `\` syntax for quick lambdas
 
 `\` followed by an operator is a lambda. The following 2 lambdas are equivalent:
 
@@ -1165,66 +1206,13 @@ To compute factorial for example:
 
 ## Currying
 
-    -> x y
+    l = -> x y
       x + y
     end
-    l = _.curry
+    l.curry!
     (l.call 1).call 2
 
-## Subroutines
-
-A subroutine can modify captured variables, and can use `next` and `break`. but the life of a block ends with a local scope.
-
-Similar to lambda, but start with `do`, for example
-
-    arr.each do e
-      :print e
-    end
-
-In lambdas, `return` ends the control flow, and captures are snapshot and immutable
-
-in subroutines, `return` ends the control flow of wrapping lambda or method, and can change local vars outside subroutine
-in subroutines, `break`/`next` can control iterations, but in lambdas, they are forbidden if not wrapped in subroutine.
-in subroutines, the arity is not enforced.
-
-subroutine's life ends with the call receiving subroutine or local var (`some_local = do, ...;`), if ref_count > 1 at it's end of life, it raises an error.
-
-iteration methods can use either subroutines or lambdas.
-
-more usages
-
-    s = do
-      ...
-    ;
-    s.call # return value is pair of ['break', 3], ['ret', 4], ['next', 5], ...
-
-[impl NOTE] `break` and `next` in if/while are compiled differently than subroutines.
-
-NOTE nesting lambda and subroutine
-
-    a = 1
-    ->
-      do, a = 2;
-      _.call
-      a # 2
-    end
-    _.call
-    a # 1
-
-`a` in lambda capture is changed, but outside of lambda, `a` is not changed.
-compiler should generate warning: assigning local variable inside closure has no effect for the outside (lower warning level just warns the subroutine-in-lambda change, higher warning level warns lambda change)
-
-## Shadow naming and variable scoping
-
-shadow naming means the variable is in fact a different one than the original variable
-
-    a = 4
-    do
-      a = 5 # not shadow naming, changes local var
-    end
-    ->
-      a = 5 # shadow naming, does not change local var
-    end
+## Variable scoping
 
 constants follow `class` scoping, while variables follow lexical rules and are separated by `def`s
 
@@ -1265,7 +1253,7 @@ Constants have a `source` meta connected to it, when reloading a source, all con
 
 back arrows generates nested lambda
 
-    do
+    make
       e <- a.each
       f <- b.each
       <- c.each
@@ -1281,8 +1269,6 @@ is equivalent to
     end
 
 it is just an opposite writing of `->` and the following lines before `end` are brace nested into the blocks.
-
-there is no back arrow for do-block (we recommend immutable ways, when we really need to change local vars inside block, then use `do` directly)
 
 back arrows can be used inside any syntax structures with `end` or `when` delimiter, the following are all valid syntax:
 
@@ -1317,3 +1303,19 @@ back arrows can be considered as monad of the universal sum type. they can be ta
 ## Matching args
 
 See [Pattern Match](pattern-match.md)
+
+# Import: specifying code dependencies
+
+    import foo/bar     # require code from another file, under load path, from first to last
+    import ./foo/bar   # search starts in folder containing current source
+    import /foo/bar    # search starts in root folder
+    import c://foo/bar # search starts in drive C
+    import ~/foo/bar   # search starts in home folder
+
+The load path is specified at startup and can not be changed over time.
+
+`import` only works in top of a file (except comments).
+
+## Dynamic loading
+
+See [Dynamic Loading](dynamic-loading.md).

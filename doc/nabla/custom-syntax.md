@@ -432,7 +432,7 @@ The options are the same as command line compile options only without the leadin
     Kernel.optimize $[w mutable-array static-dispatch static-type inline lazy] $
     def f
       a = []
-      3.times do i
+      3.times -> i
         a.push! i
       end
     end
@@ -491,7 +491,7 @@ treats `a.b` as `a @ "b"`
 
 to add new infix operators
 
-    Kernel::Syntax.infix "^_^" {precedence: 5}
+    Nabla.infix "^_^" {precedence: 5}
 
 then it can be used in `def`, `.` or `:` calling
 

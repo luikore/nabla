@@ -56,13 +56,13 @@ disambig examples:
 
     matcher = -> foo where foo > 4;
 
-## The `.match` interface
+## The `.match` interface (TODO refine considerations)
 
 Calling `.match` returns match data
 
 For lambdas `mdata @ 0` is the return value
 
-    mdata = (-> v where v > 4, v * 2;).match 5
+    mdata = (case -> v, when v > 4, v * 2;).match 5
     mdata @ 0 # 10
 
 For struct `mdata @ 0` is the source
@@ -106,9 +106,9 @@ case of const:
 both `=~` and `=` works as assignment operator, but:
 
 - `=` throws error when not match
-- `=~` as it looks, doesn't care so much and only returns `false` when not match
+- `=~` is as it looks like, doesn't care so much and only returns `false` when not match
 
-## Matching a Map
+## Matching a map
 
 example (use `*: rest_var` to match the rest)
 
@@ -123,7 +123,7 @@ function params are NOT match exprs, they allow default assignments
 
 [impl NOTE] compiler and doc-generator should be able to extract the first several lines of matchers for further use
 
-## Matching a Set
+## Matching a set
 
 We can match a set to another set
 
@@ -131,33 +131,27 @@ We can match a set to another set
 
 But the order for `a`, `b` are not garanteed
 
-## Matching arguments
+## Matching function inputs
 
-When args are quoted with brackets, we are matching the arg array, and it means `if match then...`
+An empty `case` clause can replace arguments.
 
-    def foo [a as Integer, b as 3]
+We can match against args when using `case def`
+
+    def foo case
+    when [a as Integer, b as 3]
       ...
-
-You may think, how about multiple matches? but nabla does forbid method overloading
-
-    def foo [*xs]
-      case xs
-      when [a, b]
-        ...
-      when [a, b, c, *_]
-        ...
-      end
+    when [x, *xs]
+      ...
+    else # if no else branch, raises argument error
+      ...
     end
 
 When method is defined with matching args, the arity is `-1`
 
-Lambdas and subroutines may also be defined with matching args
+Lambdas and subroutines may also be defined with case
 
-    -> [x, *xs]
-      ...
-    end
-
-    do [x, *xs]
+    -> case
+    when [x, *xs]
       ...
     end
 
@@ -169,16 +163,22 @@ The back arrow is also powered with matching syntax, which makes this syntax mor
       pick x * y
     end
 
-[design NOTE] can we make mismatch an error?
-
 ## Matching scope arguments
 
-Same as matching method arguments and they are defined as methods on the scoped object
+For scopes, it is the same as matching method arguments and they are defined as methods on the scoped object
 
-    scope foo [x, *xs]
+    scope foo case
+    when [x, *xs]
       def bar
         :xs
       end
+    end
+
+The `case` syntax also works for back arrows
+
+    case <- arr.each
+    when [x as \(> 4), y as \(< 3)]
+      ...
     end
 
 ## Logic operations on matcher
@@ -191,28 +191,22 @@ The following methods are defined on lambda:
 
 We can them use like this:
 
-    foo = do x, x > 4;
-    bar = do x, x < 10;
+    foo = -> x, x > 4;
+    bar = -> x, x < 10;
     baz = \(.even?)
     x =~ (foo | bar) & baz.neg
 
 ## On recursive matching
 
-With subroutine referencing self. example matching integer array:
+With lambda referencing self. example matching integer array:
 
-    foo = do x
-      case x
-      when [], true
-      when [Integer, *_ as foo], true
-      end
+    # but be careful since matching arguments requires additional brackets
+    foo = -> case
+    when [x]
+    when [[]], true
+    when [[Integer, *_ as foo]], true
     end
-    _ as foo =~ [1, 2, 3]
-
-Another way:
-
-    present = do [[Integer, *_ as foo]], true; # but be careful since matching arguments requires additional brackets
-    foo = present | []
-    _ as foo =~ [1, 2, 3]
+    _ as foo = [1, 2, 3] # matches
 
 With struct referencing self
 
