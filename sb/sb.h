@@ -106,7 +106,8 @@ Val sb_parse(Spellbreak* sb, const char* src, int64_t size);
 typedef struct {
   Val ast; // we may transform ast
   Val patterns_dict; // {"name": regexp_node}, built from ast
-  Val vars_dict;     // {"context:name": true}
+  void* vars;
+  void* vars_table;  // symtable of {"context:name": position_in_stack}
 
   // the following fields will be passed to runtime Spellbreak
 
@@ -126,7 +127,7 @@ int32_t sb_compile_context_dict_find(Val context_dict, Val name, char kind);
 #pragma mark ### vm functions
 
 // updates iseq, returns err
-Val sb_vm_lex_compile(struct Iseq* iseq, Val patterns_dict, Val vars_dict, Val node);
+Val sb_vm_lex_compile(struct Iseq* iseq, Val patterns_dict, void* vars_table, Val node);
 
 // returns {res, err}
 ValPair sb_vm_lex_exec(Spellbreak* sb);

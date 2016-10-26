@@ -252,7 +252,7 @@ void sb_syntax_compile(Val ast, uint32_t target_klass) {
   CompileCtx ctx = {
     .context_dict = nb_dict_new(),
     .patterns_dict = nb_dict_new(),
-    .vars_dict = nb_dict_new(),
+    .vars_table = nb_sym_table_new(),
     .ast = ast
   };
   Iseq.init(&ctx.iseq, 30);
@@ -261,14 +261,14 @@ void sb_syntax_compile(Val ast, uint32_t target_klass) {
   if (err != VAL_UNDEF) {
     RELEASE(ctx.context_dict);
     RELEASE(ctx.patterns_dict);
-    RELEASE(ctx.vars_dict);
+    nb_sym_table_delete(ctx.vars_table);
     val_throw(err);
   }
 
   SpellbreakMData* mdata = klass_get_data(target_klass);
   mdata->context_dict = ctx.context_dict;
-  mdata->vars_size = nb_dict_size(ctx.vars_dict);
+  mdata->vars_size = nb_sym_table_size(ctx.vars_table)
   mdata->compiled = true;
   RELEASE(ctx.patterns_dict);
-  RELEASE(ctx.vars_dict);
+  nb_sym_table_delete(ctx.vars_table); // TODO need to keep it for debugging
 }

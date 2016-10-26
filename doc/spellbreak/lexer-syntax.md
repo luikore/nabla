@@ -21,7 +21,7 @@ NOTE: Using a global var also marks the lex block not reusable
 
 ## Local variables (declare inside lex block)
 
-The lexer can store and make use of several variables, you need to declare them in the begin callback.
+The lexer can store and make use of several variables, you have to declare them in the `begin` callback.
 
 Variables represent current lexing state, and point to immutable values. For editor, this lexing state is stored alongside with history.
 

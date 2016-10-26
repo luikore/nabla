@@ -4,6 +4,8 @@
 
 #include "sb.h"
 #include <adt/dict.h>
+
+// sym table for var numbering
 #include <adt/sym-table.h>
 
 Val sb_check_names_conflict(Val ast);
@@ -79,8 +81,3 @@ static void LABEL_TRANSLATE(struct Labels* labels, struct Iseq* iseq) {
     ptr[0] = *((int*)Labels.lat(labels, ptr[0]));
   }
 }
-
-#pragma mark ## symbol management
-
-// vars are pre-allocated, so we generate the var table at compile time.
-

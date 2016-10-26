@@ -32,7 +32,7 @@ Val sb_compile_main(CompileCtx* ctx) {
     int32_t iseq_start = Iseq.size(&ctx->iseq);
     if (IS_A(e, "Lex")) {
       Val lex_name = AT(e, 0);
-      Val err = sb_vm_lex_compile(&ctx->iseq, ctx->patterns_dict, ctx->vars_dict, AT(e, 1), &klass_refs);
+      Val err = sb_vm_lex_compile(&ctx->iseq, ctx->patterns_dict, ctx->vars_table, AT(e, 1), &klass_refs);
       if (err) {
         return err;
       } else {
