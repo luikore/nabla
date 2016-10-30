@@ -105,9 +105,9 @@ Val sb_parse(Spellbreak* sb, const char* src, int64_t size);
 
 typedef struct {
   Val ast; // we may transform ast
-  Val patterns_dict; // {"name": regexp_node}, built from ast
-  void* vars;
-  void* vars_table;  // symtable of {"context:name": position_in_stack}
+  Val patterns_dict;   // {"name": regexp_node}, built from ast
+  void* vars_table;    // symtable of {"context:name": position_in_stack}, for global vars, key is "::name"
+  void* structs_table; // dict of {"name": arity}, for re-definition check and arity check
 
   // the following fields will be passed to runtime Spellbreak
 
@@ -135,7 +135,7 @@ ValPair sb_vm_lex_exec(Spellbreak* sb);
 // stmts: list of statements
 // peg_mode: if set to true, will forbid variables (TODO local variables still makes it pure)
 // see compile.h for label table type
-Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, struct {} ctx);
+Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, int32_t terms_size, void* label_table, bool is_peg, void* ctx);
 
 void sb_vm_callback_decompile(uint16_t* pc);
 
@@ -143,7 +143,7 @@ void sb_vm_callback_decompile(uint16_t* pc);
 ValPair sb_vm_callback_exec(uint16_t* pc, struct Vals* stack, uint32_t bp);
 
 // updates iseq, returns err
-Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, Val node, void* klass_refs);
+Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, void* structs_table, Val node);
 
 void sb_vm_peg_decompile(uint16_t* pc);
 

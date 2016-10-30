@@ -15,16 +15,16 @@ typedef struct {
   int terms_size;
   bool peg_mode;
   struct Labels* labels;
-  struct ClassRefs* class_refs;
-} Ctx;
+  struct StructsTable* structs_table;
+} CallbackCompileCtx;
 
-static void _encode_callback_lines(struct Iseq* iseq, Val stmts, Ctx* ctx);
+static void _encode_callback_lines(struct Iseq* iseq, Val stmts, CallbackCompileCtx* ctx);
 
 #pragma mark ## impls
 
 // returns change of stack
 // terms_size is for checking of capture overflows
-static void _encode_callback_expr(struct Iseq* iseq, Val expr, Ctx* ctx) {
+static void _encode_callback_expr(struct Iseq* iseq, Val expr, CallbackCompileCtx* ctx) {
   uint32_t klass = VAL_KLASS(expr);
   // Expr = InfixLogic | Call | Capture | CraeteNode | CreateList | Assign | If | Nul
   // NOTE: no VarRef for PEG
@@ -131,7 +131,7 @@ static void _encode_callback_expr(struct Iseq* iseq, Val expr, Ctx* ctx) {
       }
     }
     ENCODE(iseq, uint16_t, NODE_END);
-    KLASS_REF(ctx->klass_refs, klass_ref_offset, klass_str, elems_size, has_splat);
+    KLASS_REF(ctx->structs_table, klass_ref_offset, klass_str, elems_size, has_splat);
 
   } else if (klass == kCreateList) {
     // CreateList[(Expr | SplatEntry)*]
@@ -204,7 +204,7 @@ static void _encode_callback_expr(struct Iseq* iseq, Val expr, Ctx* ctx) {
   }
 }
 
-static void _encode_callback_lines(struct Iseq* iseq, Val stmts, Ctx* ctx) {
+static void _encode_callback_lines(struct Iseq* iseq, Val stmts, CallbackCompileCtx* ctx) {
   // Expr* (NOTE: no VarDecl in PEG callback)
 
   // NOTE: should only push the last expr to stack so this code can be correct: `[a, (b, c)]`
@@ -219,7 +219,7 @@ static void _encode_callback_lines(struct Iseq* iseq, Val stmts, Ctx* ctx) {
   }
 }
 
-Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, Ctx ctx) {
+Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, int32_t terms_size, void* labels, bool peg_mode, void* structs_table) {
   if (!kInfixLogic) {
     uint32_t sb = sb_klass();
     kInfixLogic = klass_find_c("kInfixLogic", sb); assert(kInfixLogic);
@@ -231,6 +231,11 @@ Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, Ctx ctx) {
     kIf         = klass_find_c("kIf", sb);
   }
 
+  CallbackCompileCtx ctx;
+  ctx.terms_size = terms_size;
+  ctx.labels = labels;
+  ctx.peg_mode = peg_mode;
+  ctx.structs_table = structs_table;
   _encode_callback_lines(iseq, stmts, &ctx);
   return VAL_NIL;
 }

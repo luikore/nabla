@@ -29,53 +29,59 @@ static bool _rule_num_key_eq(uint32_t k1, uint32_t k2) {
 MUT_MAP_DECL(RuleNumMap, uint32_t, int, _rule_num_key_hash, _rule_num_key_eq);
 
 typedef struct {
+  struct Iseq* iseq;
+  void* structs_table;
   // NOTE an entry in map is much heavier than one in array
   struct RuleNumMap m;
   struct Labels l;
-  struct KlassRefs klass_refs;
-} LabelTable;
+} PegCompileCtx;
 
-static void _encode_rule_body_unit(struct Iseq* iseq, Val e, LabelTable* lt);
+static void _encode_rule_body_unit(PegCompileCtx* ctx, Val e);
 
 #pragma mark ## impls
 
-static void _label_init(LabelTable* lt, KlassRefs* klass_refs) {
-  RuleNumMap.init(&lt->m);
-  Labels.init(&lt->l);
-  lt->klass_refs = klass_refs;
+static void _ctx_init(PegCompileCtx* ctx, struct Iseq* iseq, void* structs_table) {
+  ctx->iseq = iseq;
+  ctx->structs_table = structs_table;
+  RuleNumMap.init(&ctx->m);
+  Labels.init(&ctx->l);
 }
 
-static void _label_cleanup(LabelTable* lt) {
-  RuleNumMap.cleanup(&lt->m);
-  Labels.cleanup(&lt->l);
+static void _ctx_cleanup(PegCompileCtx* ctx) {
+  RuleNumMap.cleanup(&ctx->m);
+  Labels.cleanup(&ctx->l);
 }
 
-static int _label_new_rule_num(LabelTable* lt, uint32_t rule_name_strlit) {
+static int _iseq_size(PegCompileCtx* ctx) {
+  return Iseq.size(ctx->iseq);
+}
+
+static int _label_new_rule_num(PegCompileCtx* ctx, uint32_t rule_name_strlit) {
   int n;
-  if (RuleNumMap.find(&lt->m, rule_name_strlit, &n)) {
+  if (RuleNumMap.find(&ctx->m, rule_name_strlit, &n)) {
     return n;
   }
 
   // num not defined before? create one
-  n = LABEL_NEW_NUM(&lt->l);
-  RuleNumMap.insert(&lt->m, rule_name_strlit, n);
+  n = LABEL_NEW_NUM(&ctx->l);
+  RuleNumMap.insert(&ctx->m, rule_name_strlit, n);
   return n;
 }
 
-static int _label_new_num(LabelTable* lt) {
-  return LABEL_NEW_NUM(&lt->l);
+static int _label_new_num(PegCompileCtx* ctx) {
+  return LABEL_NEW_NUM(&ctx->l);
 }
 
-static void _label_def(LabelTable* lt, int num, int offset) {
-  LABEL_DEF(&lt->l, num, offset);
+static void _label_def(PegCompileCtx* ctx, int num, int offset) {
+  LABEL_DEF(&ctx->l, num, offset);
 }
 
-static void _label_ref(LabelTable* lt, int offset) {
-  LABEL_REF(&lt->l, offset);
+static void _label_ref(PegCompileCtx* ctx, int offset) {
+  LABEL_REF(&ctx->l, offset);
 }
 
 // callback_maybe: [Callback]
-static void _encode_callback_maybe(struct Iseq* iseq, Val callback_maybe, int terms_size, LabelTable* lt) {
+static void _encode_callback_maybe(PegCompileCtx* ctx, Val callback_maybe, int terms_size) {
   if (callback_maybe != VAL_NIL) {
     Val callback = nb_cons_head(callback_maybe);
 
@@ -84,28 +90,28 @@ static void _encode_callback_maybe(struct Iseq* iseq, Val callback_maybe, int te
       goto nil_callback;
     }
 
-    sb_vm_callback_compile(iseq, stmts, terms_size, &lt->l, true);
-    ENCODE(iseq, uint16_t, RULE_RET);
+    sb_vm_callback_compile(ctx->iseq, stmts, terms_size, &ctx->l, true, ctx->structs_table);
+    ENCODE(ctx->iseq, uint16_t, RULE_RET);
     return;
   }
 
 nil_callback:
-  ENCODE(iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
-  ENCODE(iseq, uint16_t, RULE_RET);
+  ENCODE(ctx->iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
+  ENCODE(ctx->iseq, uint16_t, RULE_RET);
 }
 
-static void _encode_term(struct Iseq* iseq, Val term_node, LabelTable* lt) {
+static void _encode_term(PegCompileCtx* ctx, Val term_node) {
   if (VAL_KLASS(term_node) == kRefRule) {
     Val rule_name = nb_struct_get(term_node, 0);
-    int num = _label_new_rule_num(lt, VAL_TO_STR(rule_name));
-    _label_ref(lt, Iseq.size(iseq) + 1);
-    ENCODE(iseq, ArgU32U32, ((ArgU32U32){RULE_CALL, num, VAL_TO_STR(term_node)}));
+    int num = _label_new_rule_num(ctx, VAL_TO_STR(rule_name));
+    _label_ref(ctx, _iseq_size(ctx) + 1);
+    ENCODE(ctx->iseq, ArgU32U32, ((ArgU32U32){RULE_CALL, num, VAL_TO_STR(term_node)}));
   } else { // token
-    ENCODE(iseq, ArgU32, ((ArgU32){TERM, VAL_TO_STR(term_node)}));
+    ENCODE(ctx->iseq, ArgU32, ((ArgU32){TERM, VAL_TO_STR(term_node)}));
   }
 }
 
-static void _encode_term_star(struct Iseq* iseq, Val term_star_node, LabelTable* lt) {
+static void _encode_term_star(PegCompileCtx* ctx, Val term_star_node) {
   // e*
   //   push nil
   //   push_br L0
@@ -115,22 +121,22 @@ static void _encode_term_star(struct Iseq* iseq, Val term_star_node, LabelTable*
   //   L0:
 
   Val e = nb_struct_get(term_star_node, 0);
-  int l0 = _label_new_num(lt);
-  int l1 = _label_new_num(lt);
+  int l0 = _label_new_num(ctx);
+  int l1 = _label_new_num(ctx);
 
-  ENCODE(iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
-  _label_ref(lt, Iseq.size(iseq) + 1);
-  ENCODE(iseq, Arg32, ((Arg32){PUSH_BR, l0}));
-  _label_def(lt, l1, Iseq.size(iseq));
-  _encode_term(iseq, e, lt);
+  ENCODE(ctx->iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
+  _label_ref(ctx, _iseq_size(ctx) + 1);
+  ENCODE(ctx->iseq, Arg32, ((Arg32){PUSH_BR, l0}));
+  _label_def(ctx, l1, _iseq_size(ctx));
+  _encode_term(ctx, e);
 
-  ENCODE(iseq, uint16_t, LIST_MAYBE);
-  _label_ref(lt, Iseq.size(iseq) + 1);
-  ENCODE(iseq, Arg32, ((Arg32){LOOP_UPDATE, l1}));
-  _label_def(lt, l0, Iseq.size(iseq));
+  ENCODE(ctx->iseq, uint16_t, LIST_MAYBE);
+  _label_ref(ctx, _iseq_size(ctx) + 1);
+  ENCODE(ctx->iseq, Arg32, ((Arg32){LOOP_UPDATE, l1}));
+  _label_def(ctx, l0, _iseq_size(ctx));
 }
 
-static void _encode_term_plus(struct Iseq* iseq, Val term_plus_node, LabelTable* lt) {
+static void _encode_term_plus(PegCompileCtx* ctx, Val term_plus_node) {
   // e+ # NOTE encode e twice for simplicity,
   //           this will not cause much code duplication, since there is no nesting
   //   push nil
@@ -143,23 +149,23 @@ static void _encode_term_plus(struct Iseq* iseq, Val term_plus_node, LabelTable*
   //   L0:
 
   Val e = nb_struct_get(term_plus_node, 0);
-  int l0 = _label_new_num(lt);
-  int l1 = _label_new_num(lt);
+  int l0 = _label_new_num(ctx);
+  int l1 = _label_new_num(ctx);
 
-  ENCODE(iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
-  _encode_term(iseq, e, lt);
-  ENCODE(iseq, uint16_t, LIST_MAYBE);
-  _label_ref(lt, Iseq.size(iseq) + 1);
-  ENCODE(iseq, Arg32, ((Arg32){PUSH_BR, l0}));
-  _label_def(lt, l1, Iseq.size(iseq));
-  _encode_term(iseq, e, lt);
-  ENCODE(iseq, uint16_t, LIST_MAYBE);
-  _label_ref(lt, Iseq.size(iseq) + 1);
-  ENCODE(iseq, Arg32, ((Arg32){LOOP_UPDATE, l1}));
-  _label_def(lt, l0, Iseq.size(iseq));
+  ENCODE(ctx->iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
+  _encode_term(ctx, e);
+  ENCODE(ctx->iseq, uint16_t, LIST_MAYBE);
+  _label_ref(ctx, _iseq_size(ctx) + 1);
+  ENCODE(ctx->iseq, Arg32, ((Arg32){PUSH_BR, l0}));
+  _label_def(ctx, l1, _iseq_size(ctx));
+  _encode_term(ctx, e);
+  ENCODE(ctx->iseq, uint16_t, LIST_MAYBE);
+  _label_ref(ctx, _iseq_size(ctx) + 1);
+  ENCODE(ctx->iseq, Arg32, ((Arg32){LOOP_UPDATE, l1}));
+  _label_def(ctx, l0, _iseq_size(ctx));
 }
 
-static void _encode_term_maybe(struct Iseq* iseq, Val term_maybe_node, LabelTable* lt) {
+static void _encode_term_maybe(PegCompileCtx* ctx, Val term_maybe_node) {
   // e?
   //   push nil
   //   push_br L0
@@ -169,19 +175,19 @@ static void _encode_term_maybe(struct Iseq* iseq, Val term_maybe_node, LabelTabl
   //   L0:
 
   Val e = nb_struct_get(term_maybe_node, 0);
-  int l0 = _label_new_num(lt);
+  int l0 = _label_new_num(ctx);
 
-  ENCODE(iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
-  _label_ref(lt, Iseq.size(iseq) + 1);
-  ENCODE(iseq, Arg32, ((Arg32){PUSH_BR, l0}));
-  _encode_term(iseq, e, lt);
+  ENCODE(ctx->iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
+  _label_ref(ctx, _iseq_size(ctx) + 1);
+  ENCODE(ctx->iseq, Arg32, ((Arg32){PUSH_BR, l0}));
+  _encode_term(ctx, e);
 
-  ENCODE(iseq, uint16_t, LIST_MAYBE);
-  ENCODE(iseq, uint16_t, POP_BR);
-  _label_def(lt, l0, Iseq.size(iseq) + 1);
+  ENCODE(ctx->iseq, uint16_t, LIST_MAYBE);
+  ENCODE(ctx->iseq, uint16_t, POP_BR);
+  _label_def(ctx, l0, _iseq_size(ctx) + 1);
 }
 
-static void _encode_lookahead(struct Iseq* iseq, Val node, LabelTable* lt) {
+static void _encode_lookahead(PegCompileCtx* ctx, Val node) {
   // &e
   //   push_br L0
   //   e
@@ -191,21 +197,21 @@ static void _encode_lookahead(struct Iseq* iseq, Val node, LabelTable* lt) {
   //   L1:
 
   Val e = nb_struct_get(node, 0);
-  int l0 = _label_new_num(lt);
-  int l1 = _label_new_num(lt);
+  int l0 = _label_new_num(ctx);
+  int l1 = _label_new_num(ctx);
 
-  _label_ref(lt, Iseq.size(iseq) + 1);
-  ENCODE(iseq, Arg32, ((Arg32){PUSH_BR, l0}));
-  _encode_term(iseq, e, lt);
-  ENCODE(iseq, uint16_t, UNPARSE);
-  _label_ref(lt, Iseq.size(iseq) + 1);
-  ENCODE(iseq, Arg32, ((Arg32){JMP, l1}));
-  _label_def(lt, l0, Iseq.size(iseq));
-  ENCODE(iseq, ArgU32, ((ArgU32){TERM, 0}));
-  _label_def(lt, l1, Iseq.size(iseq));
+  _label_ref(ctx, _iseq_size(ctx) + 1);
+  ENCODE(ctx->iseq, Arg32, ((Arg32){PUSH_BR, l0}));
+  _encode_term(ctx, e);
+  ENCODE(ctx->iseq, uint16_t, UNPARSE);
+  _label_ref(ctx, _iseq_size(ctx) + 1);
+  ENCODE(ctx->iseq, Arg32, ((Arg32){JMP, l1}));
+  _label_def(ctx, l0, _iseq_size(ctx));
+  ENCODE(ctx->iseq, ArgU32, ((ArgU32){TERM, 0}));
+  _label_def(ctx, l1, _iseq_size(ctx));
 }
 
-static void _encode_neg_lookahead(struct Iseq* iseq, Val node, LabelTable* lt) {
+static void _encode_neg_lookahead(PegCompileCtx* ctx, Val node) {
   // ^e
   //   push_br L0
   //   e
@@ -214,50 +220,50 @@ static void _encode_neg_lookahead(struct Iseq* iseq, Val node, LabelTable* lt) {
   //   L0:
 
   Val e = nb_struct_get(node, 0);
-  int l0 = _label_new_num(lt);
+  int l0 = _label_new_num(ctx);
 
-  _label_ref(lt, Iseq.size(iseq) + 1);
-  ENCODE(iseq, Arg32, ((Arg32){PUSH_BR, l0}));
-  _encode_term(iseq, e, lt);
-  ENCODE(iseq, uint16_t, UNPARSE);
-  ENCODE(iseq, ArgU32, ((ArgU32){TERM, 0}));
-  _label_def(lt, l0, Iseq.size(iseq));
+  _label_ref(ctx, _iseq_size(ctx) + 1);
+  ENCODE(ctx->iseq, Arg32, ((Arg32){PUSH_BR, l0}));
+  _encode_term(ctx, e);
+  ENCODE(ctx->iseq, uint16_t, UNPARSE);
+  ENCODE(ctx->iseq, ArgU32, ((ArgU32){TERM, 0}));
+  _label_def(ctx, l0, _iseq_size(ctx));
 }
 
 // terms: (Term | TermStar | TermPlus | TermMaybe | Lookahead | NegLookahead)*
 // returns size of terms
-static int _encode_terms(struct Iseq* iseq, Val terms, LabelTable* lt) {
+static int _encode_terms(PegCompileCtx* ctx, Val terms) {
   terms = nb_cons_reverse(terms);
   int terms_size = 0;
   for (Val node = terms; node != VAL_NIL; node = nb_cons_tail(node)) {
     Val e = nb_cons_head(node);
     uint32_t klass = VAL_KLASS(e);
     if (klass == kTerm) {
-      _encode_term(iseq, e, lt);
+      _encode_term(ctx, e);
     } else if (klass == kTermStar) {
-      _encode_term_star(iseq, e, lt);
+      _encode_term_star(ctx, e);
     } else if (klass == kTermPlus) {
-      _encode_term_plus(iseq, e, lt);
+      _encode_term_plus(ctx, e);
     } else if (klass == kTermMaybe) {
-      _encode_term_maybe(iseq, e, lt);
+      _encode_term_maybe(ctx, e);
     } else if (klass == kLookahead) {
-      _encode_lookahead(iseq, e, lt);
+      _encode_lookahead(ctx, e);
     } else if (klass == kNegLookahead) {
-      _encode_neg_lookahead(iseq, e, lt);
+      _encode_neg_lookahead(ctx, e);
     }
     terms_size++;
   }
   return terms_size;
 }
 
-static void _encode_seq_rule(struct Iseq* iseq, Val seq_rule, LabelTable* lt) {
+static void _encode_seq_rule(PegCompileCtx* ctx, Val seq_rule) {
   Val terms = nb_struct_get(seq_rule, 0);
   Val callback_maybe = nb_struct_get(seq_rule, 1);
-  int terms_size = _encode_terms(iseq, terms, lt);
-  _encode_callback_maybe(iseq, callback_maybe, terms_size, lt);
+  int terms_size = _encode_terms(ctx, terms);
+  _encode_callback_maybe(ctx, callback_maybe, terms_size);
 }
 
-static void _encode_branch_or(struct Iseq* iseq, Val a, Val terms, Val callback_maybe, LabelTable* lt) {
+static void _encode_branch_or(PegCompileCtx* ctx, Val a, Val terms, Val callback_maybe) {
   // a / terms callback_maybe
   //   push_br L0
   //   a
@@ -269,22 +275,22 @@ static void _encode_branch_or(struct Iseq* iseq, Val a, Val terms, Val callback_
 
   assert(terms != VAL_NIL);
 
-  int l0 = _label_new_num(lt);
-  int l1 = _label_new_num(lt);
+  int l0 = _label_new_num(ctx);
+  int l1 = _label_new_num(ctx);
 
-  _label_ref(lt, Iseq.size(iseq) + 1);
-  ENCODE(iseq, Arg32, ((Arg32){PUSH_BR, l0}));
-  _encode_rule_body_unit(iseq, a, lt);
-  ENCODE(iseq, uint16_t, POP_BR);
-  _label_ref(lt, Iseq.size(iseq) + 1);
-  ENCODE(iseq, Arg32, ((Arg32){JMP, l1}));
-  _label_def(lt, l0, Iseq.size(iseq));
-  int terms_size = _encode_terms(iseq, terms, lt);
-  _encode_callback_maybe(iseq, callback_maybe, terms_size, lt);
-  _label_def(lt, l1, Iseq.size(iseq));
+  _label_ref(ctx, _iseq_size(ctx) + 1);
+  ENCODE(ctx->iseq, Arg32, ((Arg32){PUSH_BR, l0}));
+  _encode_rule_body_unit(ctx, a);
+  ENCODE(ctx->iseq, uint16_t, POP_BR);
+  _label_ref(ctx, _iseq_size(ctx) + 1);
+  ENCODE(ctx->iseq, Arg32, ((Arg32){JMP, l1}));
+  _label_def(ctx, l0, _iseq_size(ctx));
+  int terms_size = _encode_terms(ctx, terms);
+  _encode_callback_maybe(ctx, callback_maybe, terms_size);
+  _label_def(ctx, l1, _iseq_size(ctx));
 }
 
-static void _encode_ljoin(struct Iseq* iseq, char kind, Val a, Val terms, Val callback_maybe, LabelTable* lt) {
+static void _encode_ljoin(PegCompileCtx* ctx, char kind, Val a, Val terms, Val callback_maybe) {
   assert(terms != VAL_NIL);
 
   switch (kind) {
@@ -296,17 +302,17 @@ static void _encode_ljoin(struct Iseq* iseq, char kind, Val a, Val terms, Val ca
       //   callback(captures = terms.size + 1)
       //   jmp L1
       //   L0:
-      int l0 = _label_new_num(lt);
-      int l1 = _label_new_num(lt);
-      _encode_rule_body_unit(iseq, a, lt);
-      _label_def(lt, l1, Iseq.size(iseq));
-      _label_ref(lt, Iseq.size(iseq) + 1);
-      ENCODE(iseq, Arg32, ((Arg32){PUSH_BR, l0}));
-      int terms_size = _encode_terms(iseq, terms, lt);
-      _encode_callback_maybe(iseq, callback_maybe, terms_size + 1, lt);
-      _label_ref(lt, Iseq.size(iseq) + 1);
-      ENCODE(iseq, Arg32, ((Arg32){JMP, l1}));
-      _label_def(lt, l0, Iseq.size(iseq));
+      int l0 = _label_new_num(ctx);
+      int l1 = _label_new_num(ctx);
+      _encode_rule_body_unit(ctx, a);
+      _label_def(ctx, l1, _iseq_size(ctx));
+      _label_ref(ctx, _iseq_size(ctx) + 1);
+      ENCODE(ctx->iseq, Arg32, ((Arg32){PUSH_BR, l0}));
+      int terms_size = _encode_terms(ctx, terms);
+      _encode_callback_maybe(ctx, callback_maybe, terms_size + 1);
+      _label_ref(ctx, _iseq_size(ctx) + 1);
+      ENCODE(ctx->iseq, Arg32, ((Arg32){JMP, l1}));
+      _label_def(ctx, l0, _iseq_size(ctx));
       break;
     }
 
@@ -317,13 +323,13 @@ static void _encode_ljoin(struct Iseq* iseq, char kind, Val a, Val terms, Val ca
       //   terms
       //   callback(captures = terms.size + 1)
       //   L0:
-      int l0 = _label_new_num(lt);
-      _encode_rule_body_unit(iseq, a, lt);
-      _label_ref(lt, Iseq.size(iseq) + 1);
-      ENCODE(iseq, Arg32, ((Arg32){PUSH_BR, l0}));
-      int terms_size = _encode_terms(iseq, terms, lt);
-      _encode_callback_maybe(iseq, callback_maybe, terms_size + 1, lt);
-      _label_def(lt, l0, Iseq.size(iseq));
+      int l0 = _label_new_num(ctx);
+      _encode_rule_body_unit(ctx, a);
+      _label_ref(ctx, _iseq_size(ctx) + 1);
+      ENCODE(ctx->iseq, Arg32, ((Arg32){PUSH_BR, l0}));
+      int terms_size = _encode_terms(ctx, terms);
+      _encode_callback_maybe(ctx, callback_maybe, terms_size + 1);
+      _label_def(ctx, l0, _iseq_size(ctx));
       break;
     }
 
@@ -335,24 +341,24 @@ static void _encode_ljoin(struct Iseq* iseq, char kind, Val a, Val terms, Val ca
       //   push_br L0
       //   jmp L1
       //   L0:
-      int l0 = _label_new_num(lt);
-      int l1 = _label_new_num(lt);
-      _encode_rule_body_unit(iseq, a, lt);
-      _label_def(lt, l1, Iseq.size(iseq));
-      int terms_size = _encode_terms(iseq, terms, lt);
-      _encode_callback_maybe(iseq, callback_maybe, terms_size + 1, lt);
-      _label_ref(lt, Iseq.size(iseq) + 1);
-      ENCODE(iseq, Arg32, ((Arg32){PUSH_BR, l0}));
-      _label_ref(lt, Iseq.size(iseq) + 1);
-      ENCODE(iseq, Arg32, ((Arg32){JMP, l1}));
-      _label_def(lt, l0, Iseq.size(iseq));
+      int l0 = _label_new_num(ctx);
+      int l1 = _label_new_num(ctx);
+      _encode_rule_body_unit(ctx, a);
+      _label_def(ctx, l1, _iseq_size(ctx));
+      int terms_size = _encode_terms(ctx, terms);
+      _encode_callback_maybe(ctx, callback_maybe, terms_size + 1);
+      _label_ref(ctx, _iseq_size(ctx) + 1);
+      ENCODE(ctx->iseq, Arg32, ((Arg32){PUSH_BR, l0}));
+      _label_ref(ctx, _iseq_size(ctx) + 1);
+      ENCODE(ctx->iseq, Arg32, ((Arg32){JMP, l1}));
+      _label_def(ctx, l0, _iseq_size(ctx));
 
       break;
     }
   }
 }
 
-static void _encode_rule_body_unit(struct Iseq* iseq, Val e, LabelTable* lt) {
+static void _encode_rule_body_unit(PegCompileCtx* ctx, Val e) {
   uint32_t klass = VAL_KLASS(e);
   if (klass == kBranch) {
     Val op = nb_struct_get(e, 0);
@@ -363,18 +369,18 @@ static void _encode_rule_body_unit(struct Iseq* iseq, Val e, LabelTable* lt) {
     const char* op_ptr = nb_string_ptr(op);
 
     if (op_size == 1 && op_ptr[0] == '/') {
-      _encode_branch_or(iseq, lhs, terms, callback, lt);
+      _encode_branch_or(ctx, lhs, terms, callback);
     } else if (op_size == 2 && op_ptr[0] == '/') {
       assert(op_ptr[1] == '+' || op_ptr[1] == '*' || op_ptr[1] == '?');
       // TODO report parse error
-      _encode_ljoin(iseq, op_ptr[1], lhs, terms, callback, lt);
+      _encode_ljoin(ctx, op_ptr[1], lhs, terms, callback);
     } else {
       // TODO encode op table
     }
 
   } else {
     assert(klass == kSeqRule);
-    _encode_seq_rule(iseq, e, lt);
+    _encode_seq_rule(ctx, e);
   }
 }
 
@@ -388,7 +394,7 @@ static void _encode_rule_body_unit(struct Iseq* iseq, Val e, LabelTable* lt) {
 // but since we don't know the rule offset yet when compiling,
 // we need build a {rule_name => num} mapping.
 // (TODO this mapping should be put in init metadata)
-Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, Val node, void* klass_refs) {
+Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, void* structs_table, Val node) {
   if (!kPegRule) {
     uint32_t sb   = sb_klass();
     kPegRule      = klass_find_c("PegRule", sb); assert(kPegRule);
@@ -409,24 +415,24 @@ Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, Val node, void* klas
   // Branch[op.branch, SeqRule, [Term], Callback]
 
   struct Vals stack; // TODO use stack to deal with recursive constructs so we can trace more info
-  LabelTable lt;
+  PegCompileCtx peg_compile_ctx;
   // Vals.init(&stack, 25);
-  _label_init(&lt, klass_refs);
+  _ctx_init(&peg_compile_ctx, iseq, structs_table);
 
   uint32_t rule_size = 0;
-  int iseq_original_size = Iseq.size(iseq);
+  int iseq_original_size = _iseq_size(&peg_compile_ctx);
   ENCODE_META(iseq);
 
   for (Val curr = node; curr != VAL_NIL; curr = nb_cons_tail(curr)) {
     Val e = nb_cons_head(curr);
     if (e != VAL_NIL) {
       Val rule_name_tok = nb_struct_get(e, 0); // TODO use PegRule.name.rule
-      _encode_rule_body_unit(iseq, nb_struct_get(e, 1), &lt);
+      _encode_rule_body_unit(&peg_compile_ctx, nb_struct_get(e, 1));
       rule_size++;
     }
   }
 
-  _label_cleanup(&lt);
+  _ctx_cleanup(&peg_compile_ctx);
   // Vals.cleanup(&stack);
 
   union { void* as_void; uint32_t as_u32; } cast = {.as_u32 = rule_size};

@@ -208,7 +208,7 @@ struct If[expr, true_clause, false_clause] # lines reversed, false_clause can be
 peg Callback[
   Callback : begin.code Stmts end.code { Callback[$2] }
   Stmts : Expr Stmts { [$1, *$2] }
-        / kw.var name.var Stmts { VarDecl[$2] } # only allowed in begin block
+        / kw.var name.var Stmts { [VarDecl[$2], *$3] } # only allowed in begin block
         / space.eol Stmts { $2 }
         / EPSILON { }
   Expr : Infix.Logic { $1 }

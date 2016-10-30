@@ -4,6 +4,7 @@
 
 #include "sb.h"
 #include <adt/dict.h>
+#include <adt/utils/mut-map.h>
 
 // sym table for var numbering
 #include <adt/sym-table.h>
@@ -11,7 +12,8 @@
 Val sb_check_names_conflict(Val ast);
 void sb_inline_partial_references(CompileCtx* ctx);
 void sb_build_patterns_dict(CompileCtx* ctx);
-void sb_build_vars_dict(CompileCtx* ctx);
+void sb_build_vars_table(CompileCtx* ctx);
+void sb_build_structs_table(CompileCtx* ctx);
 
 #pragma mark ## some helper macros for compiling
 
@@ -81,3 +83,7 @@ static void LABEL_TRANSLATE(struct Labels* labels, struct Iseq* iseq) {
     ptr[0] = *((int*)Labels.lat(labels, ptr[0]));
   }
 }
+
+#pragma mark ## struct table with arity
+
+MUT_MAP_DECL(StructsTable, Val, int, val_hash, val_eq);

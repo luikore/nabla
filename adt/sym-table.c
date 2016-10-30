@@ -106,3 +106,7 @@ bool nb_sym_table_reverse_get(NbSymTable* t, size_t* ksize, char** k, uint64_t i
     return false;
   }
 }
+
+size_t nb_sym_table_size(NbSymTable* st) {
+  return Strs.size(&st->strs);
+}

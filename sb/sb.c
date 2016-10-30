@@ -1,8 +1,8 @@
 #include "sb.h"
+#include "compile.h"
 #include <stdlib.h>
 #include <adt/utils/dbg.h>
 #include <adt/utils/utf-8.h>
-#include <adt/dict.h>
 
 static uint32_t _hex_to_uint(char c) {
   if (c >= '0' && c <= '9') {
@@ -249,10 +249,13 @@ Val sb_parse(Spellbreak* s, const char* src, int64_t size) {
 }
 
 void sb_syntax_compile(Val ast, uint32_t target_klass) {
+  struct StructsTable structs_table;
+  StructsTable.init(&structs_table);
   CompileCtx ctx = {
     .context_dict = nb_dict_new(),
     .patterns_dict = nb_dict_new(),
     .vars_table = nb_sym_table_new(),
+    .structs_table = &structs_table,
     .ast = ast
   };
   Iseq.init(&ctx.iseq, 30);
@@ -261,14 +264,17 @@ void sb_syntax_compile(Val ast, uint32_t target_klass) {
   if (err != VAL_UNDEF) {
     RELEASE(ctx.context_dict);
     RELEASE(ctx.patterns_dict);
+    StructsTable.cleanup(&structs_table);
     nb_sym_table_delete(ctx.vars_table);
     val_throw(err);
   }
 
   SpellbreakMData* mdata = klass_get_data(target_klass);
   mdata->context_dict = ctx.context_dict;
-  mdata->vars_size = nb_sym_table_size(ctx.vars_table)
+  mdata->vars_size = nb_sym_table_size(ctx.vars_table);
   mdata->compiled = true;
+
   RELEASE(ctx.patterns_dict);
+  StructsTable.cleanup(&structs_table);
   nb_sym_table_delete(ctx.vars_table); // TODO need to keep it for debugging
 }

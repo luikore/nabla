@@ -20,3 +20,5 @@ bool nb_sym_table_get(NbSymTable* st, size_t ksize, const char* k, uint64_t* vid
 
 // true if found, false if not found
 bool nb_sym_table_reverse_get(NbSymTable* st, size_t* ksize, char** k, uint64_t vid);
+
+size_t nb_sym_table_size(NbSymTable* st);
