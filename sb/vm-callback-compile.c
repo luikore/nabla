@@ -12,19 +12,24 @@ static uint32_t kSplatEntry = 0;
 static uint32_t kIf = 0;
 
 typedef struct {
+  struct Iseq* iseq;
   int terms_size;
   bool peg_mode;
   struct Labels* labels;
   struct StructsTable* structs_table;
 } CallbackCompileCtx;
 
-static void _encode_callback_lines(struct Iseq* iseq, Val stmts, CallbackCompileCtx* ctx);
+static void _encode_callback_lines(CallbackCompileCtx* ctx, Val stmts);
 
 #pragma mark ## impls
 
+static int _iseq_size(CallbackCompileCtx* ctx) {
+  return Iseq.size(ctx->iseq);
+}
+
 // returns change of stack
 // terms_size is for checking of capture overflows
-static void _encode_callback_expr(struct Iseq* iseq, Val expr, CallbackCompileCtx* ctx) {
+static void _encode_callback_expr(CallbackCompileCtx* ctx, Val expr) {
   uint32_t klass = VAL_KLASS(expr);
   // Expr = InfixLogic | Call | Capture | CraeteNode | CreateList | Assign | If | Nul
   // NOTE: no VarRef for PEG
@@ -49,16 +54,16 @@ static void _encode_callback_expr(struct Iseq* iseq, Val expr, CallbackCompileCt
     int l0 = LABEL_NEW_NUM(ctx->labels);
     uint16_t ins;
 
-    _encode_callback_expr(iseq, lhs, ctx);
-    LABEL_REF(ctx->labels, Iseq.size(iseq) + 1);
+    _encode_callback_expr(ctx, lhs);
+    LABEL_REF(ctx->labels, _iseq_size(ctx) + 1);
     if (nb_string_byte_size(op) == 2 && nb_string_ptr(op)[0] == '&' && nb_string_ptr(op)[1] == '&') {
       ins = JUNLESS;
     } else {
       ins = JIF;
     }
-    ENCODE(iseq, Arg32, ((Arg32){ins, l0}));
-    _encode_callback_expr(iseq, rhs, ctx);
-    LABEL_DEF(ctx->labels, l0, Iseq.size(iseq));
+    ENCODE(ctx->iseq, Arg32, ((Arg32){ins, l0}));
+    _encode_callback_expr(ctx, rhs);
+    LABEL_DEF(ctx->labels, l0, _iseq_size(ctx));
 
   } else if (klass == kCall) {
     // Call[func_name, Expr*] # args reversed
@@ -74,10 +79,10 @@ static void _encode_callback_expr(struct Iseq* iseq, Val expr, CallbackCompileCt
     uint32_t argc = 0;
     for (Val tail = exprs; tail; tail = nb_cons_tail(tail)) {
       Val e = nb_cons_head(tail);
-      _encode_callback_expr(iseq, e, ctx);
+      _encode_callback_expr(ctx, e);
       argc += 1;
     }
-    ENCODE(iseq, ArgU32U32, ((ArgU32U32){CALL, argc, func_name}));
+    ENCODE(ctx->iseq, ArgU32U32, ((ArgU32U32){CALL, argc, func_name}));
 
   } else if (klass == kCapture) {
     // Capture[var_name]
@@ -95,43 +100,64 @@ static void _encode_callback_expr(struct Iseq* iseq, Val expr, CallbackCompileCt
       // TODO maybe we don't need to pass terms_size everywhere
       // just check it after the bytecode is compiled
     }
-    ENCODE(iseq, uint16_t, CAPTURE);
-    ENCODE(iseq, uint16_t, (uint16_t)i);
+    ENCODE(ctx->iseq, uint16_t, CAPTURE);
+    ENCODE(ctx->iseq, uint16_t, (uint16_t)i);
 
   } else if (klass == kCreateNode) {
     // CreateNode[ty, (Expr | SplatEntry)*]
 
     // node[a, *b]:
-    //   node_beg klass_name # postprocess: replace name_lit with klasses, in LEX compile
+    //   node_beg klass_id
     //   a
     //   node_set
     //   b
     //   node_setv
     //   node_end
 
-    Val klass_name = nb_struct_get(expr, 0);
-    Val elems = nb_struct_get(expr, 1);
-    uint32_t klass_str = VAL_TO_STR(klass_name);
-    uint32_t klass_ref_offset = Iseq.size(iseq) + 1;
-    uint32_t elems_size = 0;
-    bool has_splat = false;
-    ENCODE(iseq, ArgU32, ((ArgU32){NODE_BEG, klass_str}));
+    // search for klass
+    Val klass_name = AT(expr, 0);
+    Val elems = AT(expr, 1);
+
+    StructsTableValue structs_table_value;
+    bool found = StructsTable.find(ctx->structs_table, klass_name, &structs_table_value);
+    if (!found) {
+      // TODO resumable and report syntax error at position
+      fatal_err("struct not found: %.*s", (int)nb_string_byte_size(klass_name), nb_string_ptr(klass_name));
+    }
+
+    // validate arity
+    int elems_size = 0;
+    bool has_more_elems = false;
+    for (Val elems_list = elems; elems_list != VAL_NIL; elems_list = TAIL(elems_list)) {
+      if (VAL_KLASS(HEAD(elems_list)) == kSplatEntry) {
+        has_more_elems = true;
+      } else {
+        elems_size++;
+      }
+    }
+    if (has_more_elems && elems_size > structs_table_value.max_elems) {
+      fatal_err("struct %.*s requies no more than %d members", (int)nb_string_byte_size(klass_name), nb_string_ptr(klass_name), structs_table_value.max_elems);
+    }
+    if (!has_more_elems && elems_size < structs_table_value.min_elems) {
+      fatal_err("struct %.*s requies at least %d members", (int)nb_string_byte_size(klass_name), nb_string_ptr(klass_name), structs_table_value.min_elems);
+    }
+
+    // encode
+    uint32_t klass_id = structs_table_value.klass_id;
+    ENCODE(ctx->iseq, ArgU32, ((ArgU32){NODE_BEG, klass_id}));
     elems = nb_cons_reverse(elems);
     for (Val tail = elems; tail; tail = nb_cons_tail(tail)) {
       Val e = nb_cons_head(tail);
       if (VAL_KLASS(e) == kSplatEntry) {
         Val to_splat = nb_struct_get(e, 0);
-        _encode_callback_expr(iseq, to_splat, ctx);
-        ENCODE(iseq, uint16_t, NODE_SETV);
-        has_splat = true;
+        _encode_callback_expr(ctx, to_splat);
+        ENCODE(ctx->iseq, uint16_t, NODE_SETV);
       } else {
-        _encode_callback_expr(iseq, e, ctx);
-        ENCODE(iseq, uint16_t, NODE_SET);
-        elems_size++;
+        _encode_callback_expr(ctx, e);
+        ENCODE(ctx->iseq, uint16_t, NODE_SET);
       }
     }
-    ENCODE(iseq, uint16_t, NODE_END);
-    KLASS_REF(ctx->structs_table, klass_ref_offset, klass_str, elems_size, has_splat);
+    ENCODE(ctx->iseq, uint16_t, NODE_END);
 
   } else if (klass == kCreateList) {
     // CreateList[(Expr | SplatEntry)*]
@@ -153,20 +179,20 @@ static void _encode_callback_expr(struct Iseq* iseq, Val expr, CallbackCompileCt
       Val e = nb_cons_head(elems);
       if (VAL_KLASS(e) == kSplatEntry) {
         Val to_splat = nb_struct_get(e, 0);
-        _encode_callback_expr(iseq, to_splat, ctx);
+        _encode_callback_expr(ctx, to_splat);
         a[i++] = 1;
       } else {
-        _encode_callback_expr(iseq, e, ctx);
+        _encode_callback_expr(ctx, e);
         a[i++] = 0;
       }
     }
 
-    ENCODE(iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
+    ENCODE(ctx->iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
     for (i = size - 1; i >= 0; i--) {
       if (a[i]) {
-        ENCODE(iseq, uint16_t, LISTV);
+        ENCODE(ctx->iseq, uint16_t, LISTV);
       } else {
-        ENCODE(iseq, uint16_t, LIST);
+        ENCODE(ctx->iseq, uint16_t, LIST);
       }
     }
 
@@ -188,23 +214,23 @@ static void _encode_callback_expr(struct Iseq* iseq, Val expr, CallbackCompileCt
     int l0 = LABEL_NEW_NUM(ctx->labels);
     int l1 = LABEL_NEW_NUM(ctx->labels);
 
-    _encode_callback_expr(iseq, cond, ctx);
-    LABEL_REF(ctx->labels, Iseq.size(iseq) + 1);
-    ENCODE(iseq, Arg32, ((Arg32){JUNLESS, l0}));
-    _encode_callback_lines(iseq, true_clause, ctx);
-    LABEL_REF(ctx->labels, Iseq.size(iseq) + 1);
-    ENCODE(iseq, Arg32, ((Arg32){JMP, l1}));
-    LABEL_DEF(ctx->labels, l0, Iseq.size(iseq));
+    _encode_callback_expr(ctx, cond);
+    LABEL_REF(ctx->labels, _iseq_size(ctx) + 1);
+    ENCODE(ctx->iseq, Arg32, ((Arg32){JUNLESS, l0}));
+    _encode_callback_lines(ctx, true_clause);
+    LABEL_REF(ctx->labels, _iseq_size(ctx) + 1);
+    ENCODE(ctx->iseq, Arg32, ((Arg32){JMP, l1}));
+    LABEL_DEF(ctx->labels, l0, _iseq_size(ctx));
     if (VAL_KLASS(false_clause) == kIf) {
-      _encode_callback_expr(iseq, false_clause, ctx);
+      _encode_callback_expr(ctx, false_clause);
     } else {
-      _encode_callback_lines(iseq, false_clause, ctx);
+      _encode_callback_lines(ctx, false_clause);
     }
-    LABEL_DEF(ctx->labels, l1, Iseq.size(iseq));
+    LABEL_DEF(ctx->labels, l1, _iseq_size(ctx));
   }
 }
 
-static void _encode_callback_lines(struct Iseq* iseq, Val stmts, CallbackCompileCtx* ctx) {
+static void _encode_callback_lines(CallbackCompileCtx* ctx, Val stmts) {
   // Expr* (NOTE: no VarDecl in PEG callback)
 
   // NOTE: should only push the last expr to stack so this code can be correct: `[a, (b, c)]`
@@ -212,9 +238,9 @@ static void _encode_callback_lines(struct Iseq* iseq, Val stmts, CallbackCompile
   stmts = nb_cons_reverse(stmts);
   for (Val tail = stmts; tail; tail = nb_cons_tail(tail)) {
     Val e = nb_cons_head(tail);
-    _encode_callback_expr(iseq, e, ctx);
+    _encode_callback_expr(ctx, e);
     if (nb_cons_tail(tail) != VAL_NIL) {
-      ENCODE(iseq, uint16_t, POP);
+      ENCODE(ctx->iseq, uint16_t, POP);
     }
   }
 }
@@ -232,11 +258,12 @@ Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, int32_t terms_size, voi
   }
 
   CallbackCompileCtx ctx;
+  ctx.iseq = iseq;
   ctx.terms_size = terms_size;
   ctx.labels = labels;
   ctx.peg_mode = peg_mode;
   ctx.structs_table = structs_table;
-  _encode_callback_lines(iseq, stmts, &ctx);
+  _encode_callback_lines(&ctx, stmts);
   return VAL_NIL;
 }
 

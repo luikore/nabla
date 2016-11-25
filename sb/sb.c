@@ -171,7 +171,7 @@ void sb_bootstrap() {
   val_gens_set_current(gen);
 
   Val ast = sb_bootstrap_ast(spellbreak_klass);
-  sb_syntax_compile(spellbreak_klass, ast);
+  sb_syntax_compile(ast, spellbreak_klass);
 
   val_gens_set_current(gen - 1);
   val_gens_drop();
@@ -256,7 +256,8 @@ void sb_syntax_compile(Val ast, uint32_t target_klass) {
     .patterns_dict = nb_dict_new(),
     .vars_table = nb_sym_table_new(),
     .structs_table = &structs_table,
-    .ast = ast
+    .ast = ast,
+    .namespace_id = target_klass
   };
   Iseq.init(&ctx.iseq, 30);
   Val err = sb_compile_main(&ctx);

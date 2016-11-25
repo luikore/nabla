@@ -12,8 +12,7 @@
 Val sb_check_names_conflict(Val ast);
 void sb_inline_partial_references(CompileCtx* ctx);
 void sb_build_patterns_dict(CompileCtx* ctx);
-void sb_build_vars_table(CompileCtx* ctx);
-void sb_build_structs_table(CompileCtx* ctx);
+void sb_build_sym_tables(CompileCtx* ctx);
 
 #pragma mark ## some helper macros for compiling
 
@@ -86,4 +85,10 @@ static void LABEL_TRANSLATE(struct Labels* labels, struct Iseq* iseq) {
 
 #pragma mark ## struct table with arity
 
-MUT_MAP_DECL(StructsTable, Val, int, val_hash, val_eq);
+typedef struct {
+  uint32_t klass_id;
+  int32_t min_elems;
+  int32_t max_elems;
+} StructsTableValue;
+
+MUT_MAP_DECL(StructsTable, Val, StructsTableValue, val_hash, val_eq);

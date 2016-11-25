@@ -13,8 +13,7 @@ Val sb_compile_main(CompileCtx* ctx) {
 
   sb_inline_partial_references(ctx);
   sb_build_patterns_dict(ctx);
-  sb_build_vars_table(ctx);
-  sb_build_structs_table(ctx);
+  sb_build_sym_tables(ctx);
   // TODO check if tokens in PEG matches tokens emitted from lexer
 
   for (Val lines = AT(ctx->ast, 0); lines != VAL_NIL; lines = TAIL(lines)) {

@@ -1,10 +1,38 @@
 #include "compile.h"
 #include <adt/sym-table.h>
 
-void sb_build_vars_table(CompileCtx* ctx) {
+void sb_build_sym_tables(CompileCtx* ctx) {
   for (Val lines = AT(ctx->ast, 0); lines != VAL_NIL; lines = TAIL(lines)) {
     Val e = HEAD(lines);
-    if (IS_A(e, "PatternIns") || IS_A(e, "Peg") || IS_A(e, "StructIns") || e == VAL_UNDEF) {
+    if (IS_A(e, "PatternIns") || IS_A(e, "Peg") || e == VAL_UNDEF) {
+      // skip
+
+    } else if (IS_A(e, "StructIns")) {
+      // StructIns[name, name.arg*]
+      Val struct_name = AT(e, 0);
+      Val elems = AT(e, 1);
+      if (StructsTable.find(ctx->structs_table, struct_name, NULL)) {
+        fatal_err("re-definition of struct: %.*s", (int)nb_string_byte_size(struct_name), nb_string_ptr(struct_name));
+      }
+      StructsTableValue v = {
+        .min_elems = 0,
+        .max_elems = 0,
+      };
+      // TODO support splat elements
+      Val elems_list;
+      for (elems_list = elems; elems_list != VAL_NIL; elems_list = TAIL(elems_list)) {
+        v.min_elems++;
+        v.max_elems++;
+      }
+      NbStructField fields[v.min_elems];
+      elems_list = elems;
+      for (int i = v.min_elems - 1; i >= 0; i--) {
+        Val elem = HEAD(elems_list);
+        fields[i] = (NbStructField){.matcher = VAL_UNDEF, .field_id = VAL_TO_STR(elem)};
+        elems_list = TAIL(elems_list);
+      }
+      nb_struct_def(struct_name, ctx->namespace_id, v.min_elems, fields);
+      StructsTable.insert(ctx->structs_table, struct_name, v);
 
     } else if (IS_A(e, "Lex")) {
       Val context_name = AT(e, 0);

@@ -108,6 +108,7 @@ typedef struct {
   Val patterns_dict;   // {"name": regexp_node}, built from ast
   void* vars_table;    // symtable of {"context:name": position_in_stack}, for global vars, key is "::name"
   void* structs_table; // dict of {"name": arity}, for re-definition check and arity check
+  uint32_t namespace_id;
 
   // the following fields will be passed to runtime Spellbreak
 
