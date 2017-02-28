@@ -1,5 +1,7 @@
 CFLAGS = -DNDEBUG -MMD -MP -march=native -I../vendor/ccut/include -I../vendor/siphash -I../vendor/tinycthread/source
-CFLAGS_DEBUG = -g -MMD -MP -march=native -I../vendor/ccut/include -I../vendor/siphash
+# COVERAGE_ARGS = -fprofile-instr-generate -fcoverage-mapping
+COVERAGE_ARGS = --coverage
+CFLAGS_DEBUG = -g -MMD -MP -march=native -I../vendor/ccut/include -I../vendor/siphash $(COVERAGE_ARGS)
 LDFLAGS = -L../vendor/ccut/lib -lccut -L../vendor/siphash -lsiphash
 
 CXXFLAGS = $(CFLAGS) --std=c++11

@@ -37,6 +37,20 @@ test:
 	$(CC) $(CFLAGS_DEBUG) $(LDFLAGS) $(test_srcs) -o adt-test
 	./adt-test
 
+# NOTE:
+# XCode 8 ships with an older `llvm-cov gcov` which can't generate html properly
+# the data generated can't be recognized by lcov or gcc-gcov either
+#
+# NOTE:
+# make coverage will result in folder up to date
+#
+# pip install gcovr
+cov:
+	mkdir -p coverage
+	gcovr -r . --html --html-details --sort-uncovered -o coverage/index.html
+	open coverage/index.html
+
 clean:
-	rm -f {,asm/}*.{o,d,a} adt-test
+	rm -f {,asm/}*.{o,d,a,gcda,gcno} adt-test
+	rm -rf coverage
 	rm -rf *.dSYM

@@ -26,6 +26,11 @@ $(target): $(objects)
 sb-test: $(test_srcs)
 	cc $(CFLAGS_DEBUG) $(LDFLAGS_DEBUG) $(test_srcs) -o sb-test
 
+cov:
+	mkdir -p coverage
+	gcovr -r . --html --html-details --sort-uncovered -o coverage/index.html
+	open coverage/index.html
+
 test: sb-test
 	./sb-test
 

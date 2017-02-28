@@ -1,6 +1,9 @@
 *.d
 *.o
 *.a
+*.gcno
+*.gcda
+coverage
 .DS_Store
 *.dSYM
 tmtags
