@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <adt/utils/dbg.h>
 #include <adt/utils/utf-8.h>
+#include <adt/dict.h>
+#include <adt/sym-table.h>
 
 static uint32_t _hex_to_uint(char c) {
   if (c >= '0' && c <= '9') {
@@ -212,11 +214,11 @@ Spellbreak* sb_new(uint32_t syntax_klass) {
 
   s->context_dict = mdata->context_dict;
 
-  Vals.init(&s->stack, mdata->vars_size + 10);
+  Vals.init(&s->stack, nb_sym_table_size(mdata->vars_table) + 10);
   ContextStack.init(&s->context_stack, 5);
   TokenStream.init(&s->token_stream, 20);
 
-  for (int i = 0; i < mdata->vars_size; i++) {
+  for (int i = 0; i < nb_sym_table_size(mdata->vars_table); i++) {
     Vals.at(&s->stack, i)[0] = VAL_NIL;
   }
 
@@ -272,7 +274,6 @@ void sb_syntax_compile(Val ast, uint32_t target_klass) {
 
   SpellbreakMData* mdata = klass_get_data(target_klass);
   mdata->context_dict = ctx.context_dict;
-  mdata->vars_size = nb_sym_table_size(ctx.vars_table);
   mdata->compiled = true;
 
   RELEASE(ctx.patterns_dict);

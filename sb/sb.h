@@ -23,7 +23,7 @@ typedef struct {
   // using a dict instead of mutable map reduces code complexity of rebuilding a map keyed by string & arena allocation optimizations
   Val context_dict;
 
-  int32_t vars_size;
+  void* vars_table;
   bool compiled;
 } SpellbreakMData;
 
@@ -76,7 +76,7 @@ void sb_init_module(void);
 // returns the klass representing Spellbreak syntax
 uint32_t sb_klass();
 
-// returns syntax klass by generating from node
+// returns syntax klass id with name
 uint32_t sb_new_syntax(uint32_t name_str);
 
 // To generate a class as a parser for a new syntax:
