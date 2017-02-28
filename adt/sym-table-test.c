@@ -25,6 +25,7 @@ void sym_table_suite() {
     uint64_t i2;
     nb_sym_table_get_set(table, strlen(hello2), hello2, &i2);
     assert_eq(i1, i2);
+    assert_eq(2, nb_sym_table_size(table));
 
     nb_sym_table_delete(table);
     val_end_check_memory();
