@@ -26,13 +26,16 @@ $(target): $(objects)
 sb-test: $(test_srcs)
 	cc $(CFLAGS_DEBUG) $(LDFLAGS_DEBUG) $(test_srcs) -o sb-test
 
+test: sb-test
+	./sb-test
+
 cov:
 	mkdir -p coverage
 	gcovr -r . --html --html-details --sort-uncovered -o coverage/index.html
 	open coverage/index.html
 
-test: sb-test
-	./sb-test
+infer:
+	infer -- $(CC) $(CFLAGS_DEBUG) $(LDFLAGS) -c $(test_srcs)
 
 clean:
 	rm -f *.o *.d *.a sb-test

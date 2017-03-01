@@ -26,6 +26,22 @@ For building in windows, you can install [MSYS2](msys2.github.io) and use pacman
 
     make
 
+For coverage report and static analysis, there are more requirements:
+
+    # on macOS
+    brew install gcovr infer
+
+Generate and open coverage report:
+
+    # under adt/ or sb/
+    make test
+    make cov
+
+Generate static analysis report:
+
+    # under adt/ or sb/
+    make infer
+
 # Copying
 
 - Nabla & CCUT: BSDL

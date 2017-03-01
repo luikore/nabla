@@ -50,6 +50,9 @@ cov:
 	gcovr -r . --html --html-details --sort-uncovered -o coverage/index.html
 	open coverage/index.html
 
+infer:
+	infer -- $(CC) $(CFLAGS_DEBUG) $(LDFLAGS) -c $(test_srcs)
+
 clean:
 	rm -f {,asm/}*.{o,d,a,gcda,gcno} adt-test
 	rm -rf coverage
