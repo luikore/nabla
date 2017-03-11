@@ -212,8 +212,8 @@
       .bits = bits,\
       .slots = malloc(sizeof(MutMapType##Slot) * (1ULL << bits))\
     };\
+    assert(new_mm.slots);\
     memset(new_mm.slots, 0, sizeof(MutMapType##Slot) * (1ULL << bits));\
-    \
     MutMapType##Iter it;\
     for (MutMapType##_MUT_MAP_iter_init(&it, mm); !MutMapType##_MUT_MAP_iter_is_end(&it); MutMapType##_MUT_MAP_iter_next(&it)) {\
       MutMapType##_MUT_MAP_insert(&new_mm, it.slot->k, it.slot->v);\

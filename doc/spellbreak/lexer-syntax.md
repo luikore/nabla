@@ -17,7 +17,7 @@ Decl:
 
 Global vars are only available in lex blocks.
 
-NOTE: Using a global var also marks the lex block not reusable
+NOTE: Using a global var also marks the lex block non-pure thus not reusable
 
 ## Local variables (declare inside lex block)
 
