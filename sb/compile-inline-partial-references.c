@@ -89,7 +89,7 @@ static DepNode* _dep_node_new(Arena* node_arena) {
 
 // topological sort lex contexts, and inline all refs
 // TODO integrate with external language definition
-void sb_inline_partial_references(CompileCtx* ctx) {
+void sb_inline_partial_references(Compiler* ctx) {
   // build partial node map and dep graph
   Val ins_list = AT(ctx->ast, 0);
 

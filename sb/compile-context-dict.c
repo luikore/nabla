@@ -1,6 +1,6 @@
 #include "compile.h"
 
-void sb_compile_context_dict_insert(CompileCtx* ctx, Val name, char kind, int32_t offset) {
+void sb_compile_context_dict_insert(Compiler* ctx, Val name, char kind, int32_t offset) {
   char stack_buf[20];
   char* buf;
   int size = nb_string_byte_size(name);

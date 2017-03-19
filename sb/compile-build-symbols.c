@@ -1,17 +1,46 @@
 #include "compile.h"
 #include <adt/sym-table.h>
 
-void sb_build_sym_tables(CompileCtx* ctx) {
-  for (Val lines = AT(ctx->ast, 0); lines != VAL_NIL; lines = TAIL(lines)) {
+static Val _literalize(Val str) {
+  return nb_string_new_literal(nb_string_byte_size(str), nb_string_ptr(str));
+}
+
+static void _add_var(VarsTable* vars_table, Val var_name) {
+  var_name = _literalize(var_name);
+
+  for (int i = 0; i < VarsTable.size(vars_table); i++) {
+    if (VarsTable.at(vars_table, i) == var_name) {
+      // todo resumable error handling
+      fatal_err("variable already defined!");
+    }
+  }
+  VarsTable.push(vars_table, var_name);
+}
+
+static void _def_local_var(Symbols* symbols, Val context_name, Val var_name) {
+  context_name = _literalize(context_name);
+
+  VarsTable* vars_table = NULL;
+  if (!VarsTableMap.find(&symbols->local_vars_map, context_name, &vars_table)) {
+    vars_table = malloc(sizeof(VarsTable));
+    VarsTable.init(vars_table);
+    VarsTableMap.insert(&symbols->local_vars_map, context_name, vars_table);
+  }
+  _add_var(vars_table, var_name);
+}
+
+void sb_build_symbols(Compiler* compiler) {
+  for (Val lines = AT(compiler->ast, 0); lines != VAL_NIL; lines = TAIL(lines)) {
     Val e = HEAD(lines);
     if (IS_A(e, "PatternIns") || IS_A(e, "Peg") || e == VAL_UNDEF) {
       // skip
 
     } else if (IS_A(e, "StructIns")) {
       // StructIns[name, name.arg*]
-      Val struct_name = AT(e, 0);
+      Val struct_name = _literalize(AT(e, 0));
       Val elems = AT(e, 1);
-      if (StructsTable.find(ctx->structs_table, struct_name, NULL)) {
+      if (StructsTable.find(compiler->structs_table, struct_name, NULL)) {
+        // todo resumable error handling
         fatal_err("re-definition of struct: %.*s", (int)nb_string_byte_size(struct_name), nb_string_ptr(struct_name));
       }
       StructsTableValue v = {
@@ -27,7 +56,7 @@ void sb_build_sym_tables(CompileCtx* ctx) {
       NbStructField fields[v.min_elems];
       elems_list = elems;
       for (int i = v.min_elems - 1; i >= 0; i--) {
-        Val elem = HEAD(elems_list);
+        Val elem = _literalize(HEAD(elems_list));
         fields[i] = (NbStructField){.matcher = VAL_UNDEF, .field_id = VAL_TO_STR(elem)};
         elems_list = TAIL(elems_list);
       }
@@ -51,15 +80,7 @@ void sb_build_sym_tables(CompileCtx* ctx) {
             Val stmt = HEAD(stmts);
             if (IS_A(stmt, "VarDecl")) {
               Val var_name = AT(stmt, 0);
-              int var_name_size = (int)nb_string_byte_size(var_name);
-              const char* var_name_ptr = nb_string_ptr(var_name);
-              int context_name_size = (int)nb_string_byte_size(context_name);
-              const char* context_name_ptr = nb_string_ptr(context_name);
-              int scoped_var_name_size = context_name_size + 1 + var_name_size;
-              char scoped_var_name[scoped_var_name_size + 1];
-              sprintf(scoped_var_name, "%.*s:%.*s", context_name_size, context_name_ptr, var_name_size, var_name_ptr);
-              // allow re-definition of same var
-              nb_sym_table_get_set(ctx->vars_table, scoped_var_name_size, scoped_var_name, NULL);
+              _def_local_var(&compiler->symbols->local_vars_map, context_name, var_name);
             }
           }
         }
@@ -67,12 +88,7 @@ void sb_build_sym_tables(CompileCtx* ctx) {
 
     } else if (IS_A(e, "VarDecl")) {
       Val var_name = AT(e, 0);
-      int var_name_size = nb_string_byte_size(var_name);
-      const char* var_name_ptr = nb_string_ptr(var_name);
-      int scoped_var_name_size = 2 + var_name_size;
-      char scoped_var_name[scoped_var_name_size + 1];
-      sprintf(scoped_var_name, "::%.*s", var_name_size, var_name_ptr);
-      nb_sym_table_get_set(ctx->vars_table, scoped_var_name_size, scoped_var_name, NULL);
+      _add_var(&compiler->symbols->global_vars, var_name);
 
     } else {
       COMPILE_ERROR("unrecognized node type");

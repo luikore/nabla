@@ -5,7 +5,7 @@
 
 #pragma mark ## exposed interfaces
 
-Val sb_compile_main(CompileCtx* ctx) {
+Val sb_compile_main(Compiler* ctx) {
   Val err = sb_check_names_conflict(ctx->ast);
   if (err) {
     return err;
@@ -13,7 +13,7 @@ Val sb_compile_main(CompileCtx* ctx) {
 
   sb_inline_partial_references(ctx);
   sb_build_patterns_dict(ctx);
-  sb_build_sym_tables(ctx);
+  sb_build_symbols(ctx);
   // TODO check if tokens in PEG matches tokens emitted from lexer
 
   for (Val lines = AT(ctx->ast, 0); lines != VAL_NIL; lines = TAIL(lines)) {

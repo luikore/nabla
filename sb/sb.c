@@ -123,7 +123,15 @@ static ValPair token(Spellbreak* ctx, int32_t argc, Val* argv) {
 }
 
 static ValPair yield(Spellbreak* ctx, Val obj) {
-  // todo
+  ContextEntry* entry = ContextStack.top(&ctx->context_stack);
+  Token tok = {
+    .pos = entry->curr,
+    .size = ctx->curr - entry->curr,
+    .v = obj,
+    .ty = entry->name_str
+  };
+  ctx->token_stream.size = entry->token_start;
+  *TokenStream.push(&ctx->token_stream, tok);
   return (ValPair){VAL_NIL, VAL_NIL};
 }
 
@@ -155,7 +163,7 @@ static void _sb_destruct(void* p) {
 #define STR(v) nb_string_new_literal_c(v)
 
 void sb_init_module(void) {
-  spellbreak_klass = sb_new_syntax(STR("Spellbreak"));
+  spellbreak_klass = sb_syntax_new(STR("Spellbreak"));
 
 # define DEF_NODE(type, ...) _define_node(#type, sizeof((const char*[]){__VA_ARGS__}) / sizeof(const char*), (const char*[]){__VA_ARGS__})
 # include "sb-klasses.inc"
@@ -173,7 +181,7 @@ void sb_bootstrap() {
   val_gens_set_current(gen);
 
   Val ast = sb_bootstrap_ast(spellbreak_klass);
-  sb_syntax_compile(ast, spellbreak_klass);
+  sb_syntax_generate(ast, spellbreak_klass);
 
   val_gens_set_current(gen - 1);
   val_gens_drop();
@@ -183,11 +191,11 @@ uint32_t sb_klass() {
   return spellbreak_klass;
 }
 
-uint32_t sb_new_syntax(uint32_t name_str) {
+uint32_t sb_syntax_new(uint32_t name_str) {
   uint32_t klass = klass_def(name_str, klass_def(STR("Lang"), 0));
-  SpellbreakMData* mdata = malloc(sizeof(SpellbreakMData));
-  mdata->compiled = false;
-  klass_set_data(klass, mdata);
+  SpellbreakKlassData* klass_data = malloc(sizeof(SpellbreakKlassData));
+  klass_data->compiled = false;
+  klass_set_data(klass, klass_data);
   klass_set_destruct_func(klass, _sb_destruct);
 
   METHOD(klass, peg, 1);
@@ -204,15 +212,17 @@ uint32_t sb_new_syntax(uint32_t name_str) {
 #undef METHOD
 
 Spellbreak* sb_new(uint32_t syntax_klass) {
-  SpellbreakMData* mdata = klass_get_data(syntax_klass);
+  SpellbreakKlassData* mdata = klass_get_data(syntax_klass);
 
   if (!mdata->compiled) {
     val_throw(STR("klass not compiled"));
   }
 
-  Spellbreak* s = val_alloc(syntax_klass, sizeof(Spellbreak));
+  int vars_size = nb_sym_table_size(mdata->vars_dict);
+  Spellbreak* s = val_alloc(syntax_klass, sizeof(Spellbreak) + vars_size * sizeof(Val));
 
   s->context_dict = mdata->context_dict;
+  s->vars_size = vars_size;
 
   Vals.init(&s->stack, nb_sym_table_size(mdata->vars_table) + 10);
   ContextStack.init(&s->context_stack, 5);
@@ -235,10 +245,6 @@ void sb_reset(Spellbreak* s) {
   s->curr = s->s;
 }
 
-Spellbreak* sb_new_sb() {
-  return sb_new(spellbreak_klass);
-}
-
 Val sb_parse(Spellbreak* s, const char* src, int64_t size) {
   s->curr = s->s = src;
   s->size = size;
@@ -250,14 +256,13 @@ Val sb_parse(Spellbreak* s, const char* src, int64_t size) {
   return pair.fst;
 }
 
-void sb_syntax_compile(Val ast, uint32_t target_klass) {
-  struct StructsTable structs_table;
+void sb_syntax_generate(Val ast, uint32_t target_klass) {
+  Symbols* symbols = malloc(sizeof(Symbols));
   StructsTable.init(&structs_table);
-  CompileCtx ctx = {
+  Compiler ctx = {
     .context_dict = nb_dict_new(),
     .patterns_dict = nb_dict_new(),
-    .vars_table = nb_sym_table_new(),
-    .structs_table = &structs_table,
+    .symbols = symbols,
     .ast = ast,
     .namespace_id = target_klass
   };
@@ -272,7 +277,7 @@ void sb_syntax_compile(Val ast, uint32_t target_klass) {
     val_throw(err);
   }
 
-  SpellbreakMData* mdata = klass_get_data(target_klass);
+  SpellbreakKlassData* mdata = klass_get_data(target_klass);
   mdata->context_dict = ctx.context_dict;
   mdata->compiled = true;
 

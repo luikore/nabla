@@ -4,15 +4,15 @@
 
 #include "sb.h"
 #include <adt/dict.h>
-#include <adt/utils/mut-map.h>
 
-// sym table for var numbering
+// sym table for structs data
 #include <adt/sym-table.h>
 
 Val sb_check_names_conflict(Val ast);
-void sb_inline_partial_references(CompileCtx* ctx);
-void sb_build_patterns_dict(CompileCtx* ctx);
-void sb_build_sym_tables(CompileCtx* ctx);
+void sb_inline_partial_references(Compiler* ctx);
+void sb_build_patterns_dict(Compiler* ctx);
+// collect structs and vars info
+void sb_build_symbols(Compiler* ctx);
 
 #pragma mark ## some helper macros for compiling
 
@@ -83,12 +83,25 @@ static void LABEL_TRANSLATE(struct Labels* labels, struct Iseq* iseq) {
   }
 }
 
-#pragma mark ## struct table with arity
+#pragma mark ## symbols management
 
-typedef struct {
-  uint32_t klass_id;
-  int32_t min_elems;
-  int32_t max_elems;
-} StructsTableValue;
+static Symbols* SYMBOLS_NEW() {
+  Symbols* symbols = malloc(sizeof(Symbols));
+  VarsTable.init(&symbols->global_vars);
+  VarsTableMap.init(&symbols->local_vars_map);
+  StructsTable.init(&symbols->structs);
+  return symbols;
+}
 
-MUT_MAP_DECL(StructsTable, Val, StructsTableValue, val_hash, val_eq);
+static void SYMBOLS_DELETE(Symbols* symbols) {
+  VarsTable.cleanup(&symbols->global_vars);
+
+  VarsTableMapIter it;
+  for (VarsTableMap.iter_init(&it, &symbols->local_vars_map); !VarsTableMap.iter_is_end(&it); VarsTableMap.iter_next(&it)) {
+    VarsTable.cleanup(it.slot->v);
+  }
+  VarsTableMap.cleanup(&symbols->local_vars_map);
+
+  // TODO undefine the klasses
+  StructsTable.cleanup(&symbols->structs);
+}

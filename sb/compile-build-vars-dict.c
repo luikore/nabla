@@ -2,21 +2,9 @@
 #include <adt/dict.h>
 #include <adt/sym-table.h>
 
-static void _add_var(void* vars_table, Val context_name, Val var_name) {
-  size_t context_size = (context_name ? nb_string_byte_size(context_name) : 0);
-  size_t size = nb_string_byte_size(var_name);
-  char name_buf[context_size + 2 + size];
-  if (context_name) {
-    memcpy(name_buf, nb_string_ptr(context_name), context_size);
-  }
-  name_buf[context_size] = name_buf[context_size + 1] = ':'; // ::var_name
-  memcpy(name_buf + context_size + 2, nb_string_ptr(var_name), size);
 
-  // TODO raise error for dup var name?
-  nb_sym_table_get_set(vars_table, context_size + 2 + size, name_buf, NULL);
-}
 
-void sb_build_vars_dict(CompileCtx* ctx) {
+void sb_build_vars_dict(Compiler* ctx) {
   for (Val lines = AT(ctx->ast, 0); lines != VAL_NIL; lines = TAIL(lines)) {
     Val e = HEAD(lines);
     if (IS_A(e, "PatternIns") || IS_A(e, "Peg") || IS_A(e, "StructIns") || e == VAL_UNDEF) {

@@ -2,7 +2,7 @@
 #include <adt/dict.h>
 
 // build patterns map, not checking loop dependency, because only regexp knows the AST structure
-void sb_build_patterns_dict(CompileCtx* ctx) {
+void sb_build_patterns_dict(Compiler* ctx) {
   Val lines = AT(ctx->ast, 0);
 
   for(; lines != VAL_NIL; lines = TAIL(lines)) {
