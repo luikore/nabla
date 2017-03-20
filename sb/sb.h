@@ -160,7 +160,7 @@ int32_t sb_compile_context_dict_find(Val context_dict, Val name, char kind);
 #pragma mark ### vm functions
 
 // updates iseq, returns err
-Val sb_vm_lex_compile(struct Iseq* iseq, Val patterns_dict, void* vars_table, Val node);
+Val sb_vm_lex_compile(struct Iseq* iseq, Val patterns_dict, struct VarsTable* vars_table, Val node);
 
 // returns {res, err}
 ValPair sb_vm_lex_exec(Spellbreak* sb);
@@ -176,7 +176,7 @@ void sb_vm_callback_decompile(uint16_t* pc);
 ValPair sb_vm_callback_exec(uint16_t* pc, struct Vals* stack, Val* global_vars, Val* vars);
 
 // updates iseq, returns err
-Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, void* structs_table, Val node);
+Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, struct StructsTable* structs_table, Val node);
 
 void sb_vm_peg_decompile(uint16_t* pc);
 
