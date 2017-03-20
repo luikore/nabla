@@ -87,7 +87,7 @@ static void LABEL_TRANSLATE(struct Labels* labels, struct Iseq* iseq) {
 
 static Symbols* SYMBOLS_NEW() {
   Symbols* symbols = malloc(sizeof(Symbols));
-  VarsTable.init(&symbols->global_vars);
+  VarsTable.init(&symbols->global_vars, 5);
   VarsTableMap.init(&symbols->local_vars_map);
   StructsTable.init(&symbols->structs);
   return symbols;
@@ -104,4 +104,10 @@ static void SYMBOLS_DELETE(Symbols* symbols) {
 
   // TODO undefine the klasses
   StructsTable.cleanup(&symbols->structs);
+}
+
+#pragma mark ## helpers
+
+static Val LITERALIZE(Val str) {
+  return nb_string_new_literal(nb_string_byte_size(str), nb_string_ptr(str));
 }

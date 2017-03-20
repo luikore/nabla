@@ -1,15 +1,11 @@
 #include "compile.h"
 #include <adt/sym-table.h>
 
-static Val _literalize(Val str) {
-  return nb_string_new_literal(nb_string_byte_size(str), nb_string_ptr(str));
-}
-
-static void _add_var(VarsTable* vars_table, Val var_name) {
-  var_name = _literalize(var_name);
+static void _add_var(struct VarsTable* vars_table, Val var_name) {
+  var_name = LITERALIZE(var_name);
 
   for (int i = 0; i < VarsTable.size(vars_table); i++) {
-    if (VarsTable.at(vars_table, i) == var_name) {
+    if (*VarsTable.at(vars_table, i) == var_name) {
       // todo resumable error handling
       fatal_err("variable already defined!");
     }
@@ -17,14 +13,14 @@ static void _add_var(VarsTable* vars_table, Val var_name) {
   VarsTable.push(vars_table, var_name);
 }
 
-static void _def_local_var(Symbols* symbols, Val context_name, Val var_name) {
-  context_name = _literalize(context_name);
+static void _def_local_var(struct VarsTableMap* local_vars_map, Val context_name, Val var_name) {
+  context_name = LITERALIZE(context_name);
 
-  VarsTable* vars_table = NULL;
-  if (!VarsTableMap.find(&symbols->local_vars_map, context_name, &vars_table)) {
+  struct VarsTable* vars_table = NULL;
+  if (!VarsTableMap.find(local_vars_map, context_name, &vars_table)) {
     vars_table = malloc(sizeof(VarsTable));
-    VarsTable.init(vars_table);
-    VarsTableMap.insert(&symbols->local_vars_map, context_name, vars_table);
+    VarsTable.init(vars_table, 3);
+    VarsTableMap.insert(local_vars_map, context_name, vars_table);
   }
   _add_var(vars_table, var_name);
 }
@@ -37,9 +33,9 @@ void sb_build_symbols(Compiler* compiler) {
 
     } else if (IS_A(e, "StructIns")) {
       // StructIns[name, name.arg*]
-      Val struct_name = _literalize(AT(e, 0));
+      Val struct_name = LITERALIZE(AT(e, 0));
       Val elems = AT(e, 1);
-      if (StructsTable.find(compiler->structs_table, struct_name, NULL)) {
+      if (StructsTable.find(&compiler->symbols->structs, struct_name, NULL)) {
         // todo resumable error handling
         fatal_err("re-definition of struct: %.*s", (int)nb_string_byte_size(struct_name), nb_string_ptr(struct_name));
       }
@@ -56,12 +52,12 @@ void sb_build_symbols(Compiler* compiler) {
       NbStructField fields[v.min_elems];
       elems_list = elems;
       for (int i = v.min_elems - 1; i >= 0; i--) {
-        Val elem = _literalize(HEAD(elems_list));
+        Val elem = LITERALIZE(HEAD(elems_list));
         fields[i] = (NbStructField){.matcher = VAL_UNDEF, .field_id = VAL_TO_STR(elem)};
         elems_list = TAIL(elems_list);
       }
-      nb_struct_def(struct_name, ctx->namespace_id, v.min_elems, fields);
-      StructsTable.insert(ctx->structs_table, struct_name, v);
+      nb_struct_def(struct_name, compiler->namespace_id, v.min_elems, fields);
+      StructsTable.insert(&compiler->symbols->structs, struct_name, v);
 
     } else if (IS_A(e, "Lex")) {
       Val context_name = AT(e, 0);

@@ -34,29 +34,29 @@ typedef struct {
   // NOTE an entry in map is much heavier than one in array
   struct RuleNumMap m;
   struct Labels l;
-} PegCompileCtx;
+} PegCompiler;
 
-static void _encode_rule_body_unit(PegCompileCtx* ctx, Val e);
+static void _encode_rule_body_unit(PegCompiler* ctx, Val e);
 
 #pragma mark ## impls
 
-static void _ctx_init(PegCompileCtx* ctx, struct Iseq* iseq, void* structs_table) {
+static void _ctx_init(PegCompiler* ctx, struct Iseq* iseq, void* structs_table) {
   ctx->iseq = iseq;
   ctx->structs_table = structs_table;
   RuleNumMap.init(&ctx->m);
   Labels.init(&ctx->l);
 }
 
-static void _ctx_cleanup(PegCompileCtx* ctx) {
+static void _ctx_cleanup(PegCompiler* ctx) {
   RuleNumMap.cleanup(&ctx->m);
   Labels.cleanup(&ctx->l);
 }
 
-static int _iseq_size(PegCompileCtx* ctx) {
+static int _iseq_size(PegCompiler* ctx) {
   return Iseq.size(ctx->iseq);
 }
 
-static int _label_new_rule_num(PegCompileCtx* ctx, uint32_t rule_name_strlit) {
+static int _label_new_rule_num(PegCompiler* ctx, uint32_t rule_name_strlit) {
   int n;
   if (RuleNumMap.find(&ctx->m, rule_name_strlit, &n)) {
     return n;
@@ -68,20 +68,20 @@ static int _label_new_rule_num(PegCompileCtx* ctx, uint32_t rule_name_strlit) {
   return n;
 }
 
-static int _label_new_num(PegCompileCtx* ctx) {
+static int _label_new_num(PegCompiler* ctx) {
   return LABEL_NEW_NUM(&ctx->l);
 }
 
-static void _label_def(PegCompileCtx* ctx, int num, int offset) {
+static void _label_def(PegCompiler* ctx, int num, int offset) {
   LABEL_DEF(&ctx->l, num, offset);
 }
 
-static void _label_ref(PegCompileCtx* ctx, int offset) {
+static void _label_ref(PegCompiler* ctx, int offset) {
   LABEL_REF(&ctx->l, offset);
 }
 
 // callback_maybe: [Callback]
-static void _encode_callback_maybe(PegCompileCtx* ctx, Val callback_maybe, int terms_size) {
+static void _encode_callback_maybe(PegCompiler* ctx, Val callback_maybe, int terms_size) {
   if (callback_maybe != VAL_NIL) {
     Val callback = nb_cons_head(callback_maybe);
 
@@ -100,7 +100,7 @@ nil_callback:
   ENCODE(ctx->iseq, uint16_t, RULE_RET);
 }
 
-static void _encode_term(PegCompileCtx* ctx, Val term_node) {
+static void _encode_term(PegCompiler* ctx, Val term_node) {
   if (VAL_KLASS(term_node) == kRefRule) {
     Val rule_name = nb_struct_get(term_node, 0);
     int num = _label_new_rule_num(ctx, VAL_TO_STR(rule_name));
@@ -111,7 +111,7 @@ static void _encode_term(PegCompileCtx* ctx, Val term_node) {
   }
 }
 
-static void _encode_term_star(PegCompileCtx* ctx, Val term_star_node) {
+static void _encode_term_star(PegCompiler* ctx, Val term_star_node) {
   // e*
   //   push nil
   //   push_br L0
@@ -136,7 +136,7 @@ static void _encode_term_star(PegCompileCtx* ctx, Val term_star_node) {
   _label_def(ctx, l0, _iseq_size(ctx));
 }
 
-static void _encode_term_plus(PegCompileCtx* ctx, Val term_plus_node) {
+static void _encode_term_plus(PegCompiler* ctx, Val term_plus_node) {
   // e+ # NOTE encode e twice for simplicity,
   //           this will not cause much code duplication, since there is no nesting
   //   push nil
@@ -165,7 +165,7 @@ static void _encode_term_plus(PegCompileCtx* ctx, Val term_plus_node) {
   _label_def(ctx, l0, _iseq_size(ctx));
 }
 
-static void _encode_term_maybe(PegCompileCtx* ctx, Val term_maybe_node) {
+static void _encode_term_maybe(PegCompiler* ctx, Val term_maybe_node) {
   // e?
   //   push nil
   //   push_br L0
@@ -187,7 +187,7 @@ static void _encode_term_maybe(PegCompileCtx* ctx, Val term_maybe_node) {
   _label_def(ctx, l0, _iseq_size(ctx) + 1);
 }
 
-static void _encode_lookahead(PegCompileCtx* ctx, Val node) {
+static void _encode_lookahead(PegCompiler* ctx, Val node) {
   // &e
   //   push_br L0
   //   e
@@ -211,7 +211,7 @@ static void _encode_lookahead(PegCompileCtx* ctx, Val node) {
   _label_def(ctx, l1, _iseq_size(ctx));
 }
 
-static void _encode_neg_lookahead(PegCompileCtx* ctx, Val node) {
+static void _encode_neg_lookahead(PegCompiler* ctx, Val node) {
   // ^e
   //   push_br L0
   //   e
@@ -232,7 +232,7 @@ static void _encode_neg_lookahead(PegCompileCtx* ctx, Val node) {
 
 // terms: (Term | TermStar | TermPlus | TermMaybe | Lookahead | NegLookahead)*
 // returns size of terms
-static int _encode_terms(PegCompileCtx* ctx, Val terms) {
+static int _encode_terms(PegCompiler* ctx, Val terms) {
   terms = nb_cons_reverse(terms);
   int terms_size = 0;
   for (Val node = terms; node != VAL_NIL; node = nb_cons_tail(node)) {
@@ -256,14 +256,14 @@ static int _encode_terms(PegCompileCtx* ctx, Val terms) {
   return terms_size;
 }
 
-static void _encode_seq_rule(PegCompileCtx* ctx, Val seq_rule) {
+static void _encode_seq_rule(PegCompiler* ctx, Val seq_rule) {
   Val terms = nb_struct_get(seq_rule, 0);
   Val callback_maybe = nb_struct_get(seq_rule, 1);
   int terms_size = _encode_terms(ctx, terms);
   _encode_callback_maybe(ctx, callback_maybe, terms_size);
 }
 
-static void _encode_branch_or(PegCompileCtx* ctx, Val a, Val terms, Val callback_maybe) {
+static void _encode_branch_or(PegCompiler* ctx, Val a, Val terms, Val callback_maybe) {
   // a / terms callback_maybe
   //   push_br L0
   //   a
@@ -290,7 +290,7 @@ static void _encode_branch_or(PegCompileCtx* ctx, Val a, Val terms, Val callback
   _label_def(ctx, l1, _iseq_size(ctx));
 }
 
-static void _encode_ljoin(PegCompileCtx* ctx, char kind, Val a, Val terms, Val callback_maybe) {
+static void _encode_ljoin(PegCompiler* ctx, char kind, Val a, Val terms, Val callback_maybe) {
   assert(terms != VAL_NIL);
 
   switch (kind) {
@@ -358,7 +358,7 @@ static void _encode_ljoin(PegCompileCtx* ctx, char kind, Val a, Val terms, Val c
   }
 }
 
-static void _encode_rule_body_unit(PegCompileCtx* ctx, Val e) {
+static void _encode_rule_body_unit(PegCompiler* ctx, Val e) {
   uint32_t klass = VAL_KLASS(e);
   if (klass == kBranch) {
     Val op = nb_struct_get(e, 0);
@@ -415,7 +415,7 @@ Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, void* structs_table,
   // Branch[op.branch, SeqRule, [Term], Callback]
 
   struct Vals stack; // TODO use stack to deal with recursive constructs so we can trace more info
-  PegCompileCtx peg_compile_ctx;
+  PegCompiler peg_compile_ctx;
   // Vals.init(&stack, 25);
   _ctx_init(&peg_compile_ctx, iseq, structs_table);
 

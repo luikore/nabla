@@ -122,16 +122,19 @@ static ValPair token(Spellbreak* ctx, int32_t argc, Val* argv) {
   return (ValPair){VAL_NIL, VAL_NIL};
 }
 
-static ValPair yield(Spellbreak* ctx, Val obj) {
-  ContextEntry* entry = ContextStack.top(&ctx->context_stack);
+static ValPair yield(Spellbreak* sb, Val obj) {
+  int context_stack_size = ContextStack.size(&sb->context_stack);
+  assert(context_stack_size > 0);
+  ContextEntry* entry = ContextStack.at(&sb->context_stack, context_stack_size - 1);
   Token tok = {
-    .pos = entry->curr,
-    .size = ctx->curr - entry->curr,
+    .pos = entry->s - sb->s,
+    .size = sb->curr - entry->s,
     .v = obj,
     .ty = entry->name_str
   };
-  ctx->token_stream.size = entry->token_start;
-  *TokenStream.push(&ctx->token_stream, tok);
+  assert(sb->token_stream.size >= entry->token_pos);
+  sb->token_stream.size = entry->token_pos;
+  TokenStream.push(&sb->token_stream, tok);
   return (ValPair){VAL_NIL, VAL_NIL};
 }
 
@@ -212,24 +215,24 @@ uint32_t sb_syntax_new(uint32_t name_str) {
 #undef METHOD
 
 Spellbreak* sb_new(uint32_t syntax_klass) {
-  SpellbreakKlassData* mdata = klass_get_data(syntax_klass);
+  SpellbreakKlassData* klass_data = klass_get_data(syntax_klass);
 
-  if (!mdata->compiled) {
+  if (!klass_data->compiled) {
     val_throw(STR("klass not compiled"));
   }
 
-  int vars_size = nb_sym_table_size(mdata->vars_dict);
-  Spellbreak* s = val_alloc(syntax_klass, sizeof(Spellbreak) + vars_size * sizeof(Val));
+  int global_vars_size = VarsTable.size(&klass_data->symbols->global_vars);
+  Spellbreak* s = val_alloc(syntax_klass, sizeof(Spellbreak) + global_vars_size * sizeof(Val));
+  s->global_vars_size = global_vars_size;
 
-  s->context_dict = mdata->context_dict;
-  s->vars_size = vars_size;
+  s->context_dict = klass_data->context_dict;
 
-  Vals.init(&s->stack, nb_sym_table_size(mdata->vars_table) + 10);
+  Vals.init(&s->stack, 10);
   ContextStack.init(&s->context_stack, 5);
   TokenStream.init(&s->token_stream, 20);
 
-  for (int i = 0; i < nb_sym_table_size(mdata->vars_table); i++) {
-    Vals.at(&s->stack, i)[0] = VAL_NIL;
+  for (int i = 0; i < global_vars_size; i++) {
+    s->global_vars[i] = VAL_NIL;
   }
 
   return s;
@@ -257,31 +260,28 @@ Val sb_parse(Spellbreak* s, const char* src, int64_t size) {
 }
 
 void sb_syntax_generate(Val ast, uint32_t target_klass) {
-  Symbols* symbols = malloc(sizeof(Symbols));
-  StructsTable.init(&structs_table);
-  Compiler ctx = {
+  Symbols* symbols = SYMBOLS_NEW();
+  Compiler compiler = {
     .context_dict = nb_dict_new(),
     .patterns_dict = nb_dict_new(),
     .symbols = symbols,
     .ast = ast,
     .namespace_id = target_klass
   };
-  Iseq.init(&ctx.iseq, 30);
-  Val err = sb_compile_main(&ctx);
+  Iseq.init(&compiler.iseq, 30);
+  Val err = sb_compile_main(&compiler);
 
   if (err != VAL_UNDEF) {
-    RELEASE(ctx.context_dict);
-    RELEASE(ctx.patterns_dict);
-    StructsTable.cleanup(&structs_table);
-    nb_sym_table_delete(ctx.vars_table);
+    RELEASE(compiler.context_dict);
+    RELEASE(compiler.patterns_dict);
+    SYMBOLS_DELETE(symbols);
     val_throw(err);
   }
 
   SpellbreakKlassData* mdata = klass_get_data(target_klass);
-  mdata->context_dict = ctx.context_dict;
+  mdata->context_dict = compiler.context_dict;
   mdata->compiled = true;
 
-  RELEASE(ctx.patterns_dict);
-  StructsTable.cleanup(&structs_table);
-  nb_sym_table_delete(ctx.vars_table); // TODO need to keep it for debugging
+  RELEASE(compiler.patterns_dict);
+  // TODO can we reduce runtime memory usage by deleting symbols?
 }

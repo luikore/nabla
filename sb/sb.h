@@ -68,7 +68,7 @@ typedef struct {
   uint32_t name_str;
   uint32_t var_size;
   int32_t token_pos; // start index of token stream
-  const char* curr;  // start src ptr
+  const char* s;  // start src ptr
   Val result;        // from yield or parse
 } ContextEntry;
 
@@ -97,8 +97,8 @@ typedef struct {
   struct Vals stack; // all globals and locals are numbered and put into the top of stack
   struct ContextStack context_stack;
 
-  int64_t globals_size;
-  Val globals[];
+  int64_t global_vars_size;
+  Val global_vars[];
 } Spellbreak;
 
 #define CAPTURE_BEGIN(c, i) (c)->captures[(i) * 2]
@@ -143,7 +143,7 @@ typedef struct {
   uint32_t namespace_id;
 
   // compile results
-  struct Symbols* symbols;
+  Symbols* symbols;
   Val context_dict;
   struct Iseq iseq;
 } Compiler;

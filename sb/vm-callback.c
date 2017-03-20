@@ -3,14 +3,17 @@
 #include "compile.h"
 #include "vm-callback-op-codes.h"
 
+// stack for node building
 typedef struct {
   uint32_t limit;
   uint32_t i;
 } ContainerInfo;
 MUT_ARRAY_DECL(ContainerInfos, ContainerInfo);
 
-ValPair sb_vm_callback_exec(uint16_t* pc, struct Vals* stack, uint32_t bp) {
-  // TODO use stack allocation when container_infos is not too large
+ValPair sb_vm_callback_exec(uint16_t* pc, struct Vals* stack, Val* global_vars, Val* vars) {
+  // TODO optimize container_infos:
+  // - idea 1: use stack allocation when container_infos is not too large
+  // - idea 2: eliminate the struct since some code doesn't require it
   struct ContainerInfos container_infos;
   ContainerInfos.init(&container_infos, 5);
   struct Vals stack_storage; // in case stack given
@@ -23,8 +26,8 @@ ValPair sb_vm_callback_exec(uint16_t* pc, struct Vals* stack, uint32_t bp) {
     Vals.init(&stack_storage, 10);
     stack = &stack_storage;
   }
+  int bp = Vals.size(stack);
 
-# define _SP(i) *Vals.at(stack, i)
 # define _PUSH(e) Vals.push(stack, e)
 # define _POP() Vals.pop(stack)
 # define _TOP() Vals.at(stack, Vals.size(stack) - 1)
@@ -49,21 +52,27 @@ ValPair sb_vm_callback_exec(uint16_t* pc, struct Vals* stack, uint32_t bp) {
     switch (*pc) {
       CASE(LOAD) {
         uint32_t var_id = DECODE(ArgU32, pc).arg1;
-        _PUSH(_SP(var_id));
+        _PUSH(vars[var_id]);
         DISPATCH;
       }
 
       CASE(STORE) {
         uint32_t var_id = DECODE(ArgU32, pc).arg1;
-        _SP(var_id) = _POP();
+        // TODO ref count?
+        vars[var_id] = _POP();
         DISPATCH;
       }
 
-      CASE(CAPTURE) {
-        pc++;
-        uint16_t index = *pc;
-        pc++;
-        _PUSH(_SP(bp + index));
+      CASE(LOAD_GLOB) {
+        uint32_t var_id = DECODE(ArgU32, pc).arg1;
+        _PUSH(global_vars[var_id]);
+        DISPATCH;
+      }
+
+      CASE(STORE_GLOB) {
+        uint32_t var_id = DECODE(ArgU32, pc).arg1;
+        // TODO ref count?
+        global_vars[var_id] = _POP();
         DISPATCH;
       }
 
@@ -196,7 +205,6 @@ ValPair sb_vm_callback_exec(uint16_t* pc, struct Vals* stack, uint32_t bp) {
       }
 
       CASE(END) {
-        // TODO cleanup stack
         goto terminate;
       }
 
@@ -208,9 +216,13 @@ ValPair sb_vm_callback_exec(uint16_t* pc, struct Vals* stack, uint32_t bp) {
 
 terminate:
 
-  ret = *Vals.at(stack, bp);
+  // assumption: always a nil pushed to stack in bytecode
+  assert(Vals.size(stack) > bp);
+  ret = *Vals.top(stack);
   if (use_stack_storage) {
     Vals.cleanup(stack);
+  } else {
+    stack->size = bp;
   }
   return (ValPair){ret, VAL_NIL};
 }

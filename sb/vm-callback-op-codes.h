@@ -7,11 +7,14 @@ enum OpCodes {
   META,         // size:uint32, data:void*            # container_size = (uint32_t)data [***]
 
   // lex specific callback ops
-  LOAD,         // id:uint32                          # push var (indexed by id) on to stack
-  STORE,        // id:uint32                          # pop stack and set var
+  // NOTE: vars are numbered when compiling, for recursive consideration, local vars should not be shared
+  //       captures are put in vars array too.
+  LOAD,         // i:uint32                           # push var (indexed by i) on to stack
+  STORE,        // i:uint32                           # pop stack and set var
+  LOAD_GLOB,    // i:uint32                           # push global var
+  STORE_GLOB,   // i:uint32                           # pop global var
 
   // callback ops, shared with those in vm-peg
-  CAPTURE,      // n:uint16                           # load capture at bp[n]
   PUSH,         // val:Val                            # push literal
   POP,          //                                    # pop top of stack
   NODE_BEG,     // klass_id:uint32                    # push [node, (limit, counter=0)] [*]
@@ -44,7 +47,8 @@ static const char* op_code_names[] = {
   [META] = "meta",
   [LOAD] = "load",
   [STORE] = "store",
-  [CAPTURE] = "capture",
+  [LOAD_GLOB] = "load_glob",
+  [STORE_GLOB] = "store_glob",
   [PUSH] = "push",
   [POP] = "pop",
   [NODE_BEG] = "node_beg",

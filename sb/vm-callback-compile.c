@@ -17,19 +17,19 @@ typedef struct {
   bool peg_mode;
   struct Labels* labels;
   struct StructsTable* structs_table;
-} CallbackCompileCtx;
+} CallbackCompiler;
 
-static void _encode_callback_lines(CallbackCompileCtx* ctx, Val stmts);
+static void _encode_callback_lines(CallbackCompiler* ctx, Val stmts);
 
 #pragma mark ## impls
 
-static int _iseq_size(CallbackCompileCtx* ctx) {
+static int _iseq_size(CallbackCompiler* ctx) {
   return Iseq.size(ctx->iseq);
 }
 
 // returns change of stack
 // terms_size is for checking of capture overflows
-static void _encode_callback_expr(CallbackCompileCtx* ctx, Val expr) {
+static void _encode_callback_expr(CallbackCompiler* ctx, Val expr) {
   uint32_t klass = VAL_KLASS(expr);
   // Expr = InfixLogic | Call | Capture | CraeteNode | CreateList | Assign | If | Nul
   // NOTE: no VarRef for PEG
@@ -230,7 +230,7 @@ static void _encode_callback_expr(CallbackCompileCtx* ctx, Val expr) {
   }
 }
 
-static void _encode_callback_lines(CallbackCompileCtx* ctx, Val stmts) {
+static void _encode_callback_lines(CallbackCompiler* ctx, Val stmts) {
   // Expr* (NOTE: no VarDecl in PEG callback)
 
   // NOTE: should only push the last expr to stack so this code can be correct: `[a, (b, c)]`
@@ -257,7 +257,7 @@ Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, int32_t terms_size, voi
     kIf         = klass_find_c("kIf", sb);
   }
 
-  CallbackCompileCtx ctx;
+  CallbackCompiler ctx;
   ctx.iseq = iseq;
   ctx.terms_size = terms_size;
   ctx.labels = labels;
