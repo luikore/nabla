@@ -37,7 +37,7 @@ lex Main[
 struct Main[ins]
 struct PatternIns[name, pattern]
 struct StructIns[name, args]
-struct VarDecl[var_name]
+struct GlobalVarDecl[var_name]
 struct Lex[context, rules]
 struct Peg[context, rules]
 peg Main[
@@ -46,7 +46,7 @@ peg Main[
   Line : space.eol { } / Ins { $1 }
 
   Ins : kw.pattern name.pattern space.pre-eq op.eq Pattern { PatternIns[$2, $5] }
-      / kw.var name.var { VarDecl[$2] }
+      / kw.var name.var.global { GlobalVarDecl[$2] }
       / kw.struct name.struct name.arg* { StructIns[$2, $3] }
       / kw.lex name.context Lex { Lex[$2, $3] }
       / kw.peg name.context Peg { Peg[$2, $3] }
@@ -84,6 +84,7 @@ struct SeqLexRules[rules]
 struct BeginCallback[first_cb, rules]
 struct EndCallback[first_cb, rules]
 struct LexRule[pattern, code]
+struct VarDecl[var_name]
 struct VarRef[var_name]
 struct GlobalVarRef[name]
 peg Lex[
@@ -195,7 +196,7 @@ lex Callback[
   "=" { :token "op.eq" }
 ]
 
-# defined above: VarDecl VarRef
+# defined above: VarRef
 struct Callback[stmts] # stmts reversed
 struct InfixLogic[lhs, op, rhs]
 struct Call[func_name, argv] # argv reversed

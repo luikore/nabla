@@ -90,8 +90,9 @@ static void _encode_callback_maybe(PegCompiler* compiler, Val callback_maybe, in
       goto nil_callback;
     }
 
+    uint16_t capture_mask = 0; // no need to use it though, captures are pushed by executing each rule body
     sb_vm_callback_compile(compiler->iseq, stmts, terms_size, &compiler->l,
-                           compiler->structs_table, NULL, NULL);
+                           compiler->structs_table, NULL, NULL, &capture_mask);
     ENCODE(compiler->iseq, uint16_t, RULE_RET);
     return;
   }

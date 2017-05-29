@@ -169,7 +169,7 @@ ValPair sb_vm_lex_exec(Spellbreak* sb);
 // peg_mode: if set to true, will forbid variables (TODO local variables still makes it pure)
 // see compile.h for label table type
 Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, int32_t terms_size, void* label_table,
-                           void* structs_table, struct VarsTable* global_vars, struct VarsTable* local_vars);
+                           void* structs_table, struct VarsTable* global_vars, struct VarsTable* local_vars, uint16_t* capture_mask);
 
 void sb_vm_callback_decompile(uint16_t* pc);
 

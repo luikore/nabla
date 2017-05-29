@@ -4,6 +4,11 @@
 
 // ins: aligned by 16bits
 // some note for alignment: http://lemire.me/blog/2012/05/31/data-alignment-for-speed-myth-or-reality/
+
+// I may question:
+// this vm is so simple and it is so high level, why not use a tree walker?
+// But I think the regexp patterns still allocate a lot.
+// And the bytecode format makes loading / dumping easier.
 enum OpCodes {
   META,          // size:uint32, data:void*
 

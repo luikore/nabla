@@ -42,7 +42,6 @@ static int _iseq_size(CallbackCompiler* compiler) {
 static void _encode_callback_expr(CallbackCompiler* compiler, Val expr) {
   uint32_t klass = VAL_KLASS(expr);
   // Expr = InfixLogic | Call | Capture | CraeteNode | CreateList | Assign | If | Nul
-  // NOTE: no VarRef for PEG
   if (klass == kInfixLogic) {
     // InfixLogic[Expr, op, Expr]
 
@@ -311,7 +310,7 @@ static void _encode_callback_lines(CallbackCompiler* compiler, Val stmts) {
 
 // when given global_vars, it is in lex mode
 Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, int32_t terms_size, void* labels,
-                           void* structs_table, struct VarsTable* global_vars, struct VarsTable* local_vars) {
+                           void* structs_table, struct VarsTable* global_vars, struct VarsTable* local_vars, uint16_t* capture_mask) {
   if (!kInfixLogic) {
     uint32_t sb   = sb_klass();
     kInfixLogic   = klass_find_c("kInfixLogic", sb); assert(kInfixLogic);
@@ -335,8 +334,10 @@ Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, int32_t terms_size, voi
   compiler.structs_table = structs_table;
   compiler.global_vars = global_vars;
   compiler.local_vars = local_vars;
+  compiler.capture_mask = 0;
 
   _encode_callback_lines(&compiler, stmts);
+  *capture_mask = compiler.capture_mask;
   return VAL_NIL;
 }
 

@@ -15,6 +15,7 @@ DEF_NODE(EndCallback, "first_cb", "rules");
 DEF_NODE(EpsilonRule, );
 DEF_NODE(Flag, "flag");
 DEF_NODE(GlobalAssign, "var_name", "expr");
+DEF_NODE(GlobalVarDecl, "var_name");
 DEF_NODE(GlobalVarRef, "name");
 DEF_NODE(Group, "special", "branches");
 DEF_NODE(If, "expr", "true_clause", "false_clause");

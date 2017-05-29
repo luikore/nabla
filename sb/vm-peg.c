@@ -45,8 +45,8 @@ ValPair sb_vm_peg_exec(uint16_t* peg, int32_t token_size, Token* tokens) {
   //   bp[-3]: return addr
   //   bp[-2]: last bp
   //   bp[-1]: last br_bp
-  //   bp[0]: rule_id  # for memoizing & error reporting
-  //   bp[1..]: captures
+  //   bp[0]: rule_id    # for memoizing & error reporting
+  //   bp[1..]: captures # they are pushed naturally by executing each of the rule body
   //
   // The root frame starts from main rule id
 
