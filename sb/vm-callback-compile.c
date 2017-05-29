@@ -3,6 +3,9 @@
 
 #pragma mark ## decls
 
+// the top 10 slots are for captures
+#define LOCAL_VAR_OFFSET 10
+
 static uint32_t kInfixLogic = 0;
 static uint32_t kCall = 0;
 static uint32_t kCapture = 0;
@@ -10,26 +13,33 @@ static uint32_t kCreateNode = 0;
 static uint32_t kCreateList = 0;
 static uint32_t kSplatEntry = 0;
 static uint32_t kIf = 0;
+static uint32_t kAssign = 0;
+static uint32_t kGlobalAssign = 0;
+static uint32_t kVarRef = 0;
+static uint32_t kGlobalVarRef = 0;
+static uint32_t kVarDecl = 0;
 
 typedef struct {
   struct Iseq* iseq;
   int terms_size;
-  bool peg_mode;
+  uint16_t capture_mask;
   struct Labels* labels;
-  struct StructsTable* structs_table;
+  struct StructsTable* structs_table;  // for Peg
+  struct VarsTable* global_vars;       // for Lex
+  struct VarsTable* local_vars;        // for Lex (TODO maybe also for Peg?)
 } CallbackCompiler;
 
-static void _encode_callback_lines(CallbackCompiler* ctx, Val stmts);
+static void _encode_callback_lines(CallbackCompiler* compiler, Val stmts);
 
 #pragma mark ## impls
 
-static int _iseq_size(CallbackCompiler* ctx) {
-  return Iseq.size(ctx->iseq);
+static int _iseq_size(CallbackCompiler* compiler) {
+  return Iseq.size(compiler->iseq);
 }
 
 // returns change of stack
 // terms_size is for checking of capture overflows
-static void _encode_callback_expr(CallbackCompiler* ctx, Val expr) {
+static void _encode_callback_expr(CallbackCompiler* compiler, Val expr) {
   uint32_t klass = VAL_KLASS(expr);
   // Expr = InfixLogic | Call | Capture | CraeteNode | CreateList | Assign | If | Nul
   // NOTE: no VarRef for PEG
@@ -51,19 +61,19 @@ static void _encode_callback_expr(CallbackCompiler* ctx, Val expr) {
     Val lhs = nb_struct_get(expr, 0);
     Val op = nb_struct_get(expr, 1);
     Val rhs = nb_struct_get(expr, 2);
-    int l0 = LABEL_NEW_NUM(ctx->labels);
+    int l0 = LABEL_NEW_NUM(compiler->labels);
     uint16_t ins;
 
-    _encode_callback_expr(ctx, lhs);
-    LABEL_REF(ctx->labels, _iseq_size(ctx) + 1);
+    _encode_callback_expr(compiler, lhs);
+    LABEL_REF(compiler->labels, _iseq_size(compiler) + 1);
     if (nb_string_byte_size(op) == 2 && nb_string_ptr(op)[0] == '&' && nb_string_ptr(op)[1] == '&') {
       ins = JUNLESS;
     } else {
       ins = JIF;
     }
-    ENCODE(ctx->iseq, Arg32, ((Arg32){ins, l0}));
-    _encode_callback_expr(ctx, rhs);
-    LABEL_DEF(ctx->labels, l0, _iseq_size(ctx));
+    ENCODE(compiler->iseq, Arg32, ((Arg32){ins, l0}));
+    _encode_callback_expr(compiler, rhs);
+    LABEL_DEF(compiler->labels, l0, _iseq_size(compiler));
 
   } else if (klass == kCall) {
     // Call[func_name, Expr*] # args reversed
@@ -79,10 +89,10 @@ static void _encode_callback_expr(CallbackCompiler* ctx, Val expr) {
     uint32_t argc = 0;
     for (Val tail = exprs; tail; tail = nb_cons_tail(tail)) {
       Val e = nb_cons_head(tail);
-      _encode_callback_expr(ctx, e);
+      _encode_callback_expr(compiler, e);
       argc += 1;
     }
-    ENCODE(ctx->iseq, ArgU32U32, ((ArgU32U32){CALL, argc, func_name}));
+    ENCODE(compiler->iseq, ArgU32U32, ((ArgU32U32){CALL, argc, func_name}));
 
   } else if (klass == kCapture) {
     // Capture[var_name]
@@ -90,18 +100,21 @@ static void _encode_callback_expr(CallbackCompiler* ctx, Val expr) {
     // TODO $-\d+
     Val tok = nb_struct_get(expr, 0);
     int size = nb_string_byte_size(tok);
-    // TODO raise error if size > 2
+    // TODO handle the cases of more than 2 digits
     char s[size];
     strncpy(s, nb_string_ptr(tok) + 1, size - 1);
     s[size - 1] = '\0';
     int i = atoi(s);
-    if (i > ctx->terms_size) {
+    if (i > compiler->terms_size) {
       // raise error
       // TODO maybe we don't need to pass terms_size everywhere
       // just check it after the bytecode is compiled
     }
-    ENCODE(ctx->iseq, uint16_t, CAPTURE);
-    ENCODE(ctx->iseq, uint16_t, (uint16_t)i);
+
+    // capture allocates resources, the mask for the save.
+    compiler->capture_mask |= (1 << i);
+    ENCODE(compiler->iseq, uint16_t, LOAD);
+    ENCODE(compiler->iseq, uint32_t, (uint32_t)i);
 
   } else if (klass == kCreateNode) {
     // CreateNode[ty, (Expr | SplatEntry)*]
@@ -119,7 +132,7 @@ static void _encode_callback_expr(CallbackCompiler* ctx, Val expr) {
     Val elems = AT(expr, 1);
 
     StructsTableValue structs_table_value;
-    bool found = StructsTable.find(ctx->structs_table, klass_name, &structs_table_value);
+    bool found = StructsTable.find(compiler->structs_table, klass_name, &structs_table_value);
     if (!found) {
       // TODO resumable and report syntax error at position
       fatal_err("struct not found: %.*s", (int)nb_string_byte_size(klass_name), nb_string_ptr(klass_name));
@@ -144,20 +157,20 @@ static void _encode_callback_expr(CallbackCompiler* ctx, Val expr) {
 
     // encode
     uint32_t klass_id = structs_table_value.klass_id;
-    ENCODE(ctx->iseq, ArgU32, ((ArgU32){NODE_BEG, klass_id}));
+    ENCODE(compiler->iseq, ArgU32, ((ArgU32){NODE_BEG, klass_id}));
     elems = nb_cons_reverse(elems);
     for (Val tail = elems; tail; tail = nb_cons_tail(tail)) {
       Val e = nb_cons_head(tail);
       if (VAL_KLASS(e) == kSplatEntry) {
         Val to_splat = nb_struct_get(e, 0);
-        _encode_callback_expr(ctx, to_splat);
-        ENCODE(ctx->iseq, uint16_t, NODE_SETV);
+        _encode_callback_expr(compiler, to_splat);
+        ENCODE(compiler->iseq, uint16_t, NODE_SETV);
       } else {
-        _encode_callback_expr(ctx, e);
-        ENCODE(ctx->iseq, uint16_t, NODE_SET);
+        _encode_callback_expr(compiler, e);
+        ENCODE(compiler->iseq, uint16_t, NODE_SET);
       }
     }
-    ENCODE(ctx->iseq, uint16_t, NODE_END);
+    ENCODE(compiler->iseq, uint16_t, NODE_END);
 
   } else if (klass == kCreateList) {
     // CreateList[(Expr | SplatEntry)*]
@@ -179,22 +192,70 @@ static void _encode_callback_expr(CallbackCompiler* ctx, Val expr) {
       Val e = nb_cons_head(elems);
       if (VAL_KLASS(e) == kSplatEntry) {
         Val to_splat = nb_struct_get(e, 0);
-        _encode_callback_expr(ctx, to_splat);
+        _encode_callback_expr(compiler, to_splat);
         a[i++] = 1;
       } else {
-        _encode_callback_expr(ctx, e);
+        _encode_callback_expr(compiler, e);
         a[i++] = 0;
       }
     }
 
-    ENCODE(ctx->iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
+    ENCODE(compiler->iseq, ArgVal, ((ArgVal){PUSH, VAL_NIL}));
     for (i = size - 1; i >= 0; i--) {
       if (a[i]) {
-        ENCODE(ctx->iseq, uint16_t, LISTV);
+        ENCODE(compiler->iseq, uint16_t, LISTV);
       } else {
-        ENCODE(ctx->iseq, uint16_t, LIST);
+        ENCODE(compiler->iseq, uint16_t, LIST);
       }
     }
+
+  } else if (klass == kAssign) {
+    // Assign[var_name, expr]
+    Val var_name = nb_struct_get(expr, 0);
+    Val value = nb_struct_get(expr, 1);
+
+    int var_id = SYMBOLS_LOOKUP_VAR_ID(compiler->local_vars, var_name);
+    if (var_id < 0) {
+      fatal_err("assigning local var %.*s not declared", (int)nb_string_byte_size(var_name), nb_string_ptr(var_name));
+    }
+    _encode_callback_expr(compiler, value);
+    ENCODE(compiler->iseq, uint16_t, STORE);
+    ENCODE(compiler->iseq, uint32_t, var_id + LOCAL_VAR_OFFSET);
+
+  } else if (klass == kGlobalAssign) {
+    // GlobalAssign[var_name, expr]
+    Val var_name = nb_struct_get(expr, 0);
+    Val value = nb_struct_get(expr, 1);
+
+    int var_id = SYMBOLS_LOOKUP_VAR_ID(compiler->global_vars, var_name);
+    if (var_id < 0) {
+      fatal_err("assigning global var %.*s not declared", (int)nb_string_byte_size(var_name), nb_string_ptr(var_name));
+    }
+    _encode_callback_expr(compiler, value);
+    ENCODE(compiler->iseq, uint16_t, STORE_GLOB);
+    ENCODE(compiler->iseq, uint32_t, var_id);
+
+  } else if (klass == kVarRef) {
+    // VarRef[var_name]
+    Val var_name = nb_struct_get(expr, 0);
+    
+    int var_id = SYMBOLS_LOOKUP_VAR_ID(compiler->local_vars, var_name);
+    if (var_id < 0) {
+      fatal_err("referencing local var %.*s not declared", (int)nb_string_byte_size(var_name), nb_string_ptr(var_name));
+    }
+    ENCODE(compiler->iseq, uint16_t, LOAD);
+    ENCODE(compiler->iseq, uint32_t, var_id + LOCAL_VAR_OFFSET);
+
+  } else if (klass == kGlobalVarRef) {
+    // GlobalVarRef[var_name]
+    Val var_name = nb_struct_get(expr, 0);
+
+    int var_id = SYMBOLS_LOOKUP_VAR_ID(compiler->global_vars, var_name);
+    if (var_id < 0) {
+      fatal_err("referencing global var %.*s not declared", (int)nb_string_byte_size(var_name), nb_string_ptr(var_name));
+    }
+    ENCODE(compiler->iseq, uint16_t, LOAD_GLOB);
+    ENCODE(compiler->iseq, uint32_t, var_id);
 
   } else {
     assert(klass == kIf);
@@ -211,59 +272,71 @@ static void _encode_callback_expr(CallbackCompiler* ctx, Val expr) {
     Val cond = nb_struct_get(expr, 0);
     Val true_clause = nb_struct_get(expr, 1);
     Val false_clause = nb_struct_get(expr, 2);
-    int l0 = LABEL_NEW_NUM(ctx->labels);
-    int l1 = LABEL_NEW_NUM(ctx->labels);
+    int l0 = LABEL_NEW_NUM(compiler->labels);
+    int l1 = LABEL_NEW_NUM(compiler->labels);
 
-    _encode_callback_expr(ctx, cond);
-    LABEL_REF(ctx->labels, _iseq_size(ctx) + 1);
-    ENCODE(ctx->iseq, Arg32, ((Arg32){JUNLESS, l0}));
-    _encode_callback_lines(ctx, true_clause);
-    LABEL_REF(ctx->labels, _iseq_size(ctx) + 1);
-    ENCODE(ctx->iseq, Arg32, ((Arg32){JMP, l1}));
-    LABEL_DEF(ctx->labels, l0, _iseq_size(ctx));
+    _encode_callback_expr(compiler, cond);
+    LABEL_REF(compiler->labels, _iseq_size(compiler) + 1);
+    ENCODE(compiler->iseq, Arg32, ((Arg32){JUNLESS, l0}));
+    _encode_callback_lines(compiler, true_clause);
+    LABEL_REF(compiler->labels, _iseq_size(compiler) + 1);
+    ENCODE(compiler->iseq, Arg32, ((Arg32){JMP, l1}));
+    LABEL_DEF(compiler->labels, l0, _iseq_size(compiler));
     if (VAL_KLASS(false_clause) == kIf) {
-      _encode_callback_expr(ctx, false_clause);
+      _encode_callback_expr(compiler, false_clause);
     } else {
-      _encode_callback_lines(ctx, false_clause);
+      _encode_callback_lines(compiler, false_clause);
     }
-    LABEL_DEF(ctx->labels, l1, _iseq_size(ctx));
+    LABEL_DEF(compiler->labels, l1, _iseq_size(compiler));
   }
 }
 
-static void _encode_callback_lines(CallbackCompiler* ctx, Val stmts) {
-  // Expr* (NOTE: no VarDecl in PEG callback)
-
+static void _encode_callback_lines(CallbackCompiler* compiler, Val stmts) {
   // NOTE: should only push the last expr to stack so this code can be correct: `[a, (b, c)]`
   // TODO: to support debugging we need to allocate more slots in stack to hold results of each line
   stmts = nb_cons_reverse(stmts);
   for (Val tail = stmts; tail; tail = nb_cons_tail(tail)) {
     Val e = nb_cons_head(tail);
-    _encode_callback_expr(ctx, e);
+    if (VAL_KLASS(e) == kVarDecl) {
+      // we already have vars declared in compile-build-symbols
+    } else {
+      _encode_callback_expr(compiler, e);
+    }
     if (nb_cons_tail(tail) != VAL_NIL) {
-      ENCODE(ctx->iseq, uint16_t, POP);
+      ENCODE(compiler->iseq, uint16_t, POP);
+      // TODO later we can optimize redundant pops with peepholes
     }
   }
 }
 
-Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, int32_t terms_size, void* labels, bool peg_mode, void* structs_table) {
+// when given global_vars, it is in lex mode
+Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, int32_t terms_size, void* labels,
+                           void* structs_table, struct VarsTable* global_vars, struct VarsTable* local_vars) {
   if (!kInfixLogic) {
-    uint32_t sb = sb_klass();
-    kInfixLogic = klass_find_c("kInfixLogic", sb); assert(kInfixLogic);
-    kCall       = klass_find_c("kCall", sb);
-    kCapture    = klass_find_c("kCapture", sb);
-    kCreateNode = klass_find_c("kCreateNode", sb);
-    kCreateList = klass_find_c("kCreateList", sb);
-    kSplatEntry = klass_find_c("kSplatEntry", sb);
-    kIf         = klass_find_c("kIf", sb);
+    uint32_t sb   = sb_klass();
+    kInfixLogic   = klass_find_c("kInfixLogic", sb); assert(kInfixLogic);
+    kCall         = klass_find_c("kCall", sb);
+    kCapture      = klass_find_c("kCapture", sb);
+    kCreateNode   = klass_find_c("kCreateNode", sb);
+    kCreateList   = klass_find_c("kCreateList", sb);
+    kSplatEntry   = klass_find_c("kSplatEntry", sb);
+    kIf           = klass_find_c("kIf", sb);
+    kAssign       = klass_find_c("kAssign", sb);
+    kGlobalAssign = klass_find_c("kGlobalAssign", sb);
+    kVarRef       = klass_find_c("kVarRef", sb);
+    kGlobalVarRef = klass_find_c("kGlobalVarRef", sb);
+    kVarDecl      = klass_find_c("kVarDecl", sb);
   }
 
-  CallbackCompiler ctx;
-  ctx.iseq = iseq;
-  ctx.terms_size = terms_size;
-  ctx.labels = labels;
-  ctx.peg_mode = peg_mode;
-  ctx.structs_table = structs_table;
-  _encode_callback_lines(&ctx, stmts);
+  CallbackCompiler compiler;
+  compiler.iseq = iseq;
+  compiler.terms_size = terms_size;
+  compiler.labels = labels;
+  compiler.structs_table = structs_table;
+  compiler.global_vars = global_vars;
+  compiler.local_vars = local_vars;
+
+  _encode_callback_lines(&compiler, stmts);
   return VAL_NIL;
 }
 
@@ -298,16 +371,13 @@ void sb_vm_callback_decompile(uint16_t* pc_start) {
 
       case LOAD:
       case STORE:
+      case LOAD_GLOB:
+      case STORE_GLOB:
       case NODE_BEG:
       case JIF:
       case JUNLESS:
       case JMP: {
         printf(" %u\n", DECODE(ArgU32, pc).arg1);
-        break;
-      }
-
-      case CAPTURE: {
-        printf(" %u\n", DECODE(Arg16, pc).arg1);
         break;
       }
 

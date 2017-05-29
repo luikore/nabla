@@ -2,11 +2,15 @@
 #include "vm-lex-op-codes.h"
 
 // vm for lex and callback (not for peg's callback)
+// it organizes nearly everything (sb_parse just invokes sb_vm_lex_exec)
+// the bytecode is a linearlized stream, so the impact of page fault is minimized.
+// the execution shares stack so allocation is minimized too.
 
 ValPair sb_vm_lex_exec(Spellbreak* sb) {
   static const void* labels[] = {
     [MATCH_RE] = &&label_MATCH_RE,
     [MATCH_STR] = &&label_MATCH_STR,
+    [PREP_CAPTURES] = &&label_PREP_CAPTURES,
     [CALLBACK] = &&label_CALLBACK,
     [CTX_CALL] = &&label_CTX_CALL,
     [CTX_END] = &&label_CTX_END,
@@ -74,10 +78,19 @@ begin:
       }
 
       CASE(CALLBACK) {
+        pc++;
+        uint16_t captures_mask = DECODE(uint16_t, pc);
+        uint32_t next_offset = DECODE(uint32_t, pc);
+        sb->stack
+        sb_vm_callback_exec(pc + 1, &sb->stack, sb->globals, );
+        pc += next_offset;
+        DISPATCH;
       }
 
       CASE(CTX_CALL) {
-        uint32_t ctx_name_str = DECODE(ArgU32, pc).arg1;
+        ArgU32U32 data = DECODE(ArgU32U32, pc);
+        uint32_t ctx_name_str = data.arg1;
+        uint32_t vars_size = data.arg2;
         CTX_PUSH(ctx_name_str);
         DISPATCH;
       }

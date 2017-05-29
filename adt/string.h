@@ -23,6 +23,7 @@ const char* nb_string_ptr(Val s);
 
 Val nb_string_concat(Val s1, Val s2);
 
+// returns 1, 0 or -1
 int nb_string_cmp(Val s1, Val s2);
 
 // todo negative index

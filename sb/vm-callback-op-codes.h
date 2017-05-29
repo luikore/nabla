@@ -3,32 +3,32 @@
 #include "op-code-helper.h"
 
 enum OpCodes {
-  // op         // args                               # description
-  META,         // size:uint32, data:void*            # container_size = (uint32_t)data [***]
+  // op         // args                            # description
+  META,         // size:uint32, data:void*         # container_size = (uint32_t)data [***]
 
   // lex specific callback ops
-  // NOTE: vars are numbered when compiling, for recursive consideration, local vars should not be shared
+  // NOTE: vars are numbered when compiling, for recursive consideration, local vars should not be shared.
   //       captures are put in vars array too.
-  LOAD,         // i:uint32                           # push var (indexed by i) on to stack
-  STORE,        // i:uint32                           # pop stack and set var
-  LOAD_GLOB,    // i:uint32                           # push global var
-  STORE_GLOB,   // i:uint32                           # pop global var
+  LOAD,         // i:uint32                        # push var (indexed by i) on to stack
+  STORE,        // i:uint32                        # pop stack and set var
+  LOAD_GLOB,    // i:uint32                        # push global var
+  STORE_GLOB,   // i:uint32                        # pop global var
 
   // callback ops, shared with those in vm-peg
-  PUSH,         // val:Val                            # push literal
-  POP,          //                                    # pop top of stack
-  NODE_BEG,     // klass_id:uint32                    # push [node, (limit, counter=0)] [*]
-  NODE_SET,     //                                    # (assume stack top is [node, (limit, counter), val]) node[counter++] = val
-  NODE_SETV,    //                                    # (assume stack top is [node, (limit, counter), *vals]) node[counter..counter+vals.size] = *vals
-  NODE_END,     //                                    # (assume stack top is [node, (limit, counter)]) finish building node, remove counter from stack top
-  LIST,         //                                    # pop b:Cons, a:Val, push [a, *b] (members are pushed from left to right)
-  LISTV,        //                                    # pop b:Cons, a:Cons, push [*a, *b] (members are pushed from left to right)
-  JIF,          // true_clause:uint32                 # pops cond [**]
-  JUNLESS,      // false_clause:uint32                # pops cond
-  JMP,          // offset:uint32                      # unconditional jump
-  CALL,         // argc:uint32, fname:uint32          # invoke a method (only pure builtin operators are supported), argc includes receiver obj
+  PUSH,         // val:Val                         # push literal
+  POP,          //                                 # pop top of stack
+  NODE_BEG,     // klass_id:uint32                 # push [node, (limit, counter=0)] [*]
+  NODE_SET,     //                                 # (assume stack top is [node, (limit, counter), val]) node[counter++] = val
+  NODE_SETV,    //                                 # (assume stack top is [node, (limit, counter), *vals]) node[counter..counter+vals.size] = *vals
+  NODE_END,     //                                 # (assume stack top is [node, (limit, counter)]) finish building node, remove counter from stack top
+  LIST,         //                                 # pop b:Cons, a:Val, push [a, *b] (members are pushed from left to right)
+  LISTV,        //                                 # pop b:Cons, a:Cons, push [*a, *b] (members are pushed from left to right)
+  JIF,          // true_clause:uint32              # pops cond [**]
+  JUNLESS,      // false_clause:uint32             # pops cond
+  JMP,          // offset:uint32                   # unconditional jump
+  CALL,         // argc:uint32, fname:uint32       # invoke a method (only pure builtin operators are supported), argc includes receiver obj
 
-  END,          //                                    # terminate execution and tweak stack
+  END,          //                                 # terminate execution and tweak stack
 
   OP_CODES_SIZE //
 };

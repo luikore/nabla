@@ -42,6 +42,14 @@ class MiniCallback
     end
   end
 
+  GlobalAssign = Struct.new :var_name, :expr
+  class GlobalAssign
+    def eval
+      Klasses.validate self.class
+      "NODE(GlobalAssign, 2, #{var_name.eval}, #{expr.eval})"
+    end
+  end
+
   Call = Struct.new :func_name, :argv
   class Call
     def self.funcs
@@ -110,6 +118,14 @@ class MiniCallback
     end
   end
 
+  GlobalVarRef = Struct.new :var_name
+  class GlobalVarRef
+    def eval
+      Klasses.validate self.class
+      "NODE(GlobalVarRef, 1, #{var_name.eval})"
+    end
+  end
+
   def initialize src
     @s = StringScanner.new src.strip
   end
@@ -159,12 +175,12 @@ class MiniCallback
     end
   end
 
-  # Expr : Paren / Lit / Assign / Capture / VarRef / CreateNode / CreateList / Call
+  # Expr : Paren / Lit / Assign / Capture / VarRef / GlobalVarRef / CreateNode / CreateList / Call
   def parse_expr
     if @s.scan(/(?=\w+\ *=)/)
       parse_assign
     else
-      parse_paren or parse_lit or parse_capture or parse_var_ref or parse_create_node or parse_create_list or parse_call
+      parse_paren or parse_lit or parse_capture or parse_var_ref or parse_global_var_ref or parse_create_node or parse_create_list or parse_call
     end
   end
 
@@ -204,6 +220,15 @@ class MiniCallback
     end
   end
 
+  # Assign: name.var.global '=' Expr
+  def parse_global_assign
+    if var_name = @s.scan(/\$[a-z]\w*/)
+      @s.skip(/ *= */)
+      expr = expect :parse_expr
+      GlobalAssign.new Token.new("name.var", var_name), expr
+    end
+  end
+
   # Capture: name.var.capture
   def parse_capture
     if c = @s.scan(/\$-?\d+/)
@@ -215,6 +240,13 @@ class MiniCallback
   def parse_var_ref
     if c = @s.scan(/[a-z]\w*/)
       VarRef.new Token.new("name.var", c)
+    end
+  end
+
+  # GlobalVarRef: name.var.global
+  def parse_global_var_ref
+    if c = @s.scan(/\$[a-z]\w*/)
+      GlobalVarRef.new Token.new("name.var.global", c)
     end
   end
 
@@ -329,13 +361,16 @@ if __FILE__ == $PROGRAM_NAME
     r.lit.to_s == 'VAL_FROM_INT(23)'
   end
   t ':token true $1', :parse_call do |r|
-    r.func_name.to_s == ':token' and r.args.size == 2
+    r.func_name.to_s == ':token' and r.argv.size == 2
   end
   t ":style (:concat 1 z) $1", :parse_stmts do |r|
     r.size == 1
   end
   t 'x = 4', :parse_assign do |r|
     r.var_name.to_s == 'x' and r.expr.to_s == 'VAL_FROM_INT(4)'
+  end
+  t '$x = 2 + 1', :parse_global_assign do |r|
+    r.var_name.to_s == '$x'
   end
   t 'var x', :parse_stmt do |r|
     r.is_a?(MiniCallback::VarDecl) and r.to_s == "x"
@@ -352,6 +387,11 @@ if __FILE__ == $PROGRAM_NAME
   t '*a, *b', :parse_entries do |r|
     r.is_a?(Array) and r.size == 2
   end
+
+  Klasses.add 'Callback', ['stmts']
+  Klasses.add 'Call', ['func_name', 'argv']
+  Klasses.add 'VarRef', ['var_name']
+  Klasses.add 'Capture', ['var_name']
   node = MiniCallback.new(<<-NABLA).parse
     :style (:concat 1 z) $1
     :String

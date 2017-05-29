@@ -89,9 +89,9 @@ static DepNode* _dep_node_new(Arena* node_arena) {
 
 // topological sort lex contexts, and inline all refs
 // TODO integrate with external language definition
-void sb_inline_partial_references(Compiler* ctx) {
+void sb_inline_partial_references(Compiler* compiler) {
   // build partial node map and dep graph
-  Val ins_list = AT(ctx->ast, 0);
+  Val ins_list = AT(compiler->ast, 0);
 
   // node map for query
   struct ContextMap context_map;
@@ -164,7 +164,7 @@ void sb_inline_partial_references(Compiler* ctx) {
     }
   }
 
-  REPLACE(ctx->ast, nb_struct_set(ctx->ast, 0, res));
+  REPLACE(compiler->ast, nb_struct_set(compiler->ast, 0, res));
 
   ContextMap.cleanup(&context_map);
   arena_delete(node_arena);

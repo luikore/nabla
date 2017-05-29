@@ -160,7 +160,7 @@ int32_t sb_compile_context_dict_find(Val context_dict, Val name, char kind);
 #pragma mark ### vm functions
 
 // updates iseq, returns err
-Val sb_vm_lex_compile(struct Iseq* iseq, Val patterns_dict, struct VarsTable* vars_table, Val node);
+Val sb_vm_lex_compile(struct Iseq* iseq, Val patterns_dict, struct VarsTable* global_vars, struct VarsTable* local_vars, Val node);
 
 // returns {res, err}
 ValPair sb_vm_lex_exec(Spellbreak* sb);
@@ -168,7 +168,8 @@ ValPair sb_vm_lex_exec(Spellbreak* sb);
 // stmts: list of statements
 // peg_mode: if set to true, will forbid variables (TODO local variables still makes it pure)
 // see compile.h for label table type
-Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, int32_t terms_size, void* label_table, bool is_peg, void* structs_table);
+Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, int32_t terms_size, void* label_table,
+                           void* structs_table, struct VarsTable* global_vars, struct VarsTable* local_vars);
 
 void sb_vm_callback_decompile(uint16_t* pc);
 

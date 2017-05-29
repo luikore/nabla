@@ -203,6 +203,7 @@ struct Capture[var_name]
 struct CreateNode[ty, elems] # elems reversed
 struct CreateList[elems] # elems reversed
 struct Assign[var_name, expr]
+struct GlobalAssign[var_name, expr]
 struct SplatEntry[expr]
 struct If[expr, true_clause, false_clause] # lines reversed, false_clause can be If
 peg Callback[
@@ -237,8 +238,9 @@ peg Callback[
        / begin.list Entries end.list { CreateList[$2] }
        / name.func Expr* { Call[$1, $2] }
        / name.var space.pre-eq op.eq Expr { Assign[$1, $4] }
+       / name.var.global space.pre-eq op.eq Expr { GlobalAssign[$1, $4] }
        / name.var { VarRef[$1] }
-       / name.var.global { VarRef[$1] }
+       / name.var.global { GlobalVarRef[$1] }
        / If { $1 }
 
   Entries : Expr Entries { [$1, *$2] }

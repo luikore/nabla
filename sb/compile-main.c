@@ -21,9 +21,10 @@ Val sb_compile_main(Compiler* compiler) {
     int32_t iseq_start = Iseq.size(&compiler->iseq);
     if (IS_A(e, "Lex")) {
       Val lex_name = AT(e, 0);
+      struct VarsTable* global_vars = &compiler->symbols->global_vars;
       struct VarsTable* vars_table = NULL;
       VarsTableMap.find(&compiler->symbols->local_vars_map, LITERALIZE(lex_name), &vars_table);
-      Val err = sb_vm_lex_compile(&compiler->iseq, compiler->patterns_dict, vars_table, AT(e, 1));
+      Val err = sb_vm_lex_compile(&compiler->iseq, compiler->patterns_dict, global_vars, vars_table, AT(e, 1));
       if (err) {
         return err;
       } else {

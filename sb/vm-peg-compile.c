@@ -90,7 +90,8 @@ static void _encode_callback_maybe(PegCompiler* compiler, Val callback_maybe, in
       goto nil_callback;
     }
 
-    sb_vm_callback_compile(compiler->iseq, stmts, terms_size, &compiler->l, true, compiler->structs_table);
+    sb_vm_callback_compile(compiler->iseq, stmts, terms_size, &compiler->l,
+                           compiler->structs_table, NULL, NULL);
     ENCODE(compiler->iseq, uint16_t, RULE_RET);
     return;
   }

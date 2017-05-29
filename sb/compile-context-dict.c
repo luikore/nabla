@@ -1,6 +1,6 @@
 #include "compile.h"
 
-void sb_compile_context_dict_insert(Compiler* ctx, Val name, char kind, int32_t offset) {
+void sb_compile_context_dict_insert(Compiler* compiler, Val name, char kind, int32_t offset) {
   char stack_buf[20];
   char* buf;
   int size = nb_string_byte_size(name);
@@ -13,7 +13,7 @@ void sb_compile_context_dict_insert(Compiler* ctx, Val name, char kind, int32_t 
   buf[0] = kind;
   memcpy(buf + 1, nb_string_ptr(name), size);
 
-  REPLACE(ctx->context_dict, nb_dict_insert(ctx->context_dict, buf, size + 1, VAL_FROM_INT(offset)));
+  REPLACE(compiler->context_dict, nb_dict_insert(compiler->context_dict, buf, size + 1, VAL_FROM_INT(offset)));
 
   if (size + 1 >= 20) {
     free(buf);

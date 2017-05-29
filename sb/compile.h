@@ -106,6 +106,16 @@ static void SYMBOLS_DELETE(Symbols* symbols) {
   StructsTable.cleanup(&symbols->structs);
 }
 
+static int SYMBOLS_LOOKUP_VAR_ID(struct VarsTable* vars_table, Val name) {
+  for (int i = 0; i < VarsTable.size(vars_table); i++) {
+    Val n = *VarsTable.at(vars_table, i);
+    if (nb_string_cmp(n, name) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 #pragma mark ## helpers
 
 static Val LITERALIZE(Val str) {
