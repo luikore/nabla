@@ -396,7 +396,7 @@ static void _encode_rule_body_unit(PegCompiler* compiler, Val e) {
 // but since we don't know the rule offset yet when compiling,
 // we need build a {rule_name => num} mapping.
 // (TODO this mapping should be put in init metadata)
-Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, StructsTable* structs_table, Val node) {
+Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, struct StructsTable* structs_table, Val node) {
   if (!kPegRule) {
     uint32_t sb   = sb_klass();
     kPegRule      = klass_find_c("PegRule", sb); assert(kPegRule);

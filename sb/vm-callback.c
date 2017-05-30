@@ -10,7 +10,7 @@ typedef struct {
 } ContainerInfo;
 MUT_ARRAY_DECL(ContainerInfos, ContainerInfo);
 
-ValPair sb_vm_callback_exec(uint16_t* pc, struct Vals* stack, Val* global_vars, Val* vars) {
+ValPair sb_vm_callback_exec(uint16_t* pc, struct Vals* stack, Val* global_vars, int32_t vars_start_index) {
   // TODO optimize container_infos:
   // - idea 1: use stack allocation when container_infos is not too large
   // - idea 2: eliminate the struct since some code doesn't require it
@@ -28,6 +28,7 @@ ValPair sb_vm_callback_exec(uint16_t* pc, struct Vals* stack, Val* global_vars, 
   }
   int bp = Vals.size(stack);
 
+# define _VAR(i) Vals.at(stack, vars_start_index + i)
 # define _PUSH(e) Vals.push(stack, e)
 # define _POP() Vals.pop(stack)
 # define _TOP() Vals.at(stack, Vals.size(stack) - 1)
@@ -52,14 +53,14 @@ ValPair sb_vm_callback_exec(uint16_t* pc, struct Vals* stack, Val* global_vars, 
     switch (*pc) {
       CASE(LOAD) {
         uint32_t var_id = DECODE(ArgU32, pc).arg1;
-        _PUSH(vars[var_id]);
+        _PUSH(*_VAR(var_id));
         DISPATCH;
       }
 
       CASE(STORE) {
         uint32_t var_id = DECODE(ArgU32, pc).arg1;
         // TODO ref count?
-        vars[var_id] = _POP();
+        *_VAR(var_id) = _POP();
         DISPATCH;
       }
 

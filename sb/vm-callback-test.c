@@ -20,7 +20,7 @@ void vm_callback_suite() {
       /*28*/ END
     };
 
-    ValPair res = sb_vm_callback_exec(callback, NULL, 0);
+    ValPair res = sb_vm_callback_exec(callback, NULL, NULL, 0);
     assert_eq(VAL_NIL, res.snd);
     assert_eq(VAL_FROM_INT(4), res.fst);
   }
@@ -42,7 +42,7 @@ void vm_callback_suite() {
       /*28*/ END
     };
 
-    ValPair res = sb_vm_callback_exec(callback, NULL, 0);
+    ValPair res = sb_vm_callback_exec(callback, NULL, NULL, 0);
     assert_eq(VAL_NIL, res.snd);
     assert_eq(VAL_FROM_INT(3), res.fst);
   }
@@ -78,7 +78,7 @@ void vm_callback_suite() {
       END
     };
 
-    ValPair res = sb_vm_callback_exec(callback, NULL, 0);
+    ValPair res = sb_vm_callback_exec(callback, NULL, NULL, 0);
     assert_eq(VAL_NIL, res.snd);
     Val res_node = res.fst;
     assert_eq(klass_id, VAL_KLASS(res_node));
@@ -102,7 +102,7 @@ void vm_callback_suite() {
       END
     };
 
-    ValPair res = sb_vm_callback_exec(callback, NULL, 0);
+    ValPair res = sb_vm_callback_exec(callback, NULL, NULL, 0);
     assert_eq(VAL_NIL, res.snd);
     Val res_list = res.fst;
     assert_eq(KLASS_CONS, VAL_KLASS(res_list));

@@ -219,7 +219,7 @@ pop_cond:
 
       CASE(CALLBACK) {
         uint16_t* callback = pc + 1;
-        ValPair res = sb_vm_callback_exec(callback, &stack, bp);
+        ValPair res = sb_vm_callback_exec(callback, &stack, NULL, 0);
         if (res.snd) {
           // TODO raise error
         }

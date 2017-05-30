@@ -174,7 +174,7 @@ Val sb_vm_callback_compile(struct Iseq* iseq, Val stmts, int32_t terms_size, voi
 void sb_vm_callback_decompile(uint16_t* pc);
 
 // replaces stack, returns err | TODO need stack from position
-ValPair sb_vm_callback_exec(uint16_t* pc, struct Vals* stack, Val* global_vars, Val* vars);
+ValPair sb_vm_callback_exec(uint16_t* pc, struct Vals* stack, Val* global_vars, int32_t vars_start_index);
 
 // updates iseq, returns err
 Val sb_vm_peg_compile(struct Iseq* iseq, Val patterns_dict, struct StructsTable* structs_table, Val node);

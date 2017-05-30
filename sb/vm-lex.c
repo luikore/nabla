@@ -10,7 +10,6 @@ ValPair sb_vm_lex_exec(Spellbreak* sb) {
   static const void* labels[] = {
     [MATCH_RE] = &&label_MATCH_RE,
     [MATCH_STR] = &&label_MATCH_STR,
-    [PREP_CAPTURES] = &&label_PREP_CAPTURES,
     [CALLBACK] = &&label_CALLBACK,
     [CTX_CALL] = &&label_CTX_CALL,
     [CTX_END] = &&label_CTX_END,
@@ -30,7 +29,7 @@ ValPair sb_vm_lex_exec(Spellbreak* sb) {
   ContextEntry ce = {\
     .name_str = name,\
     .token_pos = 0,\
-    .curr = sb->curr\
+    .s = sb->curr\
   };\
   int32_t offset = sb_compile_context_dict_find(sb->context_dict, name, 'l');\
   if (offset < 0) {\
@@ -81,8 +80,15 @@ begin:
         pc++;
         uint16_t captures_mask = DECODE(uint16_t, pc);
         uint32_t next_offset = DECODE(uint32_t, pc);
-        sb->stack
-        sb_vm_callback_exec(pc + 1, &sb->stack, sb->globals, );
+        const char* capture_start = sb->curr - sb->captures[1];
+        int32_t vars_start_index = Vals.size(&sb->stack);
+        for (int i = 0; i < 10; i++) {
+          if ((1 << i) & captures_mask) {
+            Val capture_str = nb_string_new(sb->captures[i * 2 + 1] - sb->captures[i * 2], capture_start);
+            STACK_PUSH(capture_str);
+          }
+        }
+        sb_vm_callback_exec(pc + 1, &sb->stack, sb->global_vars, vars_start_index);
         pc += next_offset;
         DISPATCH;
       }
