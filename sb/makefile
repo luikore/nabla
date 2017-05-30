@@ -38,5 +38,5 @@ infer:
 	infer -- $(CC) $(CFLAGS_DEBUG) $(LDFLAGS) -c $(test_srcs)
 
 clean:
-	rm -f *.o *.d *.a sb-test
+	rm -f *.{o,d,a,gcda,gcno} sb-test
 	rm -rf *.dSYM
