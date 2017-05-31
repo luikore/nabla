@@ -107,6 +107,9 @@ static void SYMBOLS_DELETE(Symbols* symbols) {
 }
 
 static int SYMBOLS_LOOKUP_VAR_ID(struct VarsTable* vars_table, Val name) {
+  if (!vars_table) {
+    return -1;
+  }
   for (int i = 0; i < VarsTable.size(vars_table); i++) {
     Val n = *VarsTable.at(vars_table, i);
     if (nb_string_cmp(n, name) == 0) {

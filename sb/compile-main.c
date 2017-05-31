@@ -24,6 +24,7 @@ Val sb_compile_main(Compiler* compiler) {
       struct VarsTable* global_vars = &compiler->symbols->global_vars;
       struct VarsTable* vars_table = NULL;
       VarsTableMap.find(&compiler->symbols->local_vars_map, LITERALIZE(lex_name), &vars_table);
+      // NOTE: vars_table can still be NULL here
       Val err = sb_vm_lex_compile(&compiler->iseq, compiler->patterns_dict, global_vars, vars_table, AT(e, 1));
       if (err) {
         return err;

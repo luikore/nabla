@@ -93,7 +93,7 @@ peg Lex[
            / name.context { RefContext[$1] }
            / Rule+ { SeqLexRules[$1] }
            / kw.begin Callback? Rule+ { BeginCallback[$2, $3] }
-           / kw.end Callback Rule+ { EndCallback[$2, $3] }
+           / kw.end Callback? Rule+ { EndCallback[$2, $3] }
            / space.eol { }
   Rule : Pattern space.pre-callback* Callback? { LexRule[$1, $3] }
   Pattern : String { $1 }

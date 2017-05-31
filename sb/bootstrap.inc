@@ -140,7 +140,7 @@ NODE(PegRule, 2, STR("RuleLine"), NODE(Branch, 4, STR("/"), NODE(Branch, 4, STR(
 NODE(TermMaybe, 1, NODE(RefRule, 1, STR("Callback"))),
 NODE(Term, 1, STR("kw.begin"))), LIST(NODE(Callback, 1, LIST(NODE(CreateNode, 2, STR("BeginCallback"), LIST(NODE(Capture, 1, STR("$3")),
 NODE(Capture, 1, STR("$2")))))))), LIST(NODE(TermPlus, 1, NODE(RefRule, 1, STR("Rule"))),
-NODE(Term, 1, NODE(RefRule, 1, STR("Callback"))),
+NODE(TermMaybe, 1, NODE(RefRule, 1, STR("Callback"))),
 NODE(Term, 1, STR("kw.end"))), LIST(NODE(Callback, 1, LIST(NODE(CreateNode, 2, STR("EndCallback"), LIST(NODE(Capture, 1, STR("$3")),
 NODE(Capture, 1, STR("$2")))))))), LIST(NODE(Term, 1, STR("space.eol"))), LIST())),
 NODE(PegRule, 2, STR("Lex"), NODE(SeqRule, 2, LIST(NODE(Term, 1, STR("end.lex")),
