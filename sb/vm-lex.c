@@ -6,6 +6,8 @@
 // the bytecode is a linearlized stream, so the impact of page fault is minimized.
 // the execution shares stack so allocation is minimized too.
 
+// for vm stack and captures, see sb.h for struct Spellbreak
+
 ValPair sb_vm_lex_exec(Spellbreak* sb) {
   static const void* labels[] = {
     [MATCH_RE] = &&label_MATCH_RE,

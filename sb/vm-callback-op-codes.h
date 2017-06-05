@@ -25,7 +25,7 @@ enum OpCodes {
   LISTV,        //                                 # pop b:Cons, a:Cons, push [*a, *b] (members are pushed from left to right)
   JIF,          // true_clause:uint32              # pops cond [**]
   JUNLESS,      // false_clause:uint32             # pops cond
-  JMP,          // offset:uint32                   # unconditional jump
+  JMP,          // offset:int32                    # unconditional jump
   CALL,         // argc:uint32, fname:uint32       # invoke a method (only pure builtin operators are supported), argc includes receiver obj
 
   END,          //                                 # terminate execution and tweak stack

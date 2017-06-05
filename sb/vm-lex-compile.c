@@ -31,21 +31,59 @@ typedef struct {
   struct VarsTable* local_vars;
 } LexCompiler;
 
+static void _encode_callback(LexCompiler* compiler, Val callback) {
+  // note: var defs is ignored in compiling callback
+}
+
+static void _encode_lex_rule(LexCompiler* compiler, Val lex_rule) {
+  // LexRule[(VarRef[name] | GlobalVarRef[name] | String | Regexp), Callback?]
+}
+
 static void _encode_begin_rule(LexCompiler* compiler, Val begin_rule) {
   // BeginCallback[Callback?, LexRule+]
+  Val maybe_callback = nb_struct_get(begin_rule, 0);
+  Val lex_rules = nb_struct_get(begin_rule, 1);
+
+  if (maybe_callback) {
+    Val callback_node = nb_cons_head(maybe_callback);
+    _encode_callback(compiler, callback_node);
+  }
+
+  for (Val curr = nb_cons_reverse(lex_rules); curr; curr = nb_cons_tail(curr)) {
+    Val lex_rule = nb_cons_head(curr);
+    _encode_lex_rule(compiler, lex_rule);
+  }
+}
+
+static void _encode_end_rule(LexCompiler* compiler, Val end_rule) {
+  // EndCallback[Callback?, LexRule+]
+  Val maybe_callback = nb_struct_get(begin_rule, 0);
+  Val lex_rules = nb_struct_get(begin_rule, 1);
+
+  if (maybe_callback) {
+    Val callback_node = nb_cons_head(maybe_callback);
+    _encode_callback(compiler, callback_node);
+  }
+
+  for (Val curr = nb_cons_reverse(lex_rules); curr; curr = nb_cons_tail(curr)) {
+    Val lex_rule = nb_cons_head(curr);
+    _encode_lex_rule(compiler, lex_rule);
+  }
+
+  ENCODE(iseq, uint16_t, JMP);
+  ENCODE(iseq, )
 }
 
 static void _encode_normal_rule(LexCompiler* compiler, Val rule) {
-  // EndCallback[Callback?, LexRule+]
   // SeqLexRules[LexRule+]
   // LexRule[(VarRef[name] | GlobalVarRef[name] | String | Regexp), Callback?]
   uint32_t klass = VAL_KLASS(rule);
   if (klass == kEndCallback) {
-    //content
+    _encode_
   } else if (klass == kSeqLexRules) {
     //content
   } else if (klass == kLexRule) {
-    //content
+    _encode_lex_rule(compiler, rule);
   }
 }
 
