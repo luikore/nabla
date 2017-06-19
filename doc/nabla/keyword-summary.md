@@ -31,12 +31,13 @@ logic shortcut operator (4)
 
     not and or xor
 
-control flow (10)
+control flow (11)
 
     if else case
     when ensure end
     while wend
     make pick
+    goto
 
 jumps (3)
 

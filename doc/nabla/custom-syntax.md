@@ -309,7 +309,7 @@ todo: also take advantage of array programming for auto differenciation?
 
 ### C ext
 
-    $|c|.call "main" argv
+    $|c| "main" argv
       #pragma compile -I ... -L ... -o ...
       #include <stdio.h>
       main() {

@@ -15,7 +15,7 @@ Methods on objects
 
     obj.methods
     obj.object_id
-    obj.method m $ .call args
+    obj.:m[*args]
 
     # following methods make new objects with new methods
     obj.def! m lambda

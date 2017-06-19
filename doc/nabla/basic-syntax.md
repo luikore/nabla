@@ -126,7 +126,7 @@ The local environment is mutable, local vars can be changed by another assignmen
     l = ->
       a = 3
     end
-    l.call
+    l[] # note: have to give a [] so it won't confuse with local var reference
     a # 3
 
 Variables are declared the first time you assign it.
@@ -336,6 +336,8 @@ NOTE: the methods are defined with arbitrary members, but VM can optimize them.
       bar
     while foo # perform loop body first, then check condition
 
+`next` and `break` terminates current loop.
+
 `make` ... `pick` (see more in [Make Constructor](#make-constructor)
 
     make
@@ -350,6 +352,14 @@ NOTE: the methods are defined with arbitrary members, but VM can optimize them.
     when String, ...
     else, ...
     end
+
+`goto` helps getting out of nested control structures. but can not break out of lambda/method/class.
+
+    loop
+      ...
+      goto some_label
+    end
+    some_label:
 
 [design NOTE] we don't need mod clauses, just use `,` for one-liners, and it is easier to modify
 
@@ -518,11 +528,9 @@ To unroll a map-like data structure, use `**`
 
 NOTE it can also be used in patterns
 
-But it can't be used for arguments in method call. You need to use `callv` on lambdas:
+It can also be used in method calling:
 
-    \(:f).callv [a, *b, c]
-
-This is a drawback of our call syntax, but the workaround is not hard.
+    \(:f)[a, *b, c]
 
 ## Data types (structs)
 
@@ -697,7 +705,7 @@ since the following form doesn't look very pleasing:
 
     ->
       ...
-    end.call
+    end[]
 
 we can use `make` without `pick` to achieve the same effect
 
@@ -919,6 +927,10 @@ mutator methods end with `!` or `=`
     def v= x
       self.mutate!
     end
+
+note: `!` acts as a method modifier. if there are 2 methods in the same name but one ends with `!` while the other doesn't, the later defined one can override the first defined one.
+
+note: there is a limit to `!` and `=` terminated methods: it must not change the data type of the original object.
 
 note: if you don't want to change `self`, use other left-values:
 
@@ -1176,10 +1188,10 @@ Lambdas with side effects dies when it goes out of scope, only a pure lambda can
     l = -> v
       x = v
     end
-    l.call 1
+    l[1]
     x # 1
     l.snapshot!
-    l.call 2
+    l[2]
     x # 1
 
 ## `\` syntax for quick lambdas
@@ -1200,7 +1212,7 @@ To compute factorial for example:
     \(*)           # -> x y, x * y;
     \(.present? 3) # -> x, x.present? 3;
     \(:foo)        # :method('foo') # arity depends of method foo
-    \(:foo 3)      # (:method('foo').curry 1).call 3
+    \(:foo 3)      # (:method('foo').curry 1)[3]
 
 [design NOTE] if we use placeholder lambdas as in scala, then too many meanings are put onto `_`, while saving very few typings.
 
@@ -1210,7 +1222,7 @@ To compute factorial for example:
       x + y
     end
     l.curry!
-    (l.call 1).call 2
+    l[1][2]
 
 ## Variable scoping
 
@@ -1299,6 +1311,25 @@ back arrows can be used inside any syntax structures with `end` or `when` delimi
     end
 
 back arrows can be considered as monad of the universal sum type. they can be tail-call optimized.
+
+## Breaking out of a `each` call
+
+`break`, `next` and `goto` can break out lambdas
+
+    array.each -> e
+      if e == foo
+        break
+      end
+    end
+
+    ax.each -> a
+      bx.each -> b
+        if :foo a b, goto outside;
+      end
+    end
+    outside:
+
+[impl NOTE]: it will be a special type of yielding?
 
 ## Matching args
 
