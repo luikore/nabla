@@ -22,7 +22,7 @@ lex Main[
   end /\z/ { :peg "Main" }
 
   /pattern\b/ { :token "kw.pattern" } /\ +(@\w+)/    { :token "name.pattern" 1 } /\ *=\ /
-  /var\b/     { :token "kw.var" } /\ +(\$[a-z]\w*)/    { :token "name.var.global" 1 }
+  /var\b/     { :token "kw.var" } /\ +(\$[a-z]\w*)/  { :token "name.var.global" 1 }
   /struct\b/  { :token "kw.struct" } /\ +([A-Z]\w*)/ { :token "name.struct" 1 } StructIns
   /lex\b/     { :token "kw.lex" } /\ +(\*?[A-Z]\w*)/ { :token "name.context" 1 } Lex
   /peg\b/     { :token "kw.peg" } /\ +([A-Z]\w*)/    { :token "name.context" 1 } Peg

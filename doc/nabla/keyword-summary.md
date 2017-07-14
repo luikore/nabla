@@ -16,9 +16,9 @@
 
 the following words can not be used as variables, but can be used as method names.
 
-declarative (10)
+declarative (9)
 
-    struct class
+    class
     include scope def
     undef final local var
     import

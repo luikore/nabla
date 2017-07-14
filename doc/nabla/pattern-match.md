@@ -110,16 +110,25 @@ both `=~` and `=` works as assignment operator, but:
 
 ## Matching a map
 
-example (use `*: rest_var` to match the rest)
+example (use `*rest_var` to match the rest)
 
-    {"a": a as Hash, "*": b as 3, *: rest as (-> x, x.size < 3)} =~ {'a': {}, '*': 3, 'c': 12}
+    {"a": a as Hash, "*": b as 3, *rest: (-> x, x.size < 3)} =~ {'a': {}, '*': 3, 'c': 12}
 
-function params are NOT match exprs, they allow default assignments
+function params do NOT match exprs, they allow default assignments
 
     def f x y z=3 opts={a: 3, b: 4}
       Integer = a
       Object = b
     end
+
+to make a matching expression with default values, use the full-matching style
+
+    def f{"x": x as Hash default nil, "y": y as Int default 3}
+    end
+
+to abbreviate left-value hash match spec, use a variable on the left side of the `:`
+
+    {a: Foo} # equivalent to {"a": a as Foo}
 
 [impl NOTE] compiler and doc-generator should be able to extract the first several lines of matchers for further use
 

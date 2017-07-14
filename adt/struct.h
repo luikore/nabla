@@ -17,7 +17,10 @@ ValPair nb_struct_new_empty(uint32_t klass_id);
 // -1 if not found
 int32_t nb_struct_field_i(uint32_t klass_id, uint32_t field_id);
 
+// returns field_value
 Val nb_struct_get(Val st, uint32_t i);
+
+// returns new st
 Val nb_struct_set(Val st, uint32_t i, Val field_value);
 
 // mutable set field
