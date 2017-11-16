@@ -131,7 +131,7 @@ interpolate global predefined pattern (NOTE it should not be a `\p{}`, since it 
 
     {@Graphene}
 
-interpolate predefined char class (unicode char classes)
+interpolate unicode char classes
 
     \p{Han}
 
@@ -215,7 +215,7 @@ unicode char with digits more or less than 4
 
 - `\u{ABCD1234}`
 
-special char groups:
+special char groups (ascii-only):
 
 - `\s` space
 - `\S` non space
@@ -230,6 +230,11 @@ special char groups:
 NOTE that we still need to look ahead for definitive yielding tokens even without supporting lookahead.
 For parser, we have the whole input data and loop until a real match, so no need to worry lookahead.
 For syntax highlighter, we loop visible text for building the DOM AST (then use dom diff to color).
+But... the regexp has to be over the power of DFA in order to support lookahead.
+We can make lookahead a predicate, then, if the predicate fails, we continue the path inside the DFA.
+
+With DFA, we can detect conflicts in lexer definition more easily, and need less lookaheads like `\b`.
+But it is harder to define possessive / reluctant matching.
 
 # Rules
 
@@ -400,6 +405,34 @@ An alternative scheme, is to separate the actions and state changing code out, a
 
 - state change is un-checked if defined outside of lexer.
 - when changing lexer or state-change code, it is prone to make them un-sync.
+
+## Nesting and higher order nesting
+
+There is a "distfix" stack for handling the nested operators.
+
+Adding an underscore `_` means we are following another symbol with nesting check.
+
+Parenthessis matching example:
+
+    "(" { :token 'paren.left' } _ ")" { :token 'paren.right' }
+
+`if` _ `elsif`* _ `else`? _ `end` example:
+
+    "if"       { :token 'keyword.if' }
+    _ "elsif"* { :token 'keyword.elsif' }
+    _ "else"?  { :token 'keyword.else' }
+    _ "end"    { :token 'keyword.end' }
+
+the `*` means the appearence doesn't change the stack top state.
+the `?` means either the state or previous state can lead to the next state.
+the `+` means either the previous state or current state can lead to the next state.
+
+Mixing with consecutive-matching:
+
+    "if"       { :token 'keyword.if' }  Cond
+    _ "elsif"* { :token 'keyword.elsif' }
+    _ "else"?  { :token 'keyword.else' }
+    _ "end"    { :token 'keyword.end' }
 
 ## Debug Statements
 

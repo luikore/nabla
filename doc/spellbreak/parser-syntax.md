@@ -23,6 +23,8 @@ The block `{ ... }` is the evaluator registered on that specific rule branch.
 
 [design NOTE] Looking ahead regexp is not allowed, but we can use regexp lookahead in lexer to generate distinguished tokens.
 
+[TODO] since we have tokens that can distinguish things, remove lookahead?
+
 ### Left recursion
 
 There are several left recursion extension proposals for PEG, for example, this one:
