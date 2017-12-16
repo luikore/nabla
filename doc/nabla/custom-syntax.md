@@ -71,16 +71,6 @@ Use macros from other namespace
 
 [design NOTE]: since literals are noun-like, if we need to inject some run-time variable as options, define a method on it and call. if we use a prefix notation to inject options like `{opt: 3}$foo`, then namespaced syntax require a weird tweak: `3Foo::$bar` -> `3$Foo::bar`, and doesn't help much: we don't need dynamic syntax, and most options must be determined at compile time.
 
-[design NOTE] some places are cleaner and easier to do static analysis if design a syntax instead of macro. So instead of
-
-    "code"$require
-    FooModule$include
-
-We should use
-
-    require "code"
-    include FooModule
-
 ## Multiple dangling blocks
 
     :puts $|foo| $|bar|

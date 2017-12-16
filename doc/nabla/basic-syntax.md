@@ -157,9 +157,10 @@ Since `_` is so special, it can not be used as variable name or method name.
 
     [_, x] = [3, 4]
     x as _ ~ 4
+    x as X       # syntax sugar for `x as X = x`
     x as _.f ~ 4 # syntax error
-    _.f ~ 4 # syntax error
-    x._ ~ 4 # syntax error
+    _.f ~ 4      # syntax error
+    x._ ~ 4      # syntax error
 
 ## Comments
 
@@ -224,8 +225,16 @@ A single `$` means evaluate the expression before, then use it as input of next 
 A single `$` in the middle of line makes the spaces around it "more significant"
 
     :foo :bar :baz          #=> :foo (:bar :baz)
-    :foo :bar $ :baz        #=> :foo (:bar) :baz
-    :foo :bar $ :baz $ :xip #=> :foo (:bar) (:baz) (:xip)
+    :foo $ :bar $ :baz        #=> :foo (:bar) :baz
+    :foo $ :bar $ :baz $ :xip #=> :foo (:bar) (:baz) (:xip)
+
+The `$` in the middle of line is semantically a space, lower associativity than spaces.
+
+[design NOTE]: if we make it higher associativity than first space to save a typing, rule is more complex and nesting will be ambiguous.
+
+To nest `$` calls:
+
+    :bar ($) :foo :baz $ :xip ($) :ooz
 
 # Operators
 
@@ -625,6 +634,10 @@ Lambdas with side effects dies when it goes out of scope, only a pure lambda can
     l[2]
     x # 1
 
+You can specify type for lambdas by adding trailing `->` (this is important for C-interoperability).
+
+    l = -> [v as Float] -> Integer, v.to_i;
+
 ## `\` syntax for quick lambdas
 
 `\` followed by an operator is a lambda. The following 2 lambdas are equivalent:
@@ -730,19 +743,3 @@ back arrows can be considered as monad of the universal sum type. they can be ta
 ## Matching args
 
 See [Pattern Match](pattern-match.md)
-
-# Import: specifying code dependencies
-
-    import foo/bar     # require code from another file, under load path, from first to last
-    import ./foo/bar   # search starts in folder containing current source
-    import /foo/bar    # search starts in root folder
-    import c://foo/bar # search starts in drive C
-    import ~/foo/bar   # search starts in home folder
-
-The load path is specified at startup and can not be changed over time.
-
-`import` only works in top of a file (except comments).
-
-## Dynamic loading
-
-See [Dynamic Loading](dynamic-loading.md).

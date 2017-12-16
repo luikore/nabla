@@ -21,7 +21,8 @@ declarative (9)
     class
     include scope def
     undef final local var
-    import
+    require
+    typedef
 
 type checker (1)
 

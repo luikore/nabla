@@ -344,7 +344,7 @@ Scope can be considered currying in OO programming, and it is not necessary orde
     end
 
     foo = Foo[]
-    foo.bar! 1 $ .baz! 2
+    foo.bar! $ 1 $ .baz! 2
     foo.x # 1
     foo.y # 2
 
